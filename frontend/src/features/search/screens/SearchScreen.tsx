@@ -1,30 +1,30 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+
+import { ScreenContainer, ScreenSection, ScreenStatePlaceholder } from '../../../app/shell';
 
 export function SearchScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Search</Text>
-      <Text style={styles.subtitle}>Search placeholder</Text>
-    </View>
+    <ScreenContainer testID="search-screen" centered>
+      <ScreenSection testID="search-screen-main">
+        <Text testID="search-screen-title" style={styles.title}>
+          Search
+        </Text>
+        <ScreenStatePlaceholder
+          variant="empty"
+          message="Search placeholder"
+          testID="search-screen-placeholder"
+        />
+      </ScreenSection>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-  },
   title: {
     fontSize: 22,
     fontWeight: '600',
     marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#555',
     textAlign: 'center',
+    width: '100%',
   },
 });
