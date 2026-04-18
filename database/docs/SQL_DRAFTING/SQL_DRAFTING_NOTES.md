@@ -1,15 +1,16 @@
-# SQL drafting notes — Tranche 1 (Waves 1–4)
+# SQL drafting notes — Tranche 1 (Waves 1–5)
 
 This file records **implementation-level** choices made while staying within locked architecture. It does not reopen planning decisions.
 
 ## Migration ordering
 
-Migrations `0001`–`0012` apply in lexical order. Dependencies:
+Migrations `0001`–`0016` apply in lexical order. Dependencies:
 
 - Published tables reference `venue` and geography/attribute reference rows created earlier.
 - Workflow tables reference account anchors from `0002`.
 - `0008` depends on proposals from `0007`; `0009` depends on `proposal_review` from `0008`.
 - `0010`–`0012` (Wave 4) depend on `consumer_account`, `venue`, `locality`, `geographic_region`, and `venue_change_proposal`.
+- `0013`–`0016` (Wave 5) depend on `owner_account`, `admin_account`, `business`, and `venue`. `0015` adds `venue_claim_request` and then adds `business_venue_management_relationship.source_venue_claim_request_id`. `0016` depends on `business_venue_management_relationship` and `owner_account`.
 
 ## Enum / CHECK vs lookup tables
 
@@ -41,6 +42,17 @@ Migrations `0001`–`0012` apply in lexical order. Dependencies:
 - **Push toggle**: `push_notifications_opt_in` names product push channel consent distinctly from email/SMS columns.
 - **Saved lists**: list-native model only — `saved_list` + `saved_list_membership` to `venue`; optional `position` on membership for ordering; `is_archived` on lists without a separate archive table.
 - **Submissions**: `venue_change_proposal` remains the spine for truth-impacting packages. `consumer_submission_extension` is optional 1:1 metadata; `consumer_workflow_submission` covers non-proposal authenticated intake. Actor alignment between extension and `actor_consumer_account_id` is enforced in application code.
+
+## Wave 5 — Owner / business authority (0013–0016)
+
+- **Membership vs venue authority**: `owner_business_membership` is only owner↔business; it does not reference `venue` and does not grant venue-scoped capabilities (DL-021).
+- **Managed-venue junction**: `business_venue_management_relationship` is the sole attachment point for `venue_capability_grant` rows; there is no `owner_account`→`venue` permission edge.
+- **v1 shape vs future history**: migration `0014` uses one row per `(business_id, venue_id)` with a lifecycle column—that is a **convenience for early reads**, not a schema invariant. Later workers may replace or supplement that with a history-heavy or split-table model if needed; architecture still requires an explicit business↔venue management link and distinct claim / verification / rights / grants.
+- **Claim vs relationship vs verification vs rights vs grants**: modeled as `venue_claim_request`, `business_venue_management_relationship` (+ optional claim pointers), `venue_verification_state`, `venue_management_rights`, and `venue_capability_grant` respectively—no collapsed “claim status = access” table.
+- **Companion rows**: `venue_verification_state` and `venue_management_rights` use `business_venue_management_relationship_id` as the primary key (1:1) for clear current-state reads.
+- **Authority audit**: `venue_authority_decision` records human authority outcomes; `venue_authority_event` is append-only and must not replace `venue_capability_grant` for live permission checks (DL-022).
+- **Coarse capabilities**: `venue_capability_grant.capability_code` uses a short CHECK list aligned to Worker B examples; not a granular ACL.
+- **DDL limits**: membership-in-business when filing claims or receiving grants is not enforced with composite FKs—validate in application or a later constraint/trigger if required.
 
 ## Seed scaffolding (later)
 
