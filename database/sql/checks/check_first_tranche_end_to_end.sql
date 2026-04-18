@@ -1,6 +1,7 @@
--- PubPlus — First tranche end-to-end sanity check (Waves 1–6)
--- Run after all migrations 0001–0020. This file does not replace per-wave checks;
--- it aggregates a small set of cross-cutting signals for domain separation and wiring.
+-- PubPlus — First tranche end-to-end sanity check
+-- Sections 1–6 target migrations 0001–0020 (Waves 1–6).
+-- Section 7 requires the extended stack through at least 0026 (Waves 8–9) and remains valid after 0027–0029.
+-- This file does not replace per-wave checks; it aggregates cross-cutting signals for domain separation and wiring.
 --
 -- Expect every row below to have ok = true.
 
@@ -171,4 +172,65 @@ select
       p.schemaname = 'public'
       and p.tablename = 'venue_published_profile'
       and p.cmd = any (array['INSERT', 'UPDATE', 'DELETE', 'ALL'])
+  ) as ok;
+
+-- 7) Extended product schema (Waves 8–9): when 0021+ is applied, core published tables must all exist; otherwise skip (pass)
+with
+  expected_ext (name) as (
+    values
+      ('venue_published_structured_special'),
+      ('venue_published_tap_offering'),
+      ('beverage_product')
+  ),
+  wave8_marker as (
+    select
+      exists (
+        select
+          1
+        from
+          information_schema.tables
+        where
+          table_schema = 'public'
+          and table_name = 'venue_published_structured_special'
+      ) as present
+  )
+select
+  'expected_extended_tables_present_when_wave8_applied' as check_name,
+  case
+    when not (
+      select
+        present
+      from
+        wave8_marker
+    ) then true
+    else (
+      select
+        (
+          select
+            count(*)
+          from
+            information_schema.tables t
+            join expected_ext e on e.name = t.table_name
+          where
+            t.table_schema = 'public'
+        ) = (
+          select
+            count(*)
+          from
+            expected_ext
+        )
+    )
+  end as ok;
+
+-- 8) Specials vs tap domains remain separate top-level published families (name-level guard)
+select
+  'specials_and_tap_are_distinct_roots' as check_name,
+  not exists (
+    select
+      1
+    from
+      information_schema.tables
+    where
+      table_schema = 'public'
+      and table_name in ('venue_published_special_tap', 'venue_published_tap_special')
   ) as ok;

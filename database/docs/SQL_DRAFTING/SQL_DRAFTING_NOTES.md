@@ -1,10 +1,10 @@
-# SQL drafting notes — Tranche 1 (Waves 1–9)
+# SQL drafting notes — Tranche 1 (Waves 1–9 + Wave 10 cleanup)
 
 This file records **implementation-level** choices made while staying within locked architecture. It does not reopen planning decisions.
 
 ## Migration ordering
 
-Migrations `0001`–`0026` apply in lexical order. Dependencies:
+Migrations `0001`–`0029` apply in lexical order. Dependencies:
 
 - Published tables reference `venue` and geography/attribute reference rows created earlier.
 - Workflow tables reference account anchors from `0002`.
@@ -14,6 +14,13 @@ Migrations `0001`–`0026` apply in lexical order. Dependencies:
 - `0017`–`0020` (Wave 6 RLS) depend on all tables above; apply after `0016`. Helpers `current_consumer_account_id`, `current_owner_account_id`, `owner_is_member_of_business`, `current_admin_account_id`, `is_admin_session` are `SECURITY INVOKER` / `STABLE` and are granted to `anon` and `authenticated` for policy evaluation (calling them without a matching account row returns null/false).
 - `0021`–`0023` (Wave 8 structured specials) depend on `venue` from `0002`. `0022` depends on `0021`; `0023` depends on `0021`–`0022`. Published-special tables get **SELECT-only** RLS in `0023` (parity with `0017`); they are **not** included in migration `0017`’s policy list.
 - `0024`–`0026` (Wave 9 tap list backbone) depend on `venue` from `0002`. `0025` depends on `0024` (tap offering references `beverage_product`). `0026` depends on `0025` (validity/eligibility children). **SELECT-only** RLS for all new tap + beverage reference tables is added in `0026` only (same pattern as specials: `0021`–`0022` without RLS, `0023` applies RLS). Planning doc `recommended_migration_schema_build_order.md` lists “Tap List” after specials; SQL drafting numbers that slice **Wave 9** because specials already occupy Wave 8 (`0021`–`0023`).
+- `0027`–`0029` (Wave 10 post-wave cleanup / hardening) depend on `0026`. `0027` adds FK/workflow/catalog indexes; `0028` adds two low-risk CHECK constraints (recurring DOW values; `fully_bounded` validity bounds); `0029` refreshes table comments for companion/reference clarity without changing shapes.
+
+## Wave 10 — Post-wave cleanup and hardening (`0027`–`0029`)
+
+- **No new domains:** indexes, two optional CHECKs, and comment alignment only — see `WAVE_10_POST_WAVE_CLEANUP_AND_HARDENING.md`.
+- **Subtype completeness** (recurring vs one-off child rows vs `schedule_class`) remains **publish/service validated**; Wave 10 deliberately does not add cross-table triggers or exclusion constraints.
+- **Verification:** `database/sql/checks/check_wave_10_post_wave_cleanup_and_hardening.sql`; `check_first_tranche_end_to_end.sql` includes an extended table-presence section when `0021+` is applied.
 
 ## Enum / CHECK vs lookup tables
 
@@ -69,9 +76,9 @@ Migrations `0001`–`0026` apply in lexical order. Dependencies:
 
 ## Wave 7 — Verification + dev/demo seeds (first tranche)
 
-Shipped alongside migrations `0001`–`0020` (see `WAVE_07_VERIFICATION_AND_SEEDS.md` and `FIRST_TRANCHE_OVERVIEW.md`):
+Shipped alongside migrations `0001`–`0020` (see `WAVE_07_VERIFICATION_AND_SEEDS.md` and `FIRST_TRANCHE_OVERVIEW.md`); extended by Waves 8–10 checks as migrations grew.
 
-- **Checks:** `database/sql/checks/check_wave_01_foundations.sql` … `check_wave_06_rls_and_permission_guardrails.sql`, plus `check_first_tranche_end_to_end.sql`.
+- **Checks:** `database/sql/checks/check_wave_01_foundations.sql` … `check_wave_06_rls_and_permission_guardrails.sql`, `check_wave_08_specials_promotions.sql`, `check_wave_09_tap_list_backbone.sql`, `check_wave_10_post_wave_cleanup_and_hardening.sql`, plus `check_first_tranche_end_to_end.sql`.
 - **Seeds:** `database/sql/seeds/dev_seed_reference_minimum.sql`, `dev_seed_demo_venues.sql`, `dev_seed_demo_accounts_and_relationships.sql`, composed by `database/supabase/seed.sql`.
 
 **Later workers:** extend seeds with new reference data as needed; avoid duplicating large “fake prod” datasets. Keep auth + published direct-insert demos clearly labeled as **local/dev only** in docs (RLS still blocks normal clients from mutating published truth).
