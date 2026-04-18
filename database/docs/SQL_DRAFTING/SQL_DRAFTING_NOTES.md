@@ -1,10 +1,10 @@
-# SQL drafting notes — Tranche 1 (Waves 1–9 + Wave 10 cleanup)
+# SQL drafting notes — Tranche 1 (Waves 1–11, incl. Wave 10 cleanup + Wave 11 commercial)
 
 This file records **implementation-level** choices made while staying within locked architecture. It does not reopen planning decisions.
 
 ## Migration ordering
 
-Migrations `0001`–`0029` apply in lexical order. Dependencies:
+Migrations `0001`–`0032` apply in lexical order. Dependencies:
 
 - Published tables reference `venue` and geography/attribute reference rows created earlier.
 - Workflow tables reference account anchors from `0002`.
@@ -15,6 +15,7 @@ Migrations `0001`–`0029` apply in lexical order. Dependencies:
 - `0021`–`0023` (Wave 8 structured specials) depend on `venue` from `0002`. `0022` depends on `0021`; `0023` depends on `0021`–`0022`. Published-special tables get **SELECT-only** RLS in `0023` (parity with `0017`); they are **not** included in migration `0017`’s policy list.
 - `0024`–`0026` (Wave 9 tap list backbone) depend on `venue` from `0002`. `0025` depends on `0024` (tap offering references `beverage_product`). `0026` depends on `0025` (validity/eligibility children). **SELECT-only** RLS for all new tap + beverage reference tables is added in `0026` only (same pattern as specials: `0021`–`0022` without RLS, `0023` applies RLS). Planning doc `recommended_migration_schema_build_order.md` lists “Tap List” after specials; SQL drafting numbers that slice **Wave 9** because specials already occupy Wave 8 (`0021`–`0023`).
 - `0027`–`0029` (Wave 10 post-wave cleanup / hardening) depend on `0026`. `0027` adds FK/workflow/catalog indexes; `0028` adds two low-risk CHECK constraints (recurring DOW values; `fully_bounded` validity bounds); `0029` refreshes table comments for companion/reference clarity without changing shapes.
+- `0030`–`0032` (Wave 11 commercial / subscription adjacency) depend on `business`, `business_venue_management_relationship`, and `venue` from earlier waves. `0030` adds `subscription_plan_reference` + `business_subscription`; `0031` adds `business_entitlement` + `business_venue_commercial_overlay`; `0032` adds `commercial_overlay_reference` + `business_commercial_overlay_attachment` and **RLS for all Wave 11 tables** (same pattern as Wave 9: DDL in earlier files, policies in the last file). Planning doc `recommended_migration_schema_build_order.md` lists “Commercial / Subscription Adjacency” as a recommended wave; SQL drafting numbers it **Wave 11** because prior waves already consumed migration numbers through `0029`.
 
 ## Wave 10 — Post-wave cleanup and hardening (`0027`–`0029`)
 
@@ -78,8 +79,8 @@ Migrations `0001`–`0029` apply in lexical order. Dependencies:
 
 Shipped alongside migrations `0001`–`0020` (see `WAVE_07_VERIFICATION_AND_SEEDS.md` and `FIRST_TRANCHE_OVERVIEW.md`); extended by Waves 8–10 checks as migrations grew.
 
-- **Checks:** `database/sql/checks/check_wave_01_foundations.sql` … `check_wave_06_rls_and_permission_guardrails.sql`, `check_wave_08_specials_promotions.sql`, `check_wave_09_tap_list_backbone.sql`, `check_wave_10_post_wave_cleanup_and_hardening.sql`, plus `check_first_tranche_end_to_end.sql`.
-- **Seeds:** `database/sql/seeds/dev_seed_reference_minimum.sql`, `dev_seed_demo_venues.sql`, `dev_seed_demo_accounts_and_relationships.sql`, composed by `database/supabase/seed.sql`.
+- **Checks:** `database/sql/checks/check_wave_01_foundations.sql` … `check_wave_06_rls_and_permission_guardrails.sql`, `check_wave_08_specials_promotions.sql`, `check_wave_09_tap_list_backbone.sql`, `check_wave_10_post_wave_cleanup_and_hardening.sql`, `check_wave_11_commercial_subscription_adjacency.sql`, plus `check_first_tranche_end_to_end.sql`.
+- **Seeds:** `database/sql/seeds/dev_seed_reference_minimum.sql`, `dev_seed_demo_venues.sql`, `dev_seed_demo_accounts_and_relationships.sql`, `dev_seed_demo_commercial.sql` (optional), composed by `database/supabase/seed.sql`.
 
 **Later workers:** extend seeds with new reference data as needed; avoid duplicating large “fake prod” datasets. Keep auth + published direct-insert demos clearly labeled as **local/dev only** in docs (RLS still blocks normal clients from mutating published truth).
 
@@ -101,6 +102,18 @@ Shipped alongside migrations `0001`–`0020` (see `WAVE_07_VERIFICATION_AND_SEED
 - **Validity vs tiers:** `venue_published_tap_offering_validity` and `venue_published_tap_offering_discovery_eligibility` are split so freshness and “where it may appear” are not collapsed. **`safe_for_strong_current_tap_claim`** is the strongest present-tense tier — analogous in spirit to `safe_for_active_now_ranking` on specials, but named for tap semantics. No CHECK forces tier implications; conservative derivation stays in application logic.
 - **RLS:** Wave 9 policies live in `0026` only; migration `0017` is unchanged — reset DBs must apply `0024`–`0026` after `0017` so tap tables are covered.
 - **Demo seed:** `database/sql/seeds/dev_seed_demo_taps.sql` — optional include alongside venue seeds; not added to `seed.sql` in this tranche.
+
+## Wave 11 — Commercial / subscription adjacency (`0030`–`0032`)
+
+- **Business-first:** `business_subscription` and `business_entitlement` reference `business` only; no `owner_account_id` and no FK into published-truth tables (DL-024, DL-030).
+- **Plans / overlay kinds:** `subscription_plan_reference` and `commercial_overlay_reference` are small **lookup tables** (same posture as other evolving catalogs — see “Enum / CHECK vs lookup tables” above).
+- **Current subscription row:** `business_subscription.business_id` is **unique** — v1 models one current commercial subscription record per business; subscription history and billing-event streams are deferred.
+- **Venue overlays:** `business_venue_commercial_overlay` keys off `business_venue_management_relationship_id` (+ `overlay_scope`) so venue-scoped commercial state stays tied to the authority junction without merging into `venue_published_*` rows.
+- **Sponsored adjacency:** `business_commercial_overlay_attachment` holds optional `venue_id` + validity window + opaque `external_campaign_ref` — placement **intent** only; no links to specials/taps/published profile tables in v1.
+- **Not authority:** no references to `venue_capability_grant`, `venue_management_rights`, or verification tables — commercial state does not grant permissions (DL-021).
+- **RLS:** `subscription_plan_reference` and `commercial_overlay_reference` are `SELECT` for **authenticated** (catalog reads); business-private tables are `SELECT` for **owner members of the business** or **admin session**; **no** `anon` policies and **no** client write policies (mutations via `service_role` / backend). Differs from public-truth `SELECT` for `anon` in `0017`.
+- **Verification:** `database/sql/checks/check_wave_11_commercial_subscription_adjacency.sql`.
+- **Demo seed:** `database/sql/seeds/dev_seed_demo_commercial.sql` — optional; minimal rows for one subscription, two entitlements, one BVM overlay, one overlay attachment.
 
 ## Non-blocking review items
 
