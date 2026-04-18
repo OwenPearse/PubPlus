@@ -1,5 +1,6 @@
 -- PubPlus — Verification: Wave 3 (intake, proposals, review, publish, evidence, audit)
 -- Run after migrations 0007–0009.
+-- Reinforces: raw intake + proposals + reviews + lineage + evidence + audit are distinct; submissions are not published truth.
 
 select
   'venue_change_proposal exists' as check_name,
@@ -69,3 +70,59 @@ where
   tc.table_schema = 'public'
   and tc.table_name = 'venue_change_proposal'
   and tc.constraint_type = 'FOREIGN KEY';
+
+-- Raw intake + provenance catalog (source registry)
+select
+  'raw_venue_intake_record_exists' as check_name,
+  exists (
+    select
+      1
+    from
+      information_schema.tables
+    where
+      table_schema = 'public'
+      and table_name = 'raw_venue_intake_record'
+  ) as ok
+union all
+select
+  'external_data_source_exists',
+  exists (
+    select
+      1
+    from
+      information_schema.tables
+    where
+      table_schema = 'public'
+      and table_name = 'external_data_source'
+  ) as ok;
+
+-- Staging payloads are explicit (not published-truth tables)
+select
+  'staging_tables_exist_for_proposal_packages' as check_name,
+  (
+    select
+      count(*)
+    from
+      information_schema.tables
+    where
+      table_schema = 'public'
+      and table_name in (
+        'venue_proposal_staging_profile',
+        'venue_proposal_staging_location',
+        'venue_proposal_staging_attribute',
+        'venue_proposal_staging_hours'
+      )
+  ) = 4 as ok;
+
+-- Publish lineage / history is separate from current-state published tables
+select
+  'venue_published_row_history_exists' as check_name,
+  exists (
+    select
+      1
+    from
+      information_schema.tables
+    where
+      table_schema = 'public'
+      and table_name = 'venue_published_row_history'
+  ) as ok;

@@ -1,5 +1,6 @@
 -- PubPlus — Verification: Wave 4 (consumer private state, saved lists, consumer submissions)
 -- Run after migrations 0010–0012.
+-- Reinforces: profile vs default location vs notifications are explicit; lists are list-native; venue membership uses canonical venue; consumer submissions are not public truth.
 
 -- Expected consumer-private tables exist
 select
@@ -150,4 +151,26 @@ select
         'consumer_workflow_submission_published',
         'venue_published_consumer_submission'
       )
+  ) as ok;
+
+-- Profile is not merged into notification settings (split tables)
+select
+  'profile_and_notification_settings_are_split' as check_name,
+  exists (
+    select
+      1
+    from
+      information_schema.tables
+    where
+      table_schema = 'public'
+      and table_name = 'consumer_profile'
+  )
+  and exists (
+    select
+      1
+    from
+      information_schema.tables
+    where
+      table_schema = 'public'
+      and table_name = 'consumer_notification_settings'
   ) as ok;

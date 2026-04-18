@@ -1,10 +1,10 @@
-# SQL drafting notes — Tranche 1 (Waves 1–6)
+# SQL drafting notes — Tranche 1 (Waves 1–9)
 
 This file records **implementation-level** choices made while staying within locked architecture. It does not reopen planning decisions.
 
 ## Migration ordering
 
-Migrations `0001`–`0020` apply in lexical order. Dependencies:
+Migrations `0001`–`0026` apply in lexical order. Dependencies:
 
 - Published tables reference `venue` and geography/attribute reference rows created earlier.
 - Workflow tables reference account anchors from `0002`.
@@ -12,6 +12,8 @@ Migrations `0001`–`0020` apply in lexical order. Dependencies:
 - `0010`–`0012` (Wave 4) depend on `consumer_account`, `venue`, `locality`, `geographic_region`, and `venue_change_proposal`.
 - `0013`–`0016` (Wave 5) depend on `owner_account`, `admin_account`, `business`, and `venue`. `0015` adds `venue_claim_request` and then adds `business_venue_management_relationship.source_venue_claim_request_id`. `0016` depends on `business_venue_management_relationship` and `owner_account`.
 - `0017`–`0020` (Wave 6 RLS) depend on all tables above; apply after `0016`. Helpers `current_consumer_account_id`, `current_owner_account_id`, `owner_is_member_of_business`, `current_admin_account_id`, `is_admin_session` are `SECURITY INVOKER` / `STABLE` and are granted to `anon` and `authenticated` for policy evaluation (calling them without a matching account row returns null/false).
+- `0021`–`0023` (Wave 8 structured specials) depend on `venue` from `0002`. `0022` depends on `0021`; `0023` depends on `0021`–`0022`. Published-special tables get **SELECT-only** RLS in `0023` (parity with `0017`); they are **not** included in migration `0017`’s policy list.
+- `0024`–`0026` (Wave 9 tap list backbone) depend on `venue` from `0002`. `0025` depends on `0024` (tap offering references `beverage_product`). `0026` depends on `0025` (validity/eligibility children). **SELECT-only** RLS for all new tap + beverage reference tables is added in `0026` only (same pattern as specials: `0021`–`0022` without RLS, `0023` applies RLS). Planning doc `recommended_migration_schema_build_order.md` lists “Tap List” after specials; SQL drafting numbers that slice **Wave 9** because specials already occupy Wave 8 (`0021`–`0023`).
 
 ## Enum / CHECK vs lookup tables
 
@@ -65,16 +67,37 @@ Migrations `0001`–`0020` apply in lexical order. Dependencies:
 - **JWT / metadata**: policies use `auth.uid()` and account tables only — not `user_metadata` (Supabase security guidance).
 - **RLS helpers**: Wave 6 adds only a **minimal** set of `SECURITY INVOKER` helpers; **later workers should avoid turning policy logic into a sprawling helper-function ecosystem** unless there is a **clear, concrete need** (readability/auditability or repeated predicates that are error-prone to copy). Prefer inline conditions or tightly scoped additions.
 
-## Seed scaffolding (later)
+## Wave 7 — Verification + dev/demo seeds (first tranche)
 
-Recommended seed data (not shipped in this tranche):
+Shipped alongside migrations `0001`–`0020` (see `WAVE_07_VERIFICATION_AND_SEEDS.md` and `FIRST_TRANCHE_OVERVIEW.md`):
 
-- At least one `geographic_region` + `locality` for dev.
-- Core `venue_attribute_definition` rows matching MVP filters.
-- One `external_data_source` row for imports.
+- **Checks:** `database/sql/checks/check_wave_01_foundations.sql` … `check_wave_06_rls_and_permission_guardrails.sql`, plus `check_first_tranche_end_to_end.sql`.
+- **Seeds:** `database/sql/seeds/dev_seed_reference_minimum.sql`, `dev_seed_demo_venues.sql`, `dev_seed_demo_accounts_and_relationships.sql`, composed by `database/supabase/seed.sql`.
+
+**Later workers:** extend seeds with new reference data as needed; avoid duplicating large “fake prod” datasets. Keep auth + published direct-insert demos clearly labeled as **local/dev only** in docs (RLS still blocks normal clients from mutating published truth).
+
+## Wave 8 — Structured specials / promotions (`0021`–`0023`)
+
+- **Truth vs copy:** `venue_published_structured_special` carries structured kind, schedule class, and a short structured `short_label` for UI/list identity. Long-form marketing text is **only** in `venue_published_structured_special_marketing_copy`.
+- **Recurring vs one-off:** `schedule_class` plus separate subtype tables preserves DL-018; v1 does not add a DB trigger enforcing “exactly one subtype row matches `schedule_class`” — publish pipelines should validate (or a later migration adds a deferred constraint/trigger).
+- **DOW convention:** `venue_published_special_recurring_pattern.recurring_days_of_week` uses **0 = Sunday … 6 = Saturday** (documented on column); align validation and any future ISO-8601 alternative in one place if product standardizes differently.
+- **Validity vs tiers:** `venue_published_structured_special_validity` and `venue_published_structured_special_discovery_eligibility` are split so “weak timing” and “where it may appear” are not collapsed. No CHECK forces `safe_for_active_now_ranking` ⇒ `safe_for_filter_search` — conservative derivation stays explicit in application logic.
+- **RLS:** Wave 8 policies are added in `0023` only; migration `0017` is unchanged — if you reset DBs often, apply `0021`–`0023` after `0017` so specials tables are covered.
+
+**Supabase CLI:** ensure `seed.sql` path matches your project layout if the CLI config points at a different `supabase/` directory than `database/supabase/`.
+
+## Wave 9 — Tap list backbone (`0024`–`0026`)
+
+- **Reference vs offering:** `beverage_product` (with optional `beverage_brewery` / `beverage_style`) holds **identity**; `venue_published_tap_offering` holds **venue-specific** state. No `venue_id` on product rows (DL-029).
+- **Traits vs identity:** `is_rotating`, `is_guest_tap`, `is_limited_run` are **only** on `venue_published_tap_offering` — they are not proof of a specific current SKU (rules 20–21).
+- **Unstructured label:** `unstructured_line_label` is for display/context; pairing with discovery filters should require structured `beverage_product_id` + tier gates, not text alone (DL-005).
+- **Validity vs tiers:** `venue_published_tap_offering_validity` and `venue_published_tap_offering_discovery_eligibility` are split so freshness and “where it may appear” are not collapsed. **`safe_for_strong_current_tap_claim`** is the strongest present-tense tier — analogous in spirit to `safe_for_active_now_ranking` on specials, but named for tap semantics. No CHECK forces tier implications; conservative derivation stays in application logic.
+- **RLS:** Wave 9 policies live in `0026` only; migration `0017` is unchanged — reset DBs must apply `0024`–`0026` after `0017` so tap tables are covered.
+- **Demo seed:** `database/sql/seeds/dev_seed_demo_taps.sql` — optional include alongside venue seeds; not added to `seed.sql` in this tranche.
 
 ## Non-blocking review items
 
 - Whether `day_of_week` should follow ISO-8601 Monday-first instead of US Sunday-first.
 - Whether `audit_event` should be partitioned or replaced with product analytics pipeline for high volume.
 - Whether `consumer_notification_settings` should add a stored IANA timezone name once quiet hours need DB-level comparisons.
+- Whether `availability_truth_state` should later align to a shared enum with other dynamic domains (hours/specials) for operational analytics only — v1 uses tap-local CHECK text.

@@ -1,5 +1,6 @@
 -- PubPlus — Verification: Wave 5 (owner/business authority backbone)
 -- Run after migrations 0013–0016.
+-- Reinforces: no owner→venue shortcut; managed-venue junction; claim vs verification vs rights vs grants stay distinct.
 
 -- Expected Wave 5 tables exist
 select
@@ -178,4 +179,24 @@ select
       table_schema = 'public'
       and table_name = 'business_venue_management_relationship'
       and column_name = 'source_venue_claim_request_id'
+  ) as ok;
+
+-- No direct owner_account → venue foreign key (authority routes through business + managed-venue chain)
+select
+  'no_owner_account_fk_to_venue' as check_name,
+  not exists (
+    select
+      1
+    from
+      pg_constraint c
+      join pg_class rel on rel.oid = c.conrelid
+      join pg_namespace n on n.oid = rel.relnamespace
+      join pg_class ref on ref.oid = c.confrelid
+      join pg_namespace nref on nref.oid = ref.relnamespace
+    where
+      n.nspname = 'public'
+      and rel.relname = 'owner_account'
+      and c.contype = 'f'
+      and nref.nspname = 'public'
+      and ref.relname = 'venue'
   ) as ok;
