@@ -44,7 +44,7 @@ This wave adds the **published-truth** structured specials / promotions model: c
 
 ## Demo seed
 
-`database/sql/seeds/dev_seed_demo_specials.sql` depends on `dev_seed_demo_venues.sql`. It is **not** wired into `database/supabase/seed.sql` by this wave (path allowlist); run it manually after venues or fold it into your local seed composer when convenient.
+`database/sql/seeds/dev_seed_demo_specials.sql` depends on `dev_seed_demo_venues.sql`. It is included from `database/supabase/seed.sql` after the core three seed files when applying the full migration stack (see `WAVE_12_FINAL_READINESS_REVIEW.md`); comment out the `\ir` in `seed.sql` if you stop before migration `0023`.
 
 ## See also
 

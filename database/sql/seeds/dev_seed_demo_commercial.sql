@@ -1,5 +1,6 @@
 -- PubPlus — minimal demo commercial/subscription rows (local/dev)
 -- Depends on: dev_seed_demo_accounts_and_relationships.sql (businesses + BVM rows)
+-- Included from database/supabase/seed.sql last when migrations through 0032 are applied (see WAVE_12_FINAL_READINESS_REVIEW.md).
 -- Does not simulate webhooks, invoices, or full billing — only exercises Wave 11 tables.
 
 begin;

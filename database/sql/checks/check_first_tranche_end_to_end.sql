@@ -1,6 +1,8 @@
 -- PubPlus — First tranche end-to-end sanity check
 -- Sections 1–6 target migrations 0001–0020 (Waves 1–6).
 -- Section 7 requires the extended stack through at least 0026 (Waves 8–9) and remains valid after 0027–0029.
+-- Section 9 (optional) asserts Wave 11 commercial tables when migration 0030+ is applied.
+-- For a single pass after all migrations 0001–0032, prefer also `check_full_schema_readiness.sql`.
 -- This file does not replace per-wave checks; it aggregates cross-cutting signals for domain separation and wiring.
 --
 -- Expect every row below to have ok = true.
@@ -234,3 +236,54 @@ select
       table_schema = 'public'
       and table_name in ('venue_published_special_tap', 'venue_published_tap_special')
   ) as ok;
+
+-- 9) Wave 11 commercial adjacency: when 0030+ is applied, core commercial tables must all exist; otherwise skip (pass)
+with
+  expected_commercial (name) as (
+    values
+      ('subscription_plan_reference'),
+      ('business_subscription'),
+      ('business_entitlement'),
+      ('business_venue_commercial_overlay'),
+      ('commercial_overlay_reference'),
+      ('business_commercial_overlay_attachment')
+  ),
+  wave11_marker as (
+    select
+      exists (
+        select
+          1
+        from
+          information_schema.tables
+        where
+          table_schema = 'public'
+          and table_name = 'business_subscription'
+      ) as present
+  )
+select
+  'expected_commercial_tables_present_when_wave11_applied' as check_name,
+  case
+    when not (
+      select
+        present
+      from
+        wave11_marker
+    ) then true
+    else (
+      select
+        (
+          select
+            count(*)
+          from
+            information_schema.tables t
+            join expected_commercial e on e.name = t.table_name
+          where
+            t.table_schema = 'public'
+        ) = (
+          select
+            count(*)
+          from
+            expected_commercial
+        )
+    )
+  end as ok;

@@ -52,6 +52,7 @@ This wave tightens the **already drafted** first-tranche SQL (Waves 1–9) witho
 
 - `database/sql/checks/check_wave_10_post_wave_cleanup_and_hardening.sql` — index + constraint spot checks.
 - `database/sql/checks/check_first_tranche_end_to_end.sql` — extended section when the full migration stack through Wave 9+ is applied.
+- After Wave 11 (`0032`), `database/sql/checks/check_full_schema_readiness.sql` aggregates the full drafted stack (Wave 12).
 
 ## Ordering
 

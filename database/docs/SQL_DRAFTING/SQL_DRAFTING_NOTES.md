@@ -1,6 +1,8 @@
-# SQL drafting notes — Tranche 1 (Waves 1–11, incl. Wave 10 cleanup + Wave 11 commercial)
+# SQL drafting notes — Tranche 1 (Waves 1–11, incl. Wave 10 cleanup + Wave 11 commercial + Wave 12 readiness)
 
 This file records **implementation-level** choices made while staying within locked architecture. It does not reopen planning decisions.
+
+**Wave 12** adds cross-wave verification (`check_full_schema_readiness.sql`), handoff docs (`WAVE_12_FINAL_READINESS_REVIEW.md`, `MIGRATION_RUN_ORDER.md`), and a composed `seed.sql` that loads specials/taps/commercial demo rows when the full migration stack is present — no new schema.
 
 ## Migration ordering
 
@@ -79,8 +81,8 @@ Migrations `0001`–`0032` apply in lexical order. Dependencies:
 
 Shipped alongside migrations `0001`–`0020` (see `WAVE_07_VERIFICATION_AND_SEEDS.md` and `FIRST_TRANCHE_OVERVIEW.md`); extended by Waves 8–10 checks as migrations grew.
 
-- **Checks:** `database/sql/checks/check_wave_01_foundations.sql` … `check_wave_06_rls_and_permission_guardrails.sql`, `check_wave_08_specials_promotions.sql`, `check_wave_09_tap_list_backbone.sql`, `check_wave_10_post_wave_cleanup_and_hardening.sql`, `check_wave_11_commercial_subscription_adjacency.sql`, plus `check_first_tranche_end_to_end.sql`.
-- **Seeds:** `database/sql/seeds/dev_seed_reference_minimum.sql`, `dev_seed_demo_venues.sql`, `dev_seed_demo_accounts_and_relationships.sql`, `dev_seed_demo_commercial.sql` (optional), composed by `database/supabase/seed.sql`.
+- **Checks:** `database/sql/checks/check_wave_01_foundations.sql` … `check_wave_06_rls_and_permission_guardrails.sql`, `check_wave_08_specials_promotions.sql`, `check_wave_09_tap_list_backbone.sql`, `check_wave_10_post_wave_cleanup_and_hardening.sql`, `check_wave_11_commercial_subscription_adjacency.sql`, `check_first_tranche_end_to_end.sql`, and **`check_full_schema_readiness.sql`** (run after full `0001`–`0032` apply).
+- **Seeds:** `dev_seed_reference_minimum.sql` → `dev_seed_demo_venues.sql` → `dev_seed_demo_accounts_and_relationships.sql` → `dev_seed_demo_specials.sql` → `dev_seed_demo_taps.sql` → `dev_seed_demo_commercial.sql`, composed by `database/supabase/seed.sql` (comment out tail files if migrations stop earlier).
 
 **Later workers:** extend seeds with new reference data as needed; avoid duplicating large “fake prod” datasets. Keep auth + published direct-insert demos clearly labeled as **local/dev only** in docs (RLS still blocks normal clients from mutating published truth).
 
@@ -101,7 +103,7 @@ Shipped alongside migrations `0001`–`0020` (see `WAVE_07_VERIFICATION_AND_SEED
 - **Unstructured label:** `unstructured_line_label` is for display/context; pairing with discovery filters should require structured `beverage_product_id` + tier gates, not text alone (DL-005).
 - **Validity vs tiers:** `venue_published_tap_offering_validity` and `venue_published_tap_offering_discovery_eligibility` are split so freshness and “where it may appear” are not collapsed. **`safe_for_strong_current_tap_claim`** is the strongest present-tense tier — analogous in spirit to `safe_for_active_now_ranking` on specials, but named for tap semantics. No CHECK forces tier implications; conservative derivation stays in application logic.
 - **RLS:** Wave 9 policies live in `0026` only; migration `0017` is unchanged — reset DBs must apply `0024`–`0026` after `0017` so tap tables are covered.
-- **Demo seed:** `database/sql/seeds/dev_seed_demo_taps.sql` — optional include alongside venue seeds; not added to `seed.sql` in this tranche.
+- **Demo seed:** `database/sql/seeds/dev_seed_demo_taps.sql` — wired from `database/supabase/seed.sql` after specials when the full stack is applied (see `WAVE_12_FINAL_READINESS_REVIEW.md`).
 
 ## Wave 11 — Commercial / subscription adjacency (`0030`–`0032`)
 

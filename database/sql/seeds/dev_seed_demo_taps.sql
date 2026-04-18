@@ -1,6 +1,7 @@
 -- PubPlus — demo tap list rows (local / dev / demo)
 -- Minimal exercise of 0024–0026: one brewery, one style, one product, two tap lines on a demo venue.
 -- Depends on: dev_seed_demo_venues.sql (canonical venue IDs).
+-- Included from database/supabase/seed.sql after specials when migrations through 0026 are applied (see WAVE_12_FINAL_READINESS_REVIEW.md).
 -- Do not treat seed inserts as proof of production publish hygiene — RLS blocks normal client writes.
 
 begin;

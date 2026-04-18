@@ -16,7 +16,8 @@ This wave is **not** new schema architecture. It finalizes the **first implement
 | `check_wave_04_consumer_private_state.sql` | Split prefs tables; list-native saves; venue FK; submissions not “published truth” by naming |
 | `check_wave_05_owner_business_authority.sql` | No membership→venue shortcut; grants via managed-venue junction; distinct authority tables |
 | `check_wave_06_rls_and_permission_guardrails.sql` | RLS on key classes; helpers `SECURITY INVOKER`; published truth without client write policies (samples) |
-| `check_first_tranche_end_to_end.sql` | Small cross-cutting checklist (table presence, separation, helper posture, sample RLS/write posture) |
+| `check_first_tranche_end_to_end.sql` | Small cross-cutting checklist (table presence, separation, helper posture, sample RLS/write posture; optional blocks when later waves applied) |
+| `check_full_schema_readiness.sql` | Added in Wave 12 — single pass after migrations `0001`–`0032` (see `WAVE_12_FINAL_READINESS_REVIEW.md`) |
 
 Run these **after** migrations apply. Each file returns result sets with `check_name` and `ok` (boolean) or explicit `pg_catalog` rows — **inspect for `ok = false` / `relrowsecurity = false`**.
 
@@ -34,15 +35,15 @@ These checks are **practical guardrails**, not formal proofs. They catch obvious
 
 | File | Purpose |
 |------|---------|
-| `database/supabase/seed.sql` | Composes the three seed files in order via `\ir` (paths relative to this file) |
+| `database/supabase/seed.sql` | Composes reference → venues → accounts → (optional) specials, taps, commercial via `\ir` — see `WAVE_12_FINAL_READINESS_REVIEW.md` |
 
 ## How to run safely
 
-1. **Migrations first:** apply `0001`–`0020` in order on a database that includes Supabase Auth (`auth` schema). Plain Postgres without Auth will fail on account seeding.
+1. **Migrations first:** apply `0001`–`0032` in order for the full drafted package (or stop earlier and omit optional seed includes). Database must include Supabase Auth (`auth` schema) for account seeding. Plain Postgres without Auth will fail on account seeding.
 2. **Checks:** run each `check_wave_*.sql` and `check_first_tranche_end_to_end.sql` as a privileged user (same as migrations). No writes required.
 3. **Seeds:**
    - **Reference + venues only:** run `dev_seed_reference_minimum.sql` then `dev_seed_demo_venues.sql` if you want published data **without** auth.
-   - **Full demo:** run `database/supabase/seed.sql` (or the three files in order). Requires `pgcrypto` (`extensions.crypt` / `gen_salt`) for password hashing.
+   - **Full demo:** run `database/supabase/seed.sql` (or the same files in dependency order). Requires `pgcrypto` (`extensions.crypt` / `gen_salt`) for password hashing. Tail files need matching migrations (specials/taps/commercial).
 4. **Trust / workflow posture:** seeding **published-truth tables directly** is intentional for **local/dev** to exercise reads and joins. It does **not** replace publish pipelines, evidence, or reviews in production. Document this clearly to anyone interpreting demo data as “real” provenance.
 
 ## Small cleanup decisions (implementation-level)

@@ -43,7 +43,7 @@ This wave adds the **published-truth** tap list model: lightweight **beverage pr
 
 ## Demo seed
 
-`database/sql/seeds/dev_seed_demo_taps.sql` depends on `dev_seed_demo_venues.sql`. It is **not** wired into `database/supabase/seed.sql` by this wave; include it in your local composer when you want tap rows loaded.
+`database/sql/seeds/dev_seed_demo_taps.sql` depends on `dev_seed_demo_venues.sql`. It is included from `database/supabase/seed.sql` after specials when the full stack is applied; comment out if migrations stop before `0026` (see `WAVE_12_FINAL_READINESS_REVIEW.md`).
 
 ## See also
 

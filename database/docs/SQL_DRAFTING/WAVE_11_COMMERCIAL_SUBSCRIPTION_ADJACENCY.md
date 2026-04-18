@@ -54,7 +54,7 @@ This tranche adds the **business-first commercial backbone** and **minimal spons
 ## Verification
 
 - `database/sql/checks/check_wave_11_commercial_subscription_adjacency.sql`
-- Optional: extend `check_first_tranche_end_to_end.sql` when the Database Manager wants a single mega-check updated.
+- `check_first_tranche_end_to_end.sql` includes an optional Wave 11 table-presence block; `check_full_schema_readiness.sql` aggregates the full stack (Wave 12).
 
 ## Ordering
 

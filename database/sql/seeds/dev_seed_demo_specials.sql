@@ -1,7 +1,7 @@
 -- PubPlus — demo structured specials (local / dev / demo)
 -- Depends on: dev_seed_demo_venues.sql (canonical venue IDs + published profile rows).
 -- Inserts published-truth specials directly for local/dev only — production writes go through publish orchestration.
--- Compose after venues; not automatically included in seed.sql (see WAVE_08_SPECIALS_PROMOTIONS.md).
+-- Included from database/supabase/seed.sql after venues (requires migrations through 0023). See WAVE_12_FINAL_READINESS_REVIEW.md for full seed order.
 
 begin;
 

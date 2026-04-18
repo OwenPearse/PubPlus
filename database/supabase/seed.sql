@@ -1,13 +1,19 @@
 -- PubPlus — Supabase seed entry point (local / dev / demo)
 --
--- This file composes the minimal first-tranche seeds in dependency order:
+-- Composed seed order (each file documents its own dependencies):
 --   1) reference geography + attribute defs + external source catalog
 --   2) demo published venues (direct published-truth inserts — dev convenience only)
 --   3) demo auth users + logical accounts + owner/business/authority + light consumer private rows
+--   4) demo structured specials (requires migrations through 0023)
+--   5) demo tap list (requires migrations through 0026)
+--   6) demo commercial/subscription adjacency (requires migrations through 0032 + step 3)
 --
--- Paths use psql \ir (include relative), resolved relative to this file’s directory.
--- If your Supabase project keeps seed.sql elsewhere, copy these includes or run the three files
+-- Paths use psql \ir (include relative), resolved relative to this file’s directory
+-- (database/supabase/ → database/sql/seeds/).
+-- If your Supabase project keeps seed.sql elsewhere, copy these includes or run the files
 -- under database/sql/seeds/ manually in the same order.
+--
+-- Comment out steps 4–6 if your database has not applied the extended migrations yet.
 --
 -- Demo logins (when auth seed succeeds):
 --   consumer1@demo.pubplus.local / demo-password-123
@@ -22,5 +28,14 @@
 
 \echo 'PubPlus: loading dev_seed_demo_accounts_and_relationships.sql'
 \ir ../sql/seeds/dev_seed_demo_accounts_and_relationships.sql
+
+\echo 'PubPlus: loading dev_seed_demo_specials.sql'
+\ir ../sql/seeds/dev_seed_demo_specials.sql
+
+\echo 'PubPlus: loading dev_seed_demo_taps.sql'
+\ir ../sql/seeds/dev_seed_demo_taps.sql
+
+\echo 'PubPlus: loading dev_seed_demo_commercial.sql'
+\ir ../sql/seeds/dev_seed_demo_commercial.sql
 
 \echo 'PubPlus: seed composition finished.'
