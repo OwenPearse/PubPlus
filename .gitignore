@@ -1,0 +1,30 @@
+# MCP/Supabase local payload artifacts
+.migrations_mcp/
+.mcp_check_payloads/
+.mcp_sql_checks/
+
+# Hidden root-level MCP invoke/temp files
+.invoke*.json
+.mcp*.json
+.args*.json
+.exec*.json
+.seed*.json
+.query_only*.json
+.tmp_seed*.json
+.out_invoke*.json
+.migration_payload.json
+.cursor_mcp_args.json
+.q*.sql
+
+# Local debug scratch artifacts
+_*
+t[0-9].json
+cmd_out.json
+mcp_*.json
+node_out.txt
+node_stdout_capture.txt
+q_only.txt
+qout.sql
+seed4_line.txt
+seed4_stdout.txt
+term_seed4.txt

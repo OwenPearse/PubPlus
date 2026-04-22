@@ -1,21 +1,21 @@
--- PubPlus — minimal demo commercial/subscription rows (local/dev)
+-- PubPlus - minimal demo commercial/subscription rows (local/dev)
 -- Depends on: dev_seed_demo_accounts_and_relationships.sql (businesses + BVM rows)
 -- Included from database/supabase/seed.sql last when migrations through 0032 are applied (see WAVE_12_FINAL_READINESS_REVIEW.md).
--- Does not simulate webhooks, invoices, or full billing — only exercises Wave 11 tables.
+-- Does not simulate webhooks, invoices, or full billing - only exercises Wave 11 tables.
 
 begin;
 
 insert into public.subscription_plan_reference (id, plan_code, display_name, is_active, sort_order)
 values
   (
-    'pp000001-0001-4001-8001-000000000001',
+    'a0000001-0001-4001-8001-000000000001',
     'pub_plus_standard',
     'PubPlus Standard',
     true,
     10
   ),
   (
-    'pp000002-0002-4002-8002-000000000002',
+    'a0000002-0002-4002-8002-000000000002',
     'pub_plus_growth',
     'PubPlus Growth',
     true,
@@ -35,7 +35,7 @@ insert into public.business_subscription (
   current_period_end
 )
 select
-  'sb000001-0001-4001-8001-000000000001',
+  'b0000001-0001-4001-8001-000000000001',
   'bb000001-0001-4001-8001-000000000001',
   spr.id,
   'active',
@@ -83,8 +83,8 @@ insert into public.business_venue_commercial_overlay (
 )
 values
   (
-    'vo000001-0001-4001-8001-000000000011',
-    'rm000001-0001-4001-8001-000000000011',
+    'c0000001-0001-4001-8001-000000000011',
+    'a1000001-0001-4001-8001-000000000011',
     'default',
     '{"listing_highlight": true}'::jsonb,
     'active'
@@ -97,7 +97,7 @@ on conflict (business_venue_management_relationship_id, overlay_scope) do update
 insert into public.commercial_overlay_reference (id, overlay_kind_code, display_name, is_active, sort_order)
 values
   (
-    'cr000001-0001-4001-8001-000000000001',
+    'c1000001-0001-4001-8001-000000000001',
     'map_pin_sponsor',
     'Map pin sponsorship (demo)',
     true,
