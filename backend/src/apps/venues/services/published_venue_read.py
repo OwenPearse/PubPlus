@@ -118,6 +118,44 @@ def _date_to_iso(value: date) -> str:
     return value.isoformat()
 
 
+def get_published_hours_uncertainty(venue_id: UUID | str) -> str | None:
+    """
+    `venue_hours_uncertainty` row, if any. Used by centralized open-now logic.
+    """
+    vid = str(venue_id)
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT uncertainty_level
+            FROM public.venue_hours_uncertainty
+            WHERE venue_id = %s
+            """,
+            [vid],
+        )
+        row = c.fetchone()
+        return str(row[0]) if row else None
+
+
+def map_published_hours_uncertainty(venue_ids: list[UUID | str]) -> dict[str, str | None]:
+    if not venue_ids:
+        return {}
+    ids = [str(v) for v in venue_ids]
+    with connection.cursor() as c:
+        placeholders = ",".join(["%s"] * len(ids))
+        c.execute(
+            f"""
+            SELECT venue_id::text, uncertainty_level
+            FROM public.venue_hours_uncertainty
+            WHERE venue_id IN ({placeholders})
+            """,
+            ids,
+        )
+        out: dict[str, str | None] = {i: None for i in ids}
+        for row in c.fetchall():
+            out[str(row[0])] = str(row[1])
+    return out
+
+
 def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueReadBundle | None:
     vid = str(venue_id)
     with connection.cursor() as c:
