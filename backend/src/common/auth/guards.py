@@ -2,11 +2,12 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 
 from common.auth.errors import InvalidTokenError, MissingBearerTokenError
 from common.auth.jwt_verifier import verify_supabase_jwt
-from common.auth.request_context import set_auth_context
+from common.auth.request_context import get_auth_context, set_auth_context
 from common.auth.token_extraction import extract_bearer_token
 
 
@@ -19,6 +20,18 @@ def _unauthorized_response() -> JsonResponse:
             }
         },
         status=401,
+    )
+
+
+def _forbidden_response() -> JsonResponse:
+    return JsonResponse(
+        {
+            "error": {
+                "code": "forbidden",
+                "message": "Authenticated identity is not authorized for this endpoint.",
+            }
+        },
+        status=403,
     )
 
 
@@ -35,6 +48,19 @@ def _resolve_auth_context(request: HttpRequest, required: bool) -> bool:
     return True
 
 
+def _is_internal_admin_context(request: HttpRequest) -> bool:
+    auth_context = get_auth_context(request)
+    if auth_context is None:
+        return False
+
+    allowed_subjects = set(getattr(settings, "PUBPLUS_INTERNAL_ADMIN_SUBJECTS", []))
+    if auth_context.subject in allowed_subjects:
+        return True
+
+    claims = auth_context.claims or {}
+    return bool(claims.get("pubplus_internal_admin") is True)
+
+
 def require_consumer_auth(
     view_func: Callable[..., HttpResponse],
 ) -> Callable[..., HttpResponse]:
@@ -44,6 +70,24 @@ def require_consumer_auth(
             _resolve_auth_context(request, required=True)
         except (MissingBearerTokenError, InvalidTokenError):
             return _unauthorized_response()
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
+def require_internal_admin_auth(
+    view_func: Callable[..., HttpResponse],
+) -> Callable[..., HttpResponse]:
+    @wraps(view_func)
+    def wrapped(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        try:
+            _resolve_auth_context(request, required=True)
+        except (MissingBearerTokenError, InvalidTokenError):
+            return _unauthorized_response()
+
+        if not _is_internal_admin_context(request):
+            return _forbidden_response()
+
         return view_func(request, *args, **kwargs)
 
     return wrapped
