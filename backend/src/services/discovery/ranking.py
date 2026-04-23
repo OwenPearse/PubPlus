@@ -9,7 +9,7 @@ from services.discovery.filters import DiscoveryMvpFilters, DiscoveryMode
 from services.discovery.open_now import OpenNowResult
 
 
-@dataclass(frozen=True)
+@dataclass
 class RankComponents:
     """
     Human-readable, additive ingredients for `rank_score` (0..+inf, higher is better).

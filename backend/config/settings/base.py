@@ -57,8 +57,29 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # Database
-DATABASE_URL = get_env("DATABASE_URL", required=True)
-DATABASES = {"default": parse_database_url(DATABASE_URL)}
+DATABASE_URL = get_env("DATABASE_URL", default="")
+if DATABASE_URL:
+    DATABASES = {"default": parse_database_url(DATABASE_URL)}
+else:
+    DB_HOST = get_env("DB_HOST", required=True)
+    DB_PORT = int(get_env("DB_PORT", default="5432"))
+    DB_NAME = get_env("DB_NAME", required=True)
+    DB_USER = get_env("DB_USER", required=True)
+    DB_PASSWORD = get_env("DB_PASSWORD", required=True)
+    DB_SSLMODE = get_env("DB_SSLMODE", default="")
+
+    default_db = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": DB_NAME,
+        "USER": DB_USER,
+        "PASSWORD": DB_PASSWORD,
+        "HOST": DB_HOST,
+        "PORT": DB_PORT,
+    }
+    if DB_SSLMODE:
+        default_db["OPTIONS"] = {"sslmode": DB_SSLMODE}
+
+    DATABASES = {"default": default_db}
 
 # Supabase
 SUPABASE_URL = get_env("SUPABASE_URL", required=True)
