@@ -75,6 +75,8 @@ The backend should be documented as if these tiers exist or will exist:
 
 Developer machine and local Docker setup.
 
+To load the Melbourne inner-city test seed (migrations + published-truth SQL), see [MELBOURNE_SEED_APPLY.md](MELBOURNE_SEED_APPLY.md) (Supabase or local Docker `psql` path).
+
 ## Development
 
 Shared development environment aligned to the active Supabase development project.
