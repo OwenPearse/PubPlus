@@ -7,6 +7,7 @@ until the shared `open_now` service exists (see docs/OPEN_NOW_AND_DISCOVERY_RULE
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TypeAlias
 from uuid import UUID
 
@@ -34,6 +35,7 @@ from apps.venues.public_read.detail import (
 )
 from apps.venues.services.published_venue_read import (
     PublishedVenueReadBundle,
+    get_published_hours_uncertainty,
     load_published_venue_read_bundle,
 )
 from apps.venues.services import save_enrichment
@@ -258,13 +260,33 @@ def bundle_to_public_venue_detail(
     )
 
 
+def apply_open_now_to_detail(
+    detail: PublicVenueDetail, *, bundle: PublishedVenueReadBundle
+) -> PublicVenueDetail:
+    from services.discovery.open_now import compute_open_now
+
+    open_res = compute_open_now(
+        bundle,
+        hours_uncertainty_level=get_published_hours_uncertainty(bundle.core.venue_id),
+    )
+    return replace(
+        detail,
+        hours=replace(
+            detail.hours,
+            open_now=open_res.public_open_now,
+            open_now_uncomputed=open_res.public_open_now_uncomputed,
+        ),
+    )
+
+
 def build_public_venue_detail(
     venue_id: VenueId, *, auth: AuthContext | None = None
 ) -> PublicVenueDetail | None:
     bundle = load_published_venue_read_bundle(venue_id)
     if not bundle:
         return None
-    return bundle_to_public_venue_detail(bundle, auth=auth)
+    detail = bundle_to_public_venue_detail(bundle, auth=auth)
+    return apply_open_now_to_detail(detail, bundle=bundle)
 
 
 def public_venue_card_dict(
