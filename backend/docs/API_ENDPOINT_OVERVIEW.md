@@ -297,8 +297,9 @@ Auth
 Consumer auth required
 
 Behaviour
-structured-first payload
-optional free-text notes
+structured-first payload: `venue_id` (UUID), `domain` (`profile` | `location` | `attributes` | `hours`), and domain-specific `proposed_values`; `note` optional (bounded)
+domains outside that set are rejected until staging models exist for them
+`201` response body is acknowledgement-only: `{ "status": "received", "message": "…" }` (no internal workflow or moderation state)
 routes to moderation/workflow state
 must not mutate published truth directly
 POST /api/v1/submissions/new-venues
@@ -311,8 +312,9 @@ Auth
 Consumer auth required
 
 Behaviour
-structured-first payload
-optional free-text notes
+structured minimum: `name`, `address_line_1` required; `address_line_2`, `locality_id`, `geographic_region_id`, `postcode`, `latitude`, `longitude`, `country_code`, `note` optional; locality/region are FK-validated; region must match the locality when both are sent
+creates a canonical `venue` shell plus `venue_change_proposal` + `venue_proposal_target` (profile, geo) + profile/location staging only — not `venue_published_*` discovery truth
+`201` acknowledgement body as for corrections; no internal moderation data in the response
 routes to moderation/workflow state
 must not directly create published public truth
 Deferred endpoints
