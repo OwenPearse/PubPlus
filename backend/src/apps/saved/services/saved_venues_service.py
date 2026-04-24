@@ -11,12 +11,13 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from django.db import DatabaseError, IntegrityError, connection, transaction
+from django.db import DatabaseError, connection, transaction
 
 from apps.venues.public_read.card import public_venue_card_to_dict
 from apps.venues.services import save_enrichment
 from apps.venues.services.venue_read_service import build_public_venue_card
 from common.auth.context import AuthContext
+from common.consumer_account import get_or_create_consumer_account_id
 
 # Convention: one MVP default list for simple save/unsave; list-native model (Worker 1 / Stage C).
 DEFAULT_SAVED_LIST_NAME = "Saved"
@@ -26,54 +27,6 @@ DEFAULT_SAVED_LIST_NAME = "Saved"
 class SaveVenueResult:
     venue_id: str
     saved: bool
-
-
-def _auth_user_uuid(auth: AuthContext) -> UUID:
-    try:
-        return UUID(str(auth.subject))
-    except (ValueError, TypeError) as exc:
-        raise ValueError("Invalid auth subject; expected a UUID auth user id.") from exc
-
-
-@transaction.atomic
-def get_or_create_consumer_account_id(auth: AuthContext) -> UUID:
-    """Resolve Supabase `sub` to `public.consumer_account.id`, creating the row if missing."""
-    auth_uid = _auth_user_uuid(auth)
-    with connection.cursor() as c:
-        c.execute(
-            """
-            SELECT id
-            FROM public.consumer_account
-            WHERE auth_user_id = %s::uuid
-            """,
-            [str(auth_uid)],
-        )
-        row = c.fetchone()
-        if row:
-            return UUID(str(row[0]))
-        try:
-            c.execute(
-                """
-                INSERT INTO public.consumer_account (auth_user_id)
-                VALUES (%s::uuid)
-                RETURNING id
-                """,
-                [str(auth_uid)],
-            )
-            ins = c.fetchone()
-        except IntegrityError:
-            c.execute(
-                """
-                SELECT id
-                FROM public.consumer_account
-                WHERE auth_user_id = %s::uuid
-                """,
-                [str(auth_uid)],
-            )
-            ins = c.fetchone()
-        if not ins:
-            raise RuntimeError("Could not resolve consumer_account.")
-    return UUID(str(ins[0]))
 
 
 @transaction.atomic
