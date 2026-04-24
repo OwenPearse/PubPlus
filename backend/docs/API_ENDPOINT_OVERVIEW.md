@@ -339,11 +339,23 @@ GET /api/v1/internal/moderation/queue
 Purpose
 
 Return moderation queue items for admin/operator use.
+Current implementation notes
+- canonical `item_id` is `venue_change_proposal.id`
+- required filters supported: `status`, `domain`, `venue_id`
+- optional filters supported: `created_before`, `created_after` (ISO datetime)
+- `domain=location` maps to workflow target family `geo`
+- default queue scope is open items (`staged`, `in_review`)
+- compact response only (no full staging payload dump)
 
 GET /api/v1/internal/moderation/items/{item_id}
 Purpose
 
 Return moderation item detail.
+Current implementation notes
+- `{item_id}` resolves directly to `venue_change_proposal.id`
+- includes proposal header, target families, staging payloads (profile/location/attributes/hours), and read-only review rows
+- includes bounded published-venue context when available
+- does not mutate lifecycle/workflow state
 
 POST /api/v1/internal/moderation/items/{item_id}/decision
 Purpose
@@ -370,6 +382,10 @@ GET /api/v1/internal/venues/{venue_id}
 Purpose
 
 Internal lookup endpoint for operations/moderation support.
+Current implementation notes
+- reuses published venue read bundle when present
+- shell/unpublished venues return a fallback view based on latest proposal staging data
+- includes light workflow summary (`open_proposal_count`, `latest_open_proposal_id`) only
 
 Notes
 

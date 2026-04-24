@@ -124,6 +124,12 @@ Each queue item should provide enough information to decide whether to open it, 
 Avoid overbuilding queue intelligence in MVP.
 
 Simple filtering and ordering is enough initially.
+Current implementation contract (Stage D read-side)
+- canonical moderation item id is `venue_change_proposal.id`
+- filters: `status` (lifecycle), `domain` (target family; `location` -> `geo`), `venue_id`
+- optional filters: `created_before`, `created_after` (ISO datetime)
+- default queue shows open statuses (`staged`, `in_review`)
+- ordered newest-first by submitted/created time with stable tie-breaker
 
 ---
 
@@ -164,6 +170,11 @@ Return the full internal detail for a moderation item.
 - submitter attribution summary
 - current moderation status
 - duplication-check support later if added
+
+Current implementation contract (Stage D read-side)
+- loads directly from `venue_change_proposal` + `venue_proposal_target` + staging tables
+- includes read-only `proposal_review` history when present
+- response keeps `internal_notes` field for forward compatibility, currently empty until note write-path is delivered
 
 ---
 
@@ -254,6 +265,10 @@ For example, where appropriate, it may include:
 - selected freshness or workflow indicators
 
 This data must remain internal-only.
+Current implementation contract (Stage D read-side)
+- attempts published bundle first; if absent, returns shell fallback from latest proposal staging
+- includes light workflow summary only: open proposal count + latest open proposal id
+- intentionally excludes full moderation history, full audit streams, and large proposal collections
 
 ---
 
