@@ -3,7 +3,9 @@ from django.urls import path
 from api.v1.internal.views import (
     internal_auth_probe,
     internal_venue_detail,
+    moderation_item_decision,
     moderation_item_detail,
+    moderation_item_notes,
     moderation_queue,
 )
 
@@ -14,6 +16,16 @@ urlpatterns = [
         "moderation/items/<str:item_id>",
         moderation_item_detail,
         name="internal-moderation-item-detail",
+    ),
+    path(
+        "moderation/items/<str:item_id>/decision",
+        moderation_item_decision,
+        name="internal-moderation-item-decision",
+    ),
+    path(
+        "moderation/items/<str:item_id>/notes",
+        moderation_item_notes,
+        name="internal-moderation-item-notes",
     ),
     path("venues/<str:venue_id>", internal_venue_detail, name="internal-venue-detail"),
 ]

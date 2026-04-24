@@ -361,22 +361,25 @@ POST /api/v1/internal/moderation/items/{item_id}/decision
 Purpose
 
 Apply moderation decision.
-
-Expected actions
-
-Examples:
-
-approve
-reject
-request follow-up later if implemented
-Notes
-
-Must support operator attribution and lightweight audit notes.
+Current implementation notes
+- accepts JSON body: `decision` (`approve` or `reject`) and optional `reason`
+- canonical `{item_id}` is `venue_change_proposal.id` (UUID)
+- validates internal operator by resolving JWT `sub` to `admin_account.id` before write
+- writes formal review row in `proposal_review` with reviewer attribution and sequence
+- transitions `venue_change_proposal.lifecycle_status` to `approved` or `rejected` and sets `closed_at`
+- rejects re-decision of terminal proposals with `409 conflict`
+- appends bounded `audit_event` action `moderation_decision`
+- does **not** write `venue_publish_event` or `venue_published_*` rows in this stage
 
 POST /api/v1/internal/moderation/items/{item_id}/notes
 Purpose
 
 Add lightweight audit/operator note.
+Current implementation notes
+- accepts JSON body: `body` (required, non-empty, max 2000 chars)
+- stores append-only note in `audit_event` with action `internal_note`
+- note is attached to `venue_change_proposal` item only (not venue-level)
+- internal moderation detail now includes these notes under `internal_notes`
 
 GET /api/v1/internal/venues/{venue_id}
 Purpose

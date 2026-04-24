@@ -376,6 +376,37 @@ def _load_reviews(proposal_id: str) -> list[dict[str, Any]]:
         return out
 
 
+def _load_internal_notes(proposal_id: str) -> list[dict[str, Any]]:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT
+              ae.id::text,
+              ae.actor_admin_account_id::text,
+              ae.occurred_at,
+              ae.detail
+            FROM public.audit_event ae
+            WHERE ae.entity_table = 'venue_change_proposal'
+              AND ae.entity_id = %s::uuid
+              AND ae.action = 'internal_note'
+            ORDER BY ae.occurred_at ASC, ae.id ASC
+            """,
+            [proposal_id],
+        )
+        out: list[dict[str, Any]] = []
+        for r in c.fetchall():
+            detail = r[3] if isinstance(r[3], dict) else {}
+            out.append(
+                {
+                    "id": r[0],
+                    "actor_admin_account_id": r[1],
+                    "body": detail.get("body"),
+                    "created_at": r[2].isoformat() if r[2] else None,
+                }
+            )
+        return out
+
+
 def _load_published_context(venue_id: str) -> dict[str, Any] | None:
     bundle = load_published_venue_read_bundle(venue_id)
     if bundle is None:
@@ -443,7 +474,7 @@ def get_moderation_item_detail(item_id: str) -> dict[str, Any]:
             "client_correlation_id": row[11],
         },
         "reviews": _load_reviews(proposal_id),
-        "internal_notes": [],
+        "internal_notes": _load_internal_notes(proposal_id),
     }
 
 

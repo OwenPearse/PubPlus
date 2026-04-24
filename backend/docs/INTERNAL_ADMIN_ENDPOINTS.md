@@ -200,6 +200,10 @@ The request should be structured and may include:
 - decision action
 - optional note
 - any explicit internal metadata needed for workflow routing
+Stage D implemented request contract
+- body: `{ "decision": "approve" | "reject", "reason"?: string }`
+- decision values outside `approve|reject` return `400`
+- invalid/non-UUID `{item_id}` returns `400`
 
 #### Behaviour rules
 
@@ -208,6 +212,13 @@ The request should be structured and may include:
 - optional note must be stored as internal-only audit context
 - moderation/workflow state must be updated safely
 - if approval results in published changes, it must follow the proper publish/workflow path rather than bypassing history
+Stage D implemented behaviour
+- resolves JWT `sub` to `admin_account.id`; missing mapping returns conflict-style failure
+- writes `proposal_review` (`reviewer_admin_account_id`, `review_outcome`, `review_sequence`, optional `decision_reason_text`)
+- transitions `venue_change_proposal.lifecycle_status` to `approved` or `rejected` and closes the proposal
+- terminal/closed proposals are not re-decided (`409`)
+- appends an `audit_event` (`action='moderation_decision'`) for lightweight operational history
+- intentionally does not mutate published truth tables or publish lineage rows
 
 #### Important rule
 
@@ -238,6 +249,11 @@ Attach an internal-only note to a moderation item.
 - notes are internal-only
 - notes must never appear in public APIs
 - note timestamps should be captured
+Stage D implemented behaviour
+- body contract: `{ "body": string }` (required, trimmed non-empty, max 2000 chars)
+- persists as append-only `audit_event` rows with `action='internal_note'`, entity `venue_change_proposal`
+- attributed to resolved `admin_account.id` from authenticated internal operator
+- surfaced in internal moderation detail (`internal_notes`) only; never in public venue endpoints
 
 ---
 
