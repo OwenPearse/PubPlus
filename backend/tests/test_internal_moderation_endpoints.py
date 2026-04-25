@@ -495,6 +495,38 @@ class InternalModerationReadEndpointTests(TestCase):
         notes = detail_resp.json().get("internal_notes", [])
         self.assertTrue(any(n.get("body") == "Investigate source mismatch." for n in notes))
 
+    def test_internal_note_not_exposed_by_public_venue_detail(self) -> None:
+        item_id = self._create_profile_proposal()
+        op_subject = self.e2e.auth_user_id
+        self._ensure_admin_account_for_subject(op_subject)
+        with patch(
+            "common.auth.guards.verify_supabase_jwt",
+            return_value=_internal_ctx_for_subject(op_subject),
+        ):
+            note_resp = self.client.post(
+                f"/api/v1/internal/moderation/items/{item_id}/notes",
+                data='{"body":"Internal-only note for operators."}',
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+            internal_detail_resp = self.client.get(
+                f"/api/v1/internal/moderation/items/{item_id}",
+                **self._auth_headers(),
+            )
+
+        self.assertEqual(note_resp.status_code, 201, note_resp.content)
+        self.assertEqual(internal_detail_resp.status_code, 200, internal_detail_resp.content)
+        self.assertTrue(
+            any(
+                n.get("body") == "Internal-only note for operators."
+                for n in internal_detail_resp.json().get("internal_notes", [])
+            )
+        )
+
+        public_detail_resp = self.client.get(f"/api/v1/venues/{self.e2e.venue_id}")
+        self.assertEqual(public_detail_resp.status_code, 200, public_detail_resp.content)
+        self.assertNotIn("internal_notes", public_detail_resp.json().get("data", {}))
+
     def test_note_invalid_body_returns_400(self) -> None:
         item_id = self._create_profile_proposal()
         op_subject = self.e2e.auth_user_id

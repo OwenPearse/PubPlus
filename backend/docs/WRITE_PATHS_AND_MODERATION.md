@@ -1,9 +1,3 @@
-
----
-
-## File: `backend/docs/WRITE_PATHS_AND_MODERATION.md`
-
-```md
 # PubPlus Write Paths and Moderation
 
 ## Purpose
@@ -12,7 +6,7 @@ Define the backend rules for authenticated consumer write paths and internal mod
 
 ## Current stage
 
-Architecture and workflow planning before implementation.
+Implemented MVP write-path safety and Stage D moderation decision/notes flows, now in release-hardening.
 
 ## Summary
 
@@ -207,6 +201,7 @@ Recommended response pattern:
   "status": "received",
   "message": "Your submission has been received and will be reviewed."
 }
+```
 
 Avoid exposing complex workflow state in the consumer app for MVP unless it is added later intentionally.
 
@@ -290,6 +285,21 @@ optional lightweight audit note
 Notes should be internal-only.
 
 Notes are not consumer-facing content.
+
+Stage D implementation lock
+- moderation decisions are limited to `approve` / `reject`
+- moderation decision endpoint updates workflow review state only (`proposal_review` + `venue_change_proposal` + audit)
+- moderation decision endpoint does not directly mutate `venue_published_*` or write publish-lineage rows
+- moderation notes are append-only internal audit notes and are never public endpoint fields
+- operator attribution requires internal JWT subject mapping to `admin_account`
+
+Operator precondition
+- internal operators must be provisioned with an `admin_account` row linked to JWT `sub`
+- missing mapping is an operator-environment readiness issue surfaced as `409 operator_resolution_failed`
+
+Test caveat (infrastructure)
+- DB-backed tests for workflow/published-table behavior may skip when those fixtures are unavailable in test DB
+- those skips are infrastructure-only and do not indicate an endpoint runtime contract failure
 
 Separation rules
 Rule 1: Consumer submissions are not moderation decisions

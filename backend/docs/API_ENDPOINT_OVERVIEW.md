@@ -6,7 +6,7 @@ Define the initial REST API surface for the PubPlus backend so frontend integrat
 
 ## Current stage
 
-Architecture and endpoint planning before implementation.
+Implemented MVP backend contract baseline with Stage D internal/admin moderation endpoints.
 
 ## API principles
 
@@ -62,6 +62,7 @@ Recommended baseline:
     }
   }
 }
+```
 
 
 Public endpoint groups
@@ -370,6 +371,7 @@ Current implementation notes
 - rejects re-decision of terminal proposals with `409 conflict`
 - appends bounded `audit_event` action `moderation_decision`
 - does **not** write `venue_publish_event` or `venue_published_*` rows in this stage
+- requires internal operator JWT `sub` to resolve to `admin_account.id`; missing mapping returns conflict-style failure (`operator_resolution_failed`)
 
 POST /api/v1/internal/moderation/items/{item_id}/notes
 Purpose
@@ -380,6 +382,7 @@ Current implementation notes
 - stores append-only note in `audit_event` with action `internal_note`
 - note is attached to `venue_change_proposal` item only (not venue-level)
 - internal moderation detail now includes these notes under `internal_notes`
+- notes are internal-only and are not exposed by public `/api/v1/venues/{venue_id}` responses
 
 GET /api/v1/internal/venues/{venue_id}
 Purpose
@@ -393,6 +396,12 @@ Current implementation notes
 Notes
 
 Can expose richer internal context than public venue detail, but only to authorized internal users.
+
+### Stage D test caveat (DB-backed suites)
+
+- Some Stage D and discovery/venue-detail tests are intentionally DB-backed.
+- In environments where workflow/published fixture tables are unavailable, those tests skip.
+- Those skips indicate test-infrastructure readiness gaps, not a runtime contract blocker in the implemented endpoints.
 
 Auth behaviour on public endpoints
 

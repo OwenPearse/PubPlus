@@ -6,7 +6,7 @@ Define the initial internal/admin backend endpoint scope for PubPlus so founder/
 
 ## Current stage
 
-Architecture and endpoint planning before implementation.
+Implemented Stage D MVP internal/admin moderation surface, now in release-hardening.
 
 ## Summary
 
@@ -174,7 +174,7 @@ Return the full internal detail for a moderation item.
 Current implementation contract (Stage D read-side)
 - loads directly from `venue_change_proposal` + `venue_proposal_target` + staging tables
 - includes read-only `proposal_review` history when present
-- response keeps `internal_notes` field for forward compatibility, currently empty until note write-path is delivered
+- includes `internal_notes` sourced from append-only `audit_event` rows (`action='internal_note'`)
 
 ---
 
@@ -219,6 +219,7 @@ Stage D implemented behaviour
 - terminal/closed proposals are not re-decided (`409`)
 - appends an `audit_event` (`action='moderation_decision'`) for lightweight operational history
 - intentionally does not mutate published truth tables or publish lineage rows
+- intentionally does not trigger direct publish-path writes in this endpoint
 
 #### Important rule
 
@@ -357,6 +358,18 @@ This supports:
 - reviewability
 - operational trust
 - future auditability
+
+### Operator-environment precondition
+
+Internal operators must have an `admin_account` row linked to their authenticated Supabase subject (`auth_user_id = JWT sub`).  
+If that mapping is absent, decision and notes endpoints return `409 operator_resolution_failed`.
+
+---
+
+## Test infrastructure caveat
+
+Some internal moderation tests are DB-backed and depend on workflow/published schema fixtures being present in the test database.  
+When those fixtures are unavailable, tests skip by design; this is an infrastructure caveat, not an endpoint runtime readiness blocker.
 
 ---
 
