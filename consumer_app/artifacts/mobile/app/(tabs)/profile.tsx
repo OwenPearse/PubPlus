@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { Chip } from "@/components/Chip";
 import { EmptyState } from "@/components/EmptyState";
@@ -22,6 +23,7 @@ import { useColors } from "@/hooks/useColors";
 import { signOut } from "@/lib/supabase";
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { session, isAuthenticated, profile, loading, saving, error, refreshProfile, patchProfile } = useProfile();
@@ -72,6 +74,8 @@ export default function ProfileScreen() {
           icon="user"
           title="Sign in to manage your profile"
           subtitle="Profile preferences are available once you sign in."
+          actionLabel="Sign in"
+          onAction={() => router.push("/auth" as never)}
         />
       </View>
     );

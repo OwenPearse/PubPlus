@@ -256,7 +256,10 @@ export default function SearchScreen() {
       {authMessage ? (
         <TouchableOpacity
           style={[styles.authRequiredCard, { backgroundColor: colors.secondary }]}
-          onPress={clearAuthMessage}
+          onPress={() => {
+            clearAuthMessage();
+            router.push("/auth" as never);
+          }}
           activeOpacity={0.85}
         >
           <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>

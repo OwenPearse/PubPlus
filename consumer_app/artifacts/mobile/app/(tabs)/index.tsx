@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { EmptyState } from "@/components/EmptyState";
 import { VenueRow } from "@/components/VenueRow";
@@ -22,6 +23,7 @@ import { useSavedVenues } from "@/hooks/useSavedVenues";
 const CURRENT_SUBURB = "Fitzroy";
 
 export default function HomeScreen() {
+  const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [sections, setSections] = useState<HomeResponse["data"]["sections"]>([]);
@@ -122,7 +124,10 @@ export default function HomeScreen() {
       {!loading && authMessage ? (
         <TouchableOpacity
           style={[styles.authRequiredCard, { backgroundColor: colors.secondary }]}
-          onPress={clearAuthMessage}
+          onPress={() => {
+            clearAuthMessage();
+            router.push("/auth" as never);
+          }}
           activeOpacity={0.85}
         >
           <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>

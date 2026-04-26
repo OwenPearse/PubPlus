@@ -60,6 +60,8 @@ export default function SavedScreen() {
           icon="bookmark"
           title="Sign in to save venues"
           subtitle="Your saved venues appear here once you sign in."
+          actionLabel="Sign in"
+          onAction={() => router.push("/auth" as never)}
         />
       ) : null}
 
