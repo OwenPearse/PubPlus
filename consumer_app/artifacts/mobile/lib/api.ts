@@ -1,9 +1,10 @@
 import { getAccessToken } from "@/lib/supabase";
 import { getApiBaseUrl } from "@/lib/env";
 
-export type ApiRequestOptions = RequestInit & {
+export type ApiRequestOptions = Omit<RequestInit, "body"> & {
   query?: Record<string, string | number | boolean | Array<string | number | boolean> | null | undefined>;
   requireAuth?: boolean;
+  body?: unknown;
 };
 
 export type ApiErrorCode =

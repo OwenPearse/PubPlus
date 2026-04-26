@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,65 +17,50 @@ import { EmptyState } from "@/components/EmptyState";
 import { ProfileRow } from "@/components/ProfileRow";
 import { SectionHeader } from "@/components/SectionHeader";
 import { DRINK_TYPES, SUBURBS, VENUE_FEATURES } from "@/data/mockData";
+import { useProfile } from "@/hooks/useProfile";
 import { useColors } from "@/hooks/useColors";
-
-const PROFILE_USER = {
-  name: "Alex M.",
-  email: "alex@example.com",
-  joinedDate: "April 2026",
-  stats: { checkins: 12, saved: 3, reviews: 5 },
-};
+import { signOut } from "@/lib/supabase";
 
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [isSignedIn] = useState(true);
+  const { session, isAuthenticated, profile, loading, saving, error, refreshProfile, patchProfile } = useProfile();
+  const [signingOut, setSigningOut] = useState(false);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : 0;
 
-  const [preferredSuburbs, setPreferredSuburbs] = useState<Set<string>>(
-    new Set(["Fitzroy", "Richmond"])
-  );
-  const [preferredDrinks, setPreferredDrinks] = useState<Set<string>>(
-    new Set(["Craft Beer", "IPA"])
-  );
-  const [preferredFeatures, setPreferredFeatures] = useState<Set<string>>(
-    new Set(["Beer Garden", "Live Music"])
-  );
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const displayName = profile?.display_name ?? session?.user?.email?.split("@")[0] ?? "PubPlus user";
+  const email = session?.user?.email ?? "Signed in";
+  const joinedDate = useMemo(() => {
+    const createdAt = session?.user?.created_at;
+    if (!createdAt) return "recently";
+    const date = new Date(createdAt);
+    return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }, [session?.user?.created_at]);
 
-  function toggleSuburb(s: string) {
+  async function togglePushNotifications() {
     Haptics.selectionAsync();
-    setPreferredSuburbs((prev) => {
-      const next = new Set(prev);
-      if (next.has(s)) next.delete(s);
-      else next.add(s);
-      return next;
-    });
+    if (!profile) return;
+    await patchProfile({ push_notifications_opt_in: !profile.push_notifications_opt_in });
   }
 
-  function toggleDrink(d: string) {
+  async function toggleMarketingEmails() {
     Haptics.selectionAsync();
-    setPreferredDrinks((prev) => {
-      const next = new Set(prev);
-      if (next.has(d)) next.delete(d);
-      else next.add(d);
-      return next;
-    });
+    if (!profile) return;
+    await patchProfile({ email_marketing_opt_in: !profile.email_marketing_opt_in });
   }
 
-  function toggleFeature(f: string) {
-    Haptics.selectionAsync();
-    setPreferredFeatures((prev) => {
-      const next = new Set(prev);
-      if (next.has(f)) next.delete(f);
-      else next.add(f);
-      return next;
-    });
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
   }
 
-  if (!isSignedIn) {
+  if (!isAuthenticated) {
     return (
       <View
         style={[
@@ -84,11 +70,24 @@ export default function ProfileScreen() {
       >
         <EmptyState
           icon="user"
-          title="Sign in to save your preferences"
-          subtitle="Keep track of your favourite venues, set suburb preferences, and get personalised suggestions."
-          actionLabel="Sign in"
-          onAction={() => {}}
+          title="Sign in to manage your profile"
+          subtitle="Profile preferences are available once you sign in."
         />
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.loadingWrap,
+          { backgroundColor: colors.background, paddingTop: topInset },
+        ]}
+      >
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading profile...</Text>
       </View>
     );
   }
@@ -104,18 +103,18 @@ export default function ProfileScreen() {
     >
       <View style={[styles.heroCard, { backgroundColor: colors.primary }]}>
         <View style={[styles.avatar, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
-          <Text style={styles.avatarText}>{PROFILE_USER.name.charAt(0)}</Text>
+          <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
         </View>
         <View style={styles.heroInfo}>
-          <Text style={[styles.heroName, { color: "#ffffff" }]}>{PROFILE_USER.name}</Text>
+          <Text style={[styles.heroName, { color: "#ffffff" }]}>{displayName}</Text>
           <Text style={[styles.heroEmail, { color: "rgba(255,255,255,0.72)" }]}>
-            {PROFILE_USER.email}
+            {email}
           </Text>
           <Text style={[styles.heroJoined, { color: "rgba(255,255,255,0.55)" }]}>
-            Joined {PROFILE_USER.joinedDate}
+            Joined {joinedDate}
           </Text>
         </View>
-        <TouchableOpacity style={styles.editBtn}>
+        <TouchableOpacity style={styles.editBtn} disabled>
           <Feather name="edit-2" size={16} color="rgba(255,255,255,0.8)" />
         </TouchableOpacity>
       </View>
@@ -127,9 +126,9 @@ export default function ProfileScreen() {
         ]}
       >
         {[
-          { label: "Check-ins", value: PROFILE_USER.stats.checkins },
-          { label: "Saved", value: PROFILE_USER.stats.saved },
-          { label: "Reviews", value: PROFILE_USER.stats.reviews },
+          { label: "Push", value: profile?.push_notifications_opt_in ? "On" : "Off" },
+          { label: "Emails", value: profile?.email_marketing_opt_in ? "On" : "Off" },
+          { label: "SMS", value: profile?.sms_marketing_opt_in ? "On" : "Off" },
         ].map((stat, i) => (
           <View
             key={i}
@@ -151,48 +150,67 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      <SectionHeader title="Suburb preferences" subtitle="Personalise your home feed" />
+      {error ? (
+        <EmptyState
+          icon="alert-circle"
+          title="Profile unavailable"
+          subtitle={error}
+          actionLabel="Retry"
+          onAction={refreshProfile}
+        />
+      ) : null}
+
+      <SectionHeader title="Suburb preferences" subtitle="Backend locality IDs are supported" />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.prefChips}
       >
-        {SUBURBS.map((s) => (
-          <Chip
-            key={s}
-            label={s}
-            selected={preferredSuburbs.has(s)}
-            onPress={() => toggleSuburb(s)}
-            size="sm"
-          />
-        ))}
+        <Chip
+          label={profile?.default_locality_id ? "Default locality set" : "No default locality"}
+          selected={Boolean(profile?.default_locality_id)}
+          onPress={() => {}}
+          size="sm"
+        />
+        <Chip
+          label={profile?.default_geographic_region_id ? "Default region set" : "No default region"}
+          selected={Boolean(profile?.default_geographic_region_id)}
+          onPress={() => {}}
+          size="sm"
+        />
       </ScrollView>
 
       <SectionHeader title="Drink preferences" />
       <View style={styles.prefChipsWrap}>
-        {DRINK_TYPES.map((d) => (
+        {DRINK_TYPES.slice(0, 6).map((d) => (
           <Chip
             key={d}
             label={d}
-            selected={preferredDrinks.has(d)}
-            onPress={() => toggleDrink(d)}
+            selected={false}
+            onPress={() => {}}
             size="sm"
           />
         ))}
       </View>
+      <Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>
+        Drink chips are not in the backend profile contract yet and are shown as coming soon.
+      </Text>
 
       <SectionHeader title="Venue preferences" />
       <View style={styles.prefChipsWrap}>
-        {VENUE_FEATURES.map((f) => (
+        {VENUE_FEATURES.slice(0, 6).map((f) => (
           <Chip
             key={f}
             label={f}
-            selected={preferredFeatures.has(f)}
-            onPress={() => toggleFeature(f)}
+            selected={false}
+            onPress={() => {}}
             size="sm"
           />
         ))}
       </View>
+      <Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>
+        Venue feature chips are currently UI-only and are not sent to the backend.
+      </Text>
 
       <SectionHeader title="Settings" />
       <View
@@ -204,23 +222,36 @@ export default function ProfileScreen() {
         <ProfileRow
           icon="bell"
           label="Notifications"
-          value={notificationsEnabled ? "On" : "Off"}
-          onPress={() => {
-            Haptics.selectionAsync();
-            setNotificationsEnabled((v) => !v);
-          }}
+          value={profile?.push_notifications_opt_in ? "On" : "Off"}
+          onPress={togglePushNotifications}
         />
         <ProfileRow
-          icon="map-pin"
-          label="Default location"
-          value="Fitzroy"
+          icon="mail"
+          label="Marketing emails"
+          value={profile?.email_marketing_opt_in ? "On" : "Off"}
+          onPress={toggleMarketingEmails}
+        />
+        <ProfileRow
+          icon="moon"
+          label="Quiet hours"
+          value={
+            profile?.quiet_hours_start_local && profile?.quiet_hours_end_local
+              ? `${profile.quiet_hours_start_local} - ${profile.quiet_hours_end_local}`
+              : "Off"
+          }
           onPress={() => {}}
         />
-        <ProfileRow icon="moon" label="Dark mode" value="System" onPress={() => {}} />
-        <ProfileRow icon="shield" label="Privacy" onPress={() => {}} />
+        <ProfileRow icon="shield" label="Privacy" value="Coming soon" onPress={() => {}} />
         <ProfileRow icon="help-circle" label="Help & Support" onPress={() => {}} />
         <ProfileRow icon="info" label="About PubPlus" onPress={() => {}} />
       </View>
+
+      {saving ? (
+        <View style={styles.savingRow}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Saving changes...</Text>
+        </View>
+      ) : null}
 
       <View
         style={[
@@ -231,8 +262,8 @@ export default function ProfileScreen() {
       >
         <ProfileRow
           icon="log-out"
-          label="Sign out"
-          onPress={() => {}}
+          label={signingOut ? "Signing out..." : "Sign out"}
+          onPress={handleSignOut}
           dangerous
           showChevron={false}
         />
@@ -335,5 +366,27 @@ const styles = StyleSheet.create({
   },
   settingsGroupTop: {
     marginTop: 4,
+  },
+  unsupportedCopy: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  loadingWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  savingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
 });

@@ -17,28 +17,24 @@ import { VenueRow } from "@/components/VenueRow";
 import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type HomeResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
+import { useSavedVenues } from "@/hooks/useSavedVenues";
 
 const CURRENT_SUBURB = "Fitzroy";
 
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [sections, setSections] = useState<HomeResponse["data"]["sections"]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : 0;
 
   function toggleSave(id: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    toggleSaved(id);
   }
 
   useEffect(() => {
@@ -123,6 +119,16 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
 
+      {!loading && authMessage ? (
+        <TouchableOpacity
+          style={[styles.authRequiredCard, { backgroundColor: colors.secondary }]}
+          onPress={clearAuthMessage}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
+        </TouchableOpacity>
+      ) : null}
+
       {loading ? (
         <View style={styles.stateWrap}>
           <ActivityIndicator color={colors.primary} />
@@ -162,7 +168,7 @@ export default function HomeScreen() {
               title={section.title}
               subtitle={section.id === "open_now" ? "Currently open" : undefined}
               venues={section.venues}
-              savedIds={savedIds}
+              savedIds={savedVenueIds}
               onSave={toggleSave}
               onSeeAll={() => {}}
             />
@@ -250,5 +256,16 @@ const styles = StyleSheet.create({
   stateText: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
+  },
+  authRequiredCard: {
+    marginHorizontal: 16,
+    marginBottom: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  authRequiredText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
 });

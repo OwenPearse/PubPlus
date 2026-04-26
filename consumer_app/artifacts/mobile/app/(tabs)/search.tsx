@@ -30,6 +30,7 @@ import {
 import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type SearchResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
+import { useSavedVenues } from "@/hooks/useSavedVenues";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -47,10 +48,10 @@ export default function SearchScreen() {
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [venues, setVenues] = useState<ReturnType<typeof mapCardToVenue>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
 
   function toggleDrink(d: string) {
     Haptics.selectionAsync();
@@ -251,6 +252,16 @@ export default function SearchScreen() {
         pills={activeFilterPills}
         onClearAll={activeFilterCount > 0 ? clearFilters : undefined}
       />
+
+      {authMessage ? (
+        <TouchableOpacity
+          style={[styles.authRequiredCard, { backgroundColor: colors.secondary }]}
+          onPress={clearAuthMessage}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {showFilters ? (
         <ScrollView
@@ -488,16 +499,11 @@ export default function SearchScreen() {
           results.map((venue) => (
             <View key={venue.id} style={styles.cardWrap}>
               <VenueCard
-                venue={{ ...venue, isSaved: savedIds.has(venue.id) }}
+                venue={{ ...venue, isSaved: savedVenueIds.has(venue.id) }}
                 onPress={() => router.push(`/venue/${venue.id}`)}
                 onSave={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setSavedIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(venue.id)) next.delete(venue.id);
-                    else next.add(venue.id);
-                    return next;
-                  });
+                  toggleSaved(venue.id);
                 }}
               />
             </View>
@@ -683,5 +689,16 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+  },
+  authRequiredCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  authRequiredText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
 });

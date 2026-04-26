@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,10 +16,9 @@ import { useRouter } from "expo-router";
 
 import { EmptyState } from "@/components/EmptyState";
 import { VenueCard } from "@/components/VenueCard";
-import { VENUES } from "@/data/mockData";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { useColors } from "@/hooks/useColors";
-
-const INITIAL_SAVED = ["1", "6", "8"];
+import { useSavedVenues } from "@/hooks/useSavedVenues";
 
 export default function SavedScreen() {
   const router = useRouter();
@@ -27,19 +27,13 @@ export default function SavedScreen() {
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : 0;
-
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set(INITIAL_SAVED));
+  const { isAuthenticated } = useAuthSession();
+  const { savedVenues, loading, error, refreshSavedVenues, unsaveVenue } = useSavedVenues();
 
   function unsave(id: string) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    unsaveVenue(id);
   }
-
-  const savedVenues = VENUES.filter((v) => savedIds.has(v.id));
 
   return (
     <ScrollView
@@ -61,13 +55,41 @@ export default function SavedScreen() {
         ) : null}
       </View>
 
-      {savedVenues.length === 0 ? (
+      {!isAuthenticated ? (
+        <EmptyState
+          icon="bookmark"
+          title="Sign in to save venues"
+          subtitle="Your saved venues appear here once you sign in."
+        />
+      ) : null}
+
+      {isAuthenticated && loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading saved venues...</Text>
+        </View>
+      ) : null}
+
+      {isAuthenticated && !loading && error ? (
+        <EmptyState
+          icon="alert-circle"
+          title="Saved unavailable"
+          subtitle={error}
+          actionLabel="Retry"
+          onAction={refreshSavedVenues}
+        />
+      ) : null}
+
+      {isAuthenticated && !loading && !error && savedVenues.length === 0 ? (
         <EmptyState
           icon="bookmark"
           title="Nothing saved yet"
           subtitle="Tap the bookmark icon on any venue to save it for later"
         />
       ) : (
+        isAuthenticated &&
+        !loading &&
+        !error &&
         savedVenues.map((venue) => (
           <View key={venue.id} style={styles.cardWrap}>
             <VenueCard
@@ -154,5 +176,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     fontFamily: "Inter_500Medium",
+  },
+  loadingWrap: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 24,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
   },
 });

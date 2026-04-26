@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { EmptyState } from "@/components/EmptyState";
 import { useColors } from "@/hooks/useColors";
+import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { publicApiRequest } from "@/lib/api";
 import { mapVenueDetailResponse, type VenueDetailResponse } from "@/lib/mappers";
 import type { Venue } from "@/data/mockData";
@@ -33,9 +34,9 @@ export default function VenueDetailScreen() {
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
   const [venue, setVenue] = useState<Venue | null>(null);
-  const [isSaved, setIsSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { isSaved, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +49,6 @@ export default function VenueDetailScreen() {
         if (cancelled) return;
         const mapped = mapVenueDetailResponse(response);
         setVenue(mapped);
-        setIsSaved(Boolean(mapped.isSaved));
       } catch {
         if (cancelled) return;
         setVenue(null);
@@ -133,7 +133,8 @@ export default function VenueDetailScreen() {
 
   function toggleSave() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsSaved((v) => !v);
+    if (!venue) return;
+    toggleSaved(venue.id);
   }
 
   return (
@@ -159,7 +160,11 @@ export default function VenueDetailScreen() {
             <TouchableOpacity
               style={[
                 styles.iconBtn,
-                { backgroundColor: isSaved ? "rgba(194,124,0,0.88)" : "rgba(0,0,0,0.28)" },
+                {
+                  backgroundColor: isSaved(venue.id)
+                    ? "rgba(194,124,0,0.88)"
+                    : "rgba(0,0,0,0.28)",
+                },
               ]}
               onPress={toggleSave}
               hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}
@@ -188,6 +193,16 @@ export default function VenueDetailScreen() {
             </View>
           </View>
         </View>
+
+        {authMessage ? (
+          <TouchableOpacity
+            style={[styles.authRequiredCard, { backgroundColor: colors.secondary }]}
+            onPress={clearAuthMessage}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
+          </TouchableOpacity>
+        ) : null}
 
         {/* Open status bar */}
         <View
@@ -948,5 +963,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     flex: 1,
+  },
+  authRequiredCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  authRequiredText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
 });

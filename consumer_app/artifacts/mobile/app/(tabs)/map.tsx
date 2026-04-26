@@ -17,6 +17,7 @@ import { useRouter } from "expo-router";
 import type { Venue } from "@/data/mockData";
 import { EmptyState } from "@/components/EmptyState";
 import { useColors } from "@/hooks/useColors";
+import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type MapResponse } from "@/lib/mappers";
 
@@ -55,6 +56,7 @@ export default function MapScreen() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { isSaved, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -261,6 +263,16 @@ export default function MapScreen() {
           </View>
         ) : null}
 
+        {authMessage ? (
+          <TouchableOpacity
+            style={[styles.authRequiredCard, { backgroundColor: colors.secondary }]}
+            onPress={clearAuthMessage}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
+          </TouchableOpacity>
+        ) : null}
+
         {loading ? (
           <View style={styles.stateOverlay}>
             <ActivityIndicator color={colors.primary} />
@@ -414,8 +426,13 @@ export default function MapScreen() {
                 <TouchableOpacity
                   style={[styles.popupCtaSecondary, { borderColor: colors.border }]}
                   activeOpacity={0.75}
+                  onPress={() => toggleSaved(selectedVenue.id)}
                 >
-                  <Feather name="map-pin" size={14} color={colors.mutedForeground} />
+                  <Feather
+                    name="bookmark"
+                    size={14}
+                    color={isSaved(selectedVenue.id) ? colors.primary : colors.mutedForeground}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -692,6 +709,20 @@ const styles = StyleSheet.create({
   stateText: {
     marginTop: 8,
     fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  authRequiredCard: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 20,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    zIndex: 20,
+  },
+  authRequiredText: {
+    fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
 });
