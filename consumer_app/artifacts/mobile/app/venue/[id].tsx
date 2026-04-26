@@ -1,8 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Linking,
   Platform,
   ScrollView,
@@ -14,8 +15,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { VENUES } from "@/data/mockData";
+import { EmptyState } from "@/components/EmptyState";
 import { useColors } from "@/hooks/useColors";
+import { publicApiRequest } from "@/lib/api";
+import { mapVenueDetailResponse, type VenueDetailResponse } from "@/lib/mappers";
+import type { Venue } from "@/data/mockData";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -28,8 +32,59 @@ export default function VenueDetailScreen() {
   const topInset = Platform.OS === "web" ? 0 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const venue = VENUES.find((v) => v.id === id);
+  const [venue, setVenue] = useState<Venue | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVenue() {
+      if (!id) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await publicApiRequest<VenueDetailResponse>(`/api/v1/venues/${id}`);
+        if (cancelled) return;
+        const mapped = mapVenueDetailResponse(response);
+        setVenue(mapped);
+        setIsSaved(Boolean(mapped.isSaved));
+      } catch {
+        if (cancelled) return;
+        setVenue(null);
+        setError("Could not load this venue.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadVenue();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <View style={[styles.notFound, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.notFoundText, { color: colors.mutedForeground }]}>Loading venue...</Text>
+      </View>
+    );
+  }
+
+  if (!venue && error) {
+    return (
+      <View style={[styles.notFound, { backgroundColor: colors.background }]}>
+        <EmptyState
+          icon="alert-circle"
+          title="Venue unavailable"
+          subtitle={error}
+          actionLabel="Go back"
+          onAction={() => router.back()}
+        />
+      </View>
+    );
+  }
 
   if (!venue) {
     return (
@@ -54,7 +109,10 @@ export default function VenueDetailScreen() {
   function handleWebsite() {
     if (venue?.website) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Linking.openURL(`https://${venue.website}`);
+      const url = venue.website.startsWith("http://") || venue.website.startsWith("https://")
+        ? venue.website
+        : `https://${venue.website}`;
+      Linking.openURL(url);
     }
   }
 

@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -25,8 +26,9 @@ import {
   DRINK_TYPES,
   MEAL_SPECIALS,
   VENUE_FEATURES,
-  VENUES,
 } from "@/data/mockData";
+import { publicApiRequest } from "@/lib/api";
+import { mapCardToVenue, type SearchResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
 
 export default function SearchScreen() {
@@ -46,6 +48,9 @@ export default function SearchScreen() {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [venues, setVenues] = useState<ReturnType<typeof mapCardToVenue>[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   function toggleDrink(d: string) {
     Haptics.selectionAsync();
@@ -140,41 +145,39 @@ export default function SearchScreen() {
     return pills;
   }, [selectedSuburb, distanceKm, openNowOnly, selectedMealSpecials, selectedDrinks, selectedFeatures]);
 
-  const results = useMemo(() => {
-    return VENUES.filter((v) => {
-      if (
-        query &&
-        !v.name.toLowerCase().includes(query.toLowerCase()) &&
-        !v.suburb.toLowerCase().includes(query.toLowerCase())
-      )
-        return false;
-      if (selectedSuburb && v.suburb !== selectedSuburb) return false;
-      if (openNowOnly && !v.isOpen) return false;
-      if (selectedDrinks.size > 0) {
-        const match = Array.from(selectedDrinks).some(
-          (d) =>
-            v.tapBeers.some((b) => b.toLowerCase().includes(d.toLowerCase())) ||
-            v.type.toLowerCase().includes(d.toLowerCase())
-        );
-        if (!match) return false;
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSearch() {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await publicApiRequest<SearchResponse>("/api/v1/search/venues", {
+          query: {
+            suburb: selectedSuburb ?? undefined,
+            open_now: openNowOnly ? true : undefined,
+            radius_m: distanceKm ? distanceKm * 1000 : undefined,
+            meal_specials: Array.from(selectedMealSpecials),
+            drink_types: Array.from(selectedDrinks),
+            venue_features: Array.from(selectedFeatures),
+          },
+        });
+        if (cancelled) return;
+        setVenues((response.data.venues ?? []).map(mapCardToVenue));
+      } catch {
+        if (cancelled) return;
+        setVenues([]);
+        setError("Could not load search results.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      if (selectedFeatures.size > 0) {
-        if (!Array.from(selectedFeatures).every((f) => v.features.includes(f))) return false;
-      }
-      if (selectedMealSpecials.size > 0) {
-        if (!v.mealDeal || !selectedMealSpecials.has(v.mealDeal)) return false;
-      }
-      return true;
-    });
-  }, [
-    query,
-    selectedSuburb,
-    selectedDrinks,
-    selectedFeatures,
-    selectedMealSpecials,
-    openNowOnly,
-    distanceKm,
-  ]);
+    }
+    loadSearch();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSuburb, openNowOnly, distanceKm, selectedMealSpecials, selectedDrinks, selectedFeatures]);
+
+  const results = useMemo(() => venues, [venues]);
 
   const activeFilterCount = activeFilterPills.length;
 
@@ -431,15 +434,47 @@ export default function SearchScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <SectionHeader
-          title={results.length > 0 ? `${results.length} venues` : "No results"}
+          title={loading ? "Loading venues" : results.length > 0 ? `${results.length} venues` : "No results"}
           subtitle={
             activeFilterCount > 0
               ? `${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`
+              : query
+              ? "Text search coming in Stage 4"
               : "All Melbourne"
           }
         />
 
-        {results.length === 0 ? (
+        {query ? (
+          <Text style={[styles.queryDeferred, { color: colors.mutedForeground }]}>
+            Text search is not available on the backend yet. Filters are live.
+          </Text>
+        ) : null}
+
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading results...</Text>
+          </View>
+        ) : null}
+
+        {!loading && error ? (
+          <EmptyState
+            icon="alert-circle"
+            title="Search unavailable"
+            subtitle={error}
+            actionLabel="Try again"
+            onAction={() => {
+              setLoading(true);
+              setError(null);
+              publicApiRequest<SearchResponse>("/api/v1/search/venues")
+                .then((response) => setVenues((response.data.venues ?? []).map(mapCardToVenue)))
+                .catch(() => setError("Could not load search results."))
+                .finally(() => setLoading(false));
+            }}
+          />
+        ) : null}
+
+        {!loading && !error && results.length === 0 ? (
           <EmptyState
             icon="search"
             title="No venues found"
@@ -448,6 +483,8 @@ export default function SearchScreen() {
             onAction={clearFilters}
           />
         ) : (
+          !loading &&
+          !error &&
           results.map((venue) => (
             <View key={venue.id} style={styles.cardWrap}>
               <VenueCard
@@ -631,5 +668,20 @@ const styles = StyleSheet.create({
   cardWrap: {
     paddingHorizontal: 16,
     marginBottom: 12,
+  },
+  loadingWrap: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 24,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  queryDeferred: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
   },
 });

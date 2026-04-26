@@ -2,7 +2,7 @@ import { getAccessToken } from "@/lib/supabase";
 import { getApiBaseUrl } from "@/lib/env";
 
 export type ApiRequestOptions = RequestInit & {
-  query?: Record<string, string | number | boolean | null | undefined>;
+  query?: Record<string, string | number | boolean | Array<string | number | boolean> | null | undefined>;
   requireAuth?: boolean;
 };
 
@@ -47,6 +47,12 @@ function applyQuery(path: string, query?: ApiRequestOptions["query"]): string {
   const queryString = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value == null) continue;
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        queryString.append(key, String(entry));
+      }
+      continue;
+    }
     queryString.set(key, String(value));
   }
 

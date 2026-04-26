@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Platform,
   StyleSheet,
@@ -14,22 +15,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import type { Venue } from "@/data/mockData";
-import { VENUES } from "@/data/mockData";
+import { EmptyState } from "@/components/EmptyState";
 import { useColors } from "@/hooks/useColors";
+import { publicApiRequest } from "@/lib/api";
+import { mapCardToVenue, type MapResponse } from "@/lib/mappers";
 
-const MAP_VENUES = VENUES.slice(0, 8);
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const POPUP_HEIGHT = Math.round(SCREEN_HEIGHT * 0.33);
-
-const VENUE_POSITIONS: { [key: string]: { top: number; left: number } } = {
-  "1":  { top: 0.30, left: 0.52 },
-  "2":  { top: 0.52, left: 0.40 },
-  "3":  { top: 0.72, left: 0.56 },
-  "4":  { top: 0.15, left: 0.36 },
-  "5":  { top: 0.57, left: 0.38 },
-  "6":  { top: 0.65, left: 0.63 },
-  "7":  { top: 0.40, left: 0.36 },
-  "8":  { top: 0.27, left: 0.55 },
+const DEFAULT_MAP_BOUNDS = {
+  north: -37.74,
+  south: -37.86,
+  east: 145.03,
+  west: 144.90,
 };
 
 const SUBURB_LABELS = [
@@ -55,6 +52,9 @@ export default function MapScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -63,6 +63,68 @@ export default function MapScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedVenue((prev) => (prev?.id === venue.id ? null : venue));
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMap() {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await publicApiRequest<MapResponse>("/api/v1/map/venues", {
+          query: DEFAULT_MAP_BOUNDS,
+        });
+        if (cancelled) return;
+        const mapped = (response.data.venues ?? []).map((venue) =>
+          mapCardToVenue({
+            ...venue,
+            venue_type: "pub",
+            address_short: venue.suburb,
+            distance_m: null,
+            feature_badges: [],
+            specials_summary: [],
+            events_summary: [],
+            drink_highlights: [],
+          })
+        );
+        setVenues(mapped);
+      } catch {
+        if (cancelled) return;
+        setVenues([]);
+        setError("Could not load map venues.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadMap();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const coordinateBounds = useMemo(() => {
+    if (venues.length === 0) return null;
+    const latitudes = venues.map((venue) => venue.latitude);
+    const longitudes = venues.map((venue) => venue.longitude);
+    return {
+      north: Math.max(...latitudes),
+      south: Math.min(...latitudes),
+      east: Math.max(...longitudes),
+      west: Math.min(...longitudes),
+    };
+  }, [venues]);
+
+  const venuePositions = useMemo(() => {
+    if (!coordinateBounds) return {};
+    const latRange = Math.max(coordinateBounds.north - coordinateBounds.south, 0.01);
+    const lngRange = Math.max(coordinateBounds.east - coordinateBounds.west, 0.01);
+    return Object.fromEntries(
+      venues.map((venue) => {
+        const top = 0.12 + (coordinateBounds.north - venue.latitude) / latRange * 0.72;
+        const left = 0.15 + (venue.longitude - coordinateBounds.west) / lngRange * 0.7;
+        return [venue.id, { top, left }];
+      })
+    ) as Record<string, { top: number; left: number }>;
+  }, [coordinateBounds, venues]);
 
   return (
     <View style={[styles.outer, { backgroundColor: "#e8ddd0" }]}>
@@ -94,8 +156,8 @@ export default function MapScreen() {
           </View>
         ))}
 
-        {MAP_VENUES.map((venue) => {
-          const pos = VENUE_POSITIONS[venue.id];
+        {venues.map((venue) => {
+          const pos = venuePositions[venue.id];
           if (!pos) return null;
           const isSelected = selectedVenue?.id === venue.id;
 
@@ -194,8 +256,59 @@ export default function MapScreen() {
             ]}
           >
             <Text style={[styles.venueBadgeText, { color: colors.mutedForeground }]}>
-              {MAP_VENUES.filter((v) => v.isOpen).length} open nearby
+              {venues.filter((v) => v.isOpen).length} open nearby
             </Text>
+          </View>
+        ) : null}
+
+        {loading ? (
+          <View style={styles.stateOverlay}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.stateText, { color: colors.foreground }]}>Loading map venues...</Text>
+          </View>
+        ) : null}
+
+        {!loading && error ? (
+          <View style={styles.stateOverlay}>
+            <EmptyState
+              icon="alert-circle"
+              title="Map unavailable"
+              subtitle={error}
+              actionLabel="Try again"
+              onAction={() => {
+                setLoading(true);
+                setError(null);
+                publicApiRequest<MapResponse>("/api/v1/map/venues", { query: DEFAULT_MAP_BOUNDS })
+                  .then((response) =>
+                    setVenues(
+                      (response.data.venues ?? []).map((venue) =>
+                        mapCardToVenue({
+                          ...venue,
+                          venue_type: "pub",
+                          address_short: venue.suburb,
+                          distance_m: null,
+                          feature_badges: [],
+                          specials_summary: [],
+                          events_summary: [],
+                          drink_highlights: [],
+                        })
+                      )
+                    )
+                  )
+                  .catch(() => setError("Could not load map venues."))
+                  .finally(() => setLoading(false));
+              }}
+            />
+          </View>
+        ) : null}
+
+        {!loading && !error && venues.length === 0 ? (
+          <View style={styles.stateOverlay}>
+            <EmptyState
+              icon="map-pin"
+              title="No map venues"
+              subtitle="No venues found for the current map bounds."
+            />
           </View>
         ) : null}
       </View>
@@ -569,5 +682,16 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     right: 0,
+  },
+  stateOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  stateText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
   },
 });

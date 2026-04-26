@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,8 +12,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { EmptyState } from "@/components/EmptyState";
 import { VenueRow } from "@/components/VenueRow";
-import { VENUES } from "@/data/mockData";
+import { publicApiRequest } from "@/lib/api";
+import { mapCardToVenue, type HomeResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
 
 const CURRENT_SUBURB = "Fitzroy";
@@ -21,6 +24,9 @@ export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [sections, setSections] = useState<HomeResponse["data"]["sections"]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : 0;
@@ -35,30 +41,41 @@ export default function HomeScreen() {
     });
   }
 
-  const suggested = VENUES.filter(
-    (v) => v.isOpen && (v.events.length > 0 || v.specials.length > 0)
-  );
-  const highlights = [...VENUES].sort((a, b) => b.rating - a.rating).slice(0, 6);
-  const mealDeals = VENUES.filter((v) => v.mealDeal != null);
-  const liveMusic = VENUES.filter(
-    (v) =>
-      v.features.includes("Live Music") ||
-      v.events.some(
-        (e) =>
-          e.title.toLowerCase().includes("music") ||
-          e.title.toLowerCase().includes("dj")
-      )
-  );
-  const trivia = VENUES.filter((v) =>
-    v.events.some(
-      (e) =>
-        e.title.toLowerCase().includes("trivia") ||
-        e.title.toLowerCase().includes("quiz")
-    )
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHome() {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await publicApiRequest<HomeResponse>("/api/v1/home");
+        if (cancelled) return;
+        setSections(response.data.sections ?? []);
+      } catch {
+        if (cancelled) return;
+        setSections([]);
+        setError("Could not load home feed.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadHome();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const mappedSections = useMemo(
+    () =>
+      sections.map((section) => ({
+        ...section,
+        venues: section.venues.map(mapCardToVenue),
+      })),
+    [sections]
   );
 
-  const openNowCount = VENUES.filter((v) => v.isOpen).length;
-  const eventsCount = VENUES.filter((v) => v.events.length > 0).length;
+  const allVenues = useMemo(() => mappedSections.flatMap((section) => section.venues), [mappedSections]);
+  const openNowCount = allVenues.filter((venue) => venue.isOpen).length;
+  const eventsCount = allVenues.filter((venue) => venue.events.length > 0).length;
 
   return (
     <ScrollView
@@ -106,50 +123,51 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
 
-      <VenueRow
-        title="Suggested"
-        subtitle="Good picks for tonight"
-        venues={suggested}
-        savedIds={savedIds}
-        onSave={toggleSave}
-        onSeeAll={() => {}}
-      />
+      {loading ? (
+        <View style={styles.stateWrap}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading venues...</Text>
+        </View>
+      ) : null}
 
-      <VenueRow
-        title="Highlights"
-        subtitle="Trending this week"
-        venues={highlights}
-        savedIds={savedIds}
-        onSave={toggleSave}
-        onSeeAll={() => {}}
-      />
+      {!loading && error ? (
+        <EmptyState
+          icon="alert-circle"
+          title="Home unavailable"
+          subtitle={error}
+          actionLabel="Try again"
+          onAction={() => {
+            setLoading(true);
+            setError(null);
+            publicApiRequest<HomeResponse>("/api/v1/home")
+              .then((response) => setSections(response.data.sections ?? []))
+              .catch(() => setError("Could not load home feed."))
+              .finally(() => setLoading(false));
+          }}
+        />
+      ) : null}
 
-      <VenueRow
-        title="Meal deals nearby"
-        subtitle="Parma, burger, steak and more"
-        venues={mealDeals}
-        savedIds={savedIds}
-        onSave={toggleSave}
-        onSeeAll={() => {}}
-      />
+      {!loading && !error && mappedSections.length === 0 ? (
+        <EmptyState
+          icon="home"
+          title="No home sections yet"
+          subtitle="Check back soon for nearby venues and tonight highlights."
+        />
+      ) : null}
 
-      <VenueRow
-        title="Live music"
-        subtitle="Playing tonight"
-        venues={liveMusic}
-        savedIds={savedIds}
-        onSave={toggleSave}
-        onSeeAll={() => {}}
-      />
-
-      <VenueRow
-        title="Trivia tonight"
-        subtitle="Teams of 2–6"
-        venues={trivia}
-        savedIds={savedIds}
-        onSave={toggleSave}
-        onSeeAll={() => {}}
-      />
+      {!loading && !error
+        ? mappedSections.map((section) => (
+            <VenueRow
+              key={section.id}
+              title={section.title}
+              subtitle={section.id === "open_now" ? "Currently open" : undefined}
+              venues={section.venues}
+              savedIds={savedIds}
+              onSave={toggleSave}
+              onSeeAll={() => {}}
+            />
+          ))
+        : null}
     </ScrollView>
   );
 }
@@ -223,5 +241,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+  stateWrap: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 24,
+  },
+  stateText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
   },
 });
