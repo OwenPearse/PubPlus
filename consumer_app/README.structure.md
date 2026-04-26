@@ -17,7 +17,6 @@ This workspace is a pnpm monorepo.
     - `lib/supabase.ts` - Supabase Auth bridge helpers + token/session access.
     - `lib/bootstrap.ts` - App startup bridge to connect auth token getter.
 - `artifacts/api-server` - Local API package prototype/server implementation in this workspace.
-- `artifacts/mockup-sandbox` - Legacy/prototype UI sandbox package.
 - `lib/api-client-react` - Generated/react-query API client scaffolding used by mobile package.
 - `lib/api-spec` - OpenAPI source + codegen config.
 - `lib/api-zod` - Generated Zod types/schema package.
@@ -27,4 +26,4 @@ This workspace is a pnpm monorepo.
 
 - Replit root files and prompt artifacts have been removed.
 - Replit artifact metadata directories were removed.
-- Remaining packages are kept intentionally to avoid breaking workspace references before Stage 2.
+- Legacy `artifacts/mockup-sandbox` package has been removed during Stage 2C cleanup to keep workspace validation focused on active integration paths.
