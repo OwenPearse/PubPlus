@@ -1,0 +1,30 @@
+# Consumer App Structure (Stage 1C)
+
+This workspace is a pnpm monorepo.
+
+## Current frontend app target
+
+- The actual mobile app is `artifacts/mobile` (Expo Router, React Native).
+- Stage 2 integration should target this package directly.
+- Do not treat full-width desktop web rendering as the product target; use Expo Go and mobile emulation.
+
+## Workspace packages
+
+- `artifacts/mobile` - Production-target frontend app.
+  - Stage 2 foundation files:
+    - `lib/env.ts` - Expo public env access for API/Auth config.
+    - `lib/api.ts` - Shared API request helpers for public/private Django calls.
+    - `lib/supabase.ts` - Supabase Auth bridge helpers + token/session access.
+    - `lib/bootstrap.ts` - App startup bridge to connect auth token getter.
+- `artifacts/api-server` - Local API package prototype/server implementation in this workspace.
+- `artifacts/mockup-sandbox` - Legacy/prototype UI sandbox package.
+- `lib/api-client-react` - Generated/react-query API client scaffolding used by mobile package.
+- `lib/api-spec` - OpenAPI source + codegen config.
+- `lib/api-zod` - Generated Zod types/schema package.
+- `lib/db` - Database schema/helpers package for the local API package.
+
+## Cleanup notes
+
+- Replit root files and prompt artifacts have been removed.
+- Replit artifact metadata directories were removed.
+- Remaining packages are kept intentionally to avoid breaking workspace references before Stage 2.
