@@ -75,6 +75,8 @@ export default function ProfileScreen() {
           title="Sign in to manage your profile"
           subtitle="Profile preferences are available once you sign in."
           actionLabel="Sign in"
+          actionAccessibilityLabel="Sign in to manage profile"
+          actionTestID="profile-sign-in-cta"
           onAction={() => router.push("/auth" as never)}
         />
       </View>

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EmptyState } from "@/components/EmptyState";
 import { useColors } from "@/hooks/useColors";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { publicApiRequest } from "@/lib/api";
 import { mapVenueDetailResponse, type VenueDetailResponse } from "@/lib/mappers";
 import type { Venue } from "@/data/mockData";
@@ -37,6 +38,7 @@ export default function VenueDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isSaved, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
+  const { isAuthenticated } = useAuthSession();
 
   useEffect(() => {
     let cancelled = false;
@@ -202,10 +204,37 @@ export default function VenueDetailScreen() {
               router.push("/auth" as never);
             }}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in to save venues"
+            testID="venue-auth-required-cta"
           >
             <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
           </TouchableOpacity>
         ) : null}
+
+        <View style={[styles.submissionEntryWrap, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            style={[styles.submissionEntryBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => {
+              if (!isAuthenticated) {
+                router.push("/auth" as never);
+                return;
+              }
+              router.push(
+                {
+                  pathname: "/venue/[id]/correction",
+                  params: { id: venue.id, name: venue.name },
+                } as never
+              );
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Suggest an edit for this venue"
+            testID="venue-correction-entry"
+          >
+            <Feather name="edit-2" size={14} color={colors.primary} />
+            <Text style={[styles.submissionEntryText, { color: colors.primary }]}>Suggest an edit</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Open status bar */}
         <View
@@ -977,5 +1006,24 @@ const styles = StyleSheet.create({
   authRequiredText: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
+  },
+  submissionEntryWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  submissionEntryBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  submissionEntryText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
 });

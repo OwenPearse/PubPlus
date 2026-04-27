@@ -31,6 +31,7 @@ import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type SearchResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
+import { useAuthSession } from "@/hooks/useAuthSession";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -52,6 +53,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
+  const { isAuthenticated } = useAuthSession();
 
   function toggleDrink(d: string) {
     Haptics.selectionAsync();
@@ -261,6 +263,9 @@ export default function SearchScreen() {
             router.push("/auth" as never);
           }}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in to save venues"
+          testID="search-auth-required-cta"
         >
           <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
         </TouchableOpacity>
@@ -457,6 +462,19 @@ export default function SearchScreen() {
               : "All Melbourne"
           }
         />
+
+        <TouchableOpacity
+          style={[styles.suggestVenueCta, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => router.push((isAuthenticated ? "/suggest-venue" : "/auth") as never)}
+          accessibilityRole="button"
+          accessibilityLabel="Suggest a missing venue"
+          testID="search-suggest-venue-entry"
+        >
+          <Feather name="plus-circle" size={14} color={colors.primary} />
+          <Text style={[styles.suggestVenueCtaText, { color: colors.primary }]}>
+            Can't find a venue? Suggest one
+          </Text>
+        </TouchableOpacity>
 
         {query ? (
           <Text style={[styles.queryDeferred, { color: colors.mutedForeground }]}>
@@ -703,5 +721,20 @@ const styles = StyleSheet.create({
   authRequiredText: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
+  },
+  suggestVenueCta: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  suggestVenueCtaText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
 });

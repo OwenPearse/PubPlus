@@ -39,6 +39,7 @@ def _make_context_for_auth_subject(subj: str) -> AuthContext:
 class ProfileApiTests(TestCase):
     def setUp(self) -> None:
         self.client = Client()
+        self.csrf_client = Client(enforce_csrf_checks=True)
 
     @staticmethod
     def _delete_e2e_consumer_state(auth_user_id: str) -> None:
@@ -145,7 +146,7 @@ class ProfileApiTests(TestCase):
             )
         self.assertEqual(g1.status_code, 200, g1.content)
         body1 = g1.json()["data"]
-        self.assertIsNone(body1.get("display_name"))
+        self.assertEqual(body1.get("display_name"), "e2e-profile")
         self.assertEqual(
             body1.get("default_locality_id"), None, "Omitted rows read as null / defaults"
         )
@@ -153,6 +154,28 @@ class ProfileApiTests(TestCase):
         self.assertEqual(body1.get("email_marketing_opt_in"), False)
         self.assertEqual(body1.get("email_transactional_opt_in"), True)
         self.assertIn("push_notifications_opt_in", body1)
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT count(1)
+                FROM public.consumer_account
+                WHERE auth_user_id = %s::uuid
+                """,
+                [e2e.auth_user_id],
+            )
+            account_count = c.fetchone()[0]
+            c.execute(
+                """
+                SELECT count(1)
+                FROM public.consumer_profile cp
+                INNER JOIN public.consumer_account ca ON ca.id = cp.consumer_account_id
+                WHERE ca.auth_user_id = %s::uuid
+                """,
+                [e2e.auth_user_id],
+            )
+            profile_count = c.fetchone()[0]
+        self.assertEqual(account_count, 1)
+        self.assertEqual(profile_count, 1)
 
         with patch("common.auth.guards.verify_supabase_jwt", return_value=ctx):
             p1 = self.client.patch(
@@ -230,6 +253,21 @@ class ProfileApiTests(TestCase):
                 **_auth_headers(),
             )
         self.assertEqual(r.status_code, 400, r.content)
+
+    @patch(
+        "common.auth.guards.verify_supabase_jwt",
+        return_value=_make_context_for_auth_subject(E2E_AUTH_USER_ID),
+    )
+    def test_patch_with_bearer_token_does_not_require_csrf(
+        self, _mock_jwt: object
+    ) -> None:
+        response = self.csrf_client.patch(
+            "/api/v1/profile/",
+            data=json.dumps({"push_notifications_opt_in": False}),
+            content_type="application/json",
+            **_auth_headers(),
+        )
+        self.assertNotEqual(response.status_code, 403, response.content)
 
     def test_bad_locality_uuid_fk(
         self,

@@ -20,10 +20,34 @@ def _auth_user_uuid(auth: AuthContext) -> UUID:
         raise ValueError("Invalid auth subject; expected a UUID auth user id.") from exc
 
 
+def _default_display_name(auth: AuthContext) -> str:
+    email = (auth.email or "").strip()
+    if email and "@" in email:
+        prefix = email.split("@", 1)[0].strip()
+        if prefix:
+            return prefix
+    if email:
+        return email
+    return "Test Consumer"
+
+
+def _ensure_consumer_profile_row(consumer_id: UUID, auth: AuthContext) -> None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.consumer_profile (consumer_account_id, display_name)
+            VALUES (%s::uuid, %s)
+            ON CONFLICT (consumer_account_id) DO NOTHING
+            """,
+            [str(consumer_id), _default_display_name(auth)],
+        )
+
+
 @transaction.atomic
 def get_or_create_consumer_account_id(auth: AuthContext) -> UUID:
     """Resolve Supabase `sub` to `public.consumer_account.id`, creating the row if missing."""
     auth_uid = _auth_user_uuid(auth)
+    consumer_id: UUID | None = None
     with connection.cursor() as c:
         c.execute(
             """
@@ -35,7 +59,9 @@ def get_or_create_consumer_account_id(auth: AuthContext) -> UUID:
         )
         row = c.fetchone()
         if row:
-            return UUID(str(row[0]))
+            consumer_id = UUID(str(row[0]))
+            _ensure_consumer_profile_row(consumer_id, auth)
+            return consumer_id
         try:
             c.execute(
                 """
@@ -58,4 +84,6 @@ def get_or_create_consumer_account_id(auth: AuthContext) -> UUID:
             ins = c.fetchone()
         if not ins:
             raise RuntimeError("Could not resolve consumer_account.")
-    return UUID(str(ins[0]))
+        consumer_id = UUID(str(ins[0]))
+    _ensure_consumer_profile_row(consumer_id, auth)
+    return consumer_id

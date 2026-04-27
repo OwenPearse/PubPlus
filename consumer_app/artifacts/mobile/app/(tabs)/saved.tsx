@@ -61,6 +61,8 @@ export default function SavedScreen() {
           title="Sign in to save venues"
           subtitle="Your saved venues appear here once you sign in."
           actionLabel="Sign in"
+          actionAccessibilityLabel="Sign in to view saved venues"
+          actionTestID="saved-sign-in-cta"
           onAction={() => router.push("/auth" as never)}
         />
       ) : null}

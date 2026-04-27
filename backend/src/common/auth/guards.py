@@ -4,6 +4,7 @@ from typing import Any
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
 from common.auth.errors import InvalidTokenError, MissingBearerTokenError
 from common.auth.jwt_verifier import verify_supabase_jwt
@@ -73,6 +74,17 @@ def require_consumer_auth(
         return view_func(request, *args, **kwargs)
 
     return wrapped
+
+
+def require_consumer_auth_api(
+    view_func: Callable[..., HttpResponse],
+) -> Callable[..., HttpResponse]:
+    """
+    Bearer-token API wrapper for mobile/web clients.
+
+    CSRF is for cookie-backed browser sessions; these endpoints use Authorization: Bearer.
+    """
+    return csrf_exempt(require_consumer_auth(view_func))
 
 
 def require_internal_admin_auth(

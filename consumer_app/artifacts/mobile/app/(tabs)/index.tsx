@@ -129,6 +129,9 @@ export default function HomeScreen() {
             router.push("/auth" as never);
           }}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in to save venues"
+          testID="home-auth-required-cta"
         >
           <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
         </TouchableOpacity>

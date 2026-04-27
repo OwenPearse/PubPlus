@@ -9,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.test.client import Client
 
 from common.auth.context import AuthContext
+from common.auth.errors import InvalidTokenError
 
 from tests.support.saved_venues_e2e_data import (
     E2E_AUTH_USER_ID,
@@ -37,6 +38,7 @@ def _make_context_for_auth_subject(subj: str) -> AuthContext:
 class SavedVenuesApiTests(TestCase):
     def setUp(self) -> None:
         self.client = Client()
+        self.csrf_client = Client(enforce_csrf_checks=True)
 
     @staticmethod
     def _clear_e2e_default_saved_state():
@@ -99,6 +101,34 @@ class SavedVenuesApiTests(TestCase):
         )
         self.assertEqual(r4.status_code, 404)
         self.assertEqual(r4.json()["error"]["code"], "venue_not_found")
+
+    @patch("common.auth.guards.verify_supabase_jwt", return_value=_make_context_for_auth_subject(E2E_AUTH_USER_ID))
+    @patch("apps.saved.services.saved_venues_service.venue_row_exists", return_value=False)
+    def test_post_with_bearer_token_does_not_require_csrf(
+        self, _venue_exists: object, _mock_jwt: object
+    ) -> None:
+        response = self.csrf_client.post(
+            "/api/v1/saved/venues",
+            data=json.dumps({"venue_id": str(uuid4())}),
+            content_type="application/json",
+            **_auth_headers(),
+        )
+        self.assertNotEqual(response.status_code, 403, response.content)
+
+    @patch(
+        "common.auth.guards.verify_supabase_jwt",
+        side_effect=InvalidTokenError("token invalid"),
+    )
+    def test_post_invalid_token_still_returns_401_without_csrf_requirement(
+        self, _mock_jwt: object
+    ) -> None:
+        response = self.csrf_client.post(
+            "/api/v1/saved/venues",
+            data=json.dumps({"venue_id": str(uuid4())}),
+            content_type="application/json",
+            **_auth_headers(),
+        )
+        self.assertEqual(response.status_code, 401)
 
     def test_db_backed_idempotent_save_unsave_and_list(self) -> None:
         e2e = try_install_saved_venues_e2e_fixtures()

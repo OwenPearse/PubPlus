@@ -9,9 +9,19 @@ type Props = {
   subtitle?: string;
   actionLabel?: string;
   onAction?: () => void;
+  actionAccessibilityLabel?: string;
+  actionTestID?: string;
 };
 
-export function EmptyState({ icon, title, subtitle, actionLabel, onAction }: Props) {
+export function EmptyState({
+  icon,
+  title,
+  subtitle,
+  actionLabel,
+  onAction,
+  actionAccessibilityLabel,
+  actionTestID,
+}: Props) {
   const colors = useColors();
 
   return (
@@ -28,6 +38,9 @@ export function EmptyState({ icon, title, subtitle, actionLabel, onAction }: Pro
           onPress={onAction}
           style={[styles.action, { backgroundColor: colors.primary }]}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={actionAccessibilityLabel ?? actionLabel}
+          testID={actionTestID}
         >
           <Text style={[styles.actionText, { color: colors.primaryForeground }]}>{actionLabel}</Text>
         </TouchableOpacity>

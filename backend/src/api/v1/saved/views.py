@@ -10,7 +10,7 @@ from apps.saved.services.saved_venues_service import (
     parse_venue_id_path,
     remove_venue_from_default_list,
 )
-from common.auth.guards import require_consumer_auth
+from common.auth.guards import require_consumer_auth_api
 from common.auth.request_context import get_auth_context
 
 
@@ -21,7 +21,7 @@ def _validation_error(*, code: str, message: str, field_errors: dict | None = No
     return JsonResponse({"error": err}, status=400)
 
 
-@require_consumer_auth
+@require_consumer_auth_api
 def saved_venues(request: HttpRequest) -> HttpResponse:
     if request.method == "GET":
         return _get_saved_venues(request)
@@ -107,7 +107,7 @@ def _post_saved_venue(request: HttpRequest) -> HttpResponse:
     )
 
 
-@require_consumer_auth
+@require_consumer_auth_api
 def remove_saved_venue(request: HttpRequest, venue_id: str) -> HttpResponse:
     if request.method != "DELETE":
         return error_response(

@@ -271,6 +271,9 @@ export default function MapScreen() {
               router.push("/auth" as never);
             }}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in to save venues"
+            testID="map-auth-required-cta"
           >
             <Text style={[styles.authRequiredText, { color: colors.primary }]}>{authMessage}</Text>
           </TouchableOpacity>

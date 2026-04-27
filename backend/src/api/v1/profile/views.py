@@ -5,7 +5,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.discovery.http import error_response
 from apps.profile.services import profile_service
-from common.auth.guards import require_consumer_auth
+from common.auth.guards import require_consumer_auth_api
 from common.auth.request_context import get_auth_context
 
 
@@ -42,7 +42,7 @@ def _map_validation_details(
 
 
 @require_http_methods(["GET", "HEAD", "PATCH"])
-@require_consumer_auth
+@require_consumer_auth_api
 def consumer_profile(request: HttpRequest) -> HttpResponse:
     if request.method == "HEAD":
         return HttpResponse(status=200)

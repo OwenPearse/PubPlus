@@ -75,8 +75,15 @@ export default function AuthScreen() {
       ]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
+      testID="auth-screen"
     >
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Back from authentication"
+        testID="auth-back-button"
+      >
         <Feather name="arrow-left" size={18} color={colors.mutedForeground} />
         <Text style={[styles.backText, { color: colors.mutedForeground }]}>Back</Text>
       </TouchableOpacity>
@@ -112,6 +119,8 @@ export default function AuthScreen() {
           placeholderTextColor={colors.mutedForeground}
           style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
           editable={!busy && !configMissing}
+          accessibilityLabel="Email address"
+          testID="auth-email-input"
         />
 
         <Text style={[styles.label, { color: colors.mutedForeground }]}>Password</Text>
@@ -124,6 +133,8 @@ export default function AuthScreen() {
           placeholderTextColor={colors.mutedForeground}
           style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
           editable={!busy && !configMissing}
+          accessibilityLabel="Password"
+          testID="auth-password-input"
         />
 
         <TouchableOpacity
@@ -139,6 +150,9 @@ export default function AuthScreen() {
                 : signUpWithEmailPassword(email.trim(), password)
             )
           }
+          accessibilityRole="button"
+          accessibilityLabel={mode === "sign_in" ? "Sign in with email" : "Create account with email"}
+          testID={mode === "sign_in" ? "auth-submit-sign-in" : "auth-submit-sign-up"}
         >
           {busy ? (
             <ActivityIndicator size="small" color={colors.primaryForeground} />
@@ -153,6 +167,9 @@ export default function AuthScreen() {
           style={styles.switchModeBtn}
           onPress={() => setMode((current) => (current === "sign_in" ? "sign_up" : "sign_in"))}
           disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel={mode === "sign_in" ? "Switch to sign up mode" : "Switch to sign in mode"}
+          testID="auth-switch-mode-button"
         >
           <Text style={[styles.switchModeText, { color: colors.primary }]}>
             {mode === "sign_in"
@@ -168,6 +185,9 @@ export default function AuthScreen() {
           style={[styles.socialBtn, { borderColor: colors.border }]}
           onPress={() => runAuthAction(() => signInWithGoogle())}
           disabled={busy || configMissing}
+          accessibilityRole="button"
+          accessibilityLabel="Continue with Google"
+          testID="auth-social-google"
         >
           <Text style={[styles.socialBtnText, { color: colors.foreground }]}>Continue with Google</Text>
         </TouchableOpacity>
@@ -175,6 +195,9 @@ export default function AuthScreen() {
           style={[styles.socialBtn, { borderColor: colors.border }]}
           onPress={() => runAuthAction(() => signInWithFacebook())}
           disabled={busy || configMissing}
+          accessibilityRole="button"
+          accessibilityLabel="Continue with Facebook"
+          testID="auth-social-facebook"
         >
           <Text style={[styles.socialBtnText, { color: colors.foreground }]}>Continue with Facebook</Text>
         </TouchableOpacity>
@@ -183,6 +206,9 @@ export default function AuthScreen() {
             style={[styles.socialBtn, { borderColor: colors.border }]}
             onPress={() => runAuthAction(() => signInWithAppleIOS())}
             disabled={busy || configMissing}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Apple"
+            testID="auth-social-apple"
           >
             <Text style={[styles.socialBtnText, { color: colors.foreground }]}>Continue with Apple</Text>
           </TouchableOpacity>

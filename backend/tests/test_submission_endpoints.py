@@ -38,6 +38,7 @@ def _ctx(sub: str) -> AuthContext:
 class SubmissionIntakeApiTests(TestCase):
     def setUp(self) -> None:
         self.client = Client()
+        self.csrf_client = Client(enforce_csrf_checks=True)
 
     def _delete_workflow_for_venue(self, venue_id: str) -> None:
         with connection.cursor() as c:
@@ -83,6 +84,40 @@ class SubmissionIntakeApiTests(TestCase):
                 **_auth_headers(),
             )
         self.assertEqual(r2.status_code, 400)
+
+    def test_submission_mutations_with_bearer_do_not_require_csrf(self) -> None:
+        e2e = try_install_submissions_e2e_fixtures()
+        if e2e is None:
+            self.skipTest("PubPlus workflow schema not available in test database.")
+        ctx = _ctx(e2e.auth_user_id)
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=ctx):
+            correction = self.csrf_client.post(
+                "/api/v1/submissions/corrections",
+                data=json.dumps(
+                    {
+                        "venue_id": e2e.venue_id,
+                        "domain": "profile",
+                        "proposed_values": {"display_name": "CSRF test name"},
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertNotEqual(correction.status_code, 403, correction.content)
+
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=ctx):
+            suggestion = self.csrf_client.post(
+                "/api/v1/submissions/new-venues",
+                data=json.dumps(
+                    {
+                        "name": "CSRF Test Venue",
+                        "address_line_1": "1 CSRF Street",
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertNotEqual(suggestion.status_code, 403, suggestion.content)
 
     def test_unsupported_domain_rejected(self) -> None:
         e2e = try_install_submissions_e2e_fixtures()

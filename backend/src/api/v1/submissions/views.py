@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.discovery.http import error_response
 from apps.submissions.services import submission_intake_service
-from common.auth.guards import require_consumer_auth
+from common.auth.guards import require_consumer_auth_api
 from common.auth.request_context import get_auth_context
 
 
@@ -35,7 +35,7 @@ def _ack_response() -> JsonResponse:
 
 
 @require_http_methods(["POST", "HEAD"])
-@require_consumer_auth
+@require_consumer_auth_api
 def submit_correction(request: HttpRequest) -> HttpResponse:
     if request.method == "HEAD":
         return HttpResponse(status=200)
@@ -80,7 +80,7 @@ def submit_correction(request: HttpRequest) -> HttpResponse:
 
 
 @require_http_methods(["POST", "HEAD"])
-@require_consumer_auth
+@require_consumer_auth_api
 def submit_new_venue(request: HttpRequest) -> HttpResponse:
     if request.method == "HEAD":
         return HttpResponse(status=200)
