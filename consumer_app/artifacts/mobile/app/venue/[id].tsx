@@ -38,7 +38,7 @@ export default function VenueDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isSaved, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
-  const { isAuthenticated } = useAuthSession();
+  const { isAuthenticated, loading: authLoading } = useAuthSession();
 
   useEffect(() => {
     let cancelled = false;
@@ -214,8 +214,12 @@ export default function VenueDetailScreen() {
 
         <View style={[styles.submissionEntryWrap, { borderBottomColor: colors.border }]}>
           <TouchableOpacity
-            style={[styles.submissionEntryBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.submissionEntryBtn,
+              { backgroundColor: colors.card, borderColor: colors.border, opacity: authLoading ? 0.6 : 1 },
+            ]}
             onPress={() => {
+              if (authLoading) return;
               if (!isAuthenticated) {
                 router.push("/auth" as never);
                 return;
@@ -230,6 +234,7 @@ export default function VenueDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Suggest an edit for this venue"
             testID="venue-correction-entry"
+            disabled={authLoading}
           >
             <Feather name="edit-2" size={14} color={colors.primary} />
             <Text style={[styles.submissionEntryText, { color: colors.primary }]}>Suggest an edit</Text>
@@ -260,7 +265,11 @@ export default function VenueDetailScreen() {
               { color: venue.isOpen ? "#237842" : "#b03020" },
             ]}
           >
-            {venue.isOpen ? `Open now · Closes ${venue.closingTime}` : venue.closingTime}
+            {venue.isOpen
+              ? venue.closingTime === "Open now"
+                ? "Open now"
+                : `Open now · ${venue.closingTime}`
+              : venue.closingTime}
           </Text>
         </View>
 

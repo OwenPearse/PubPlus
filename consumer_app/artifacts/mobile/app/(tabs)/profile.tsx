@@ -62,6 +62,21 @@ export default function ProfileScreen() {
     }
   }
 
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.loadingWrap,
+          { backgroundColor: colors.background, paddingTop: topInset },
+        ]}
+      >
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading profile...</Text>
+      </View>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <View
@@ -79,21 +94,6 @@ export default function ProfileScreen() {
           actionTestID="profile-sign-in-cta"
           onAction={() => router.push("/auth" as never)}
         />
-      </View>
-    );
-  }
-
-  if (loading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          styles.loadingWrap,
-          { backgroundColor: colors.background, paddingTop: topInset },
-        ]}
-      >
-        <ActivityIndicator color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading profile...</Text>
       </View>
     );
   }
@@ -199,7 +199,7 @@ export default function ProfileScreen() {
         ))}
       </View>
       <Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>
-        Drink chips are not in the backend profile contract yet and are shown as coming soon.
+        Drink chips are preview-only and are not sent to the backend yet.
       </Text>
 
       <SectionHeader title="Venue preferences" />
@@ -243,13 +243,13 @@ export default function ProfileScreen() {
           value={
             profile?.quiet_hours_start_local && profile?.quiet_hours_end_local
               ? `${profile.quiet_hours_start_local} - ${profile.quiet_hours_end_local}`
-              : "Off"
+              : "Not set"
           }
-          onPress={() => {}}
+          showChevron={false}
         />
-        <ProfileRow icon="shield" label="Privacy" value="Coming soon" onPress={() => {}} />
-        <ProfileRow icon="help-circle" label="Help & Support" onPress={() => {}} />
-        <ProfileRow icon="info" label="About PubPlus" onPress={() => {}} />
+        <ProfileRow icon="shield" label="Privacy" value="Coming soon" showChevron={false} />
+        <ProfileRow icon="help-circle" label="Help & Support" value="Coming soon" showChevron={false} />
+        <ProfileRow icon="info" label="About PubPlus" value="Coming soon" showChevron={false} />
       </View>
 
       {saving ? (

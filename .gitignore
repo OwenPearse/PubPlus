@@ -3,6 +3,14 @@
 .mcp_check_payloads/
 .mcp_sql_checks/
 
+# Local environment files
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
 # Hidden root-level MCP invoke/temp files
 .invoke*.json
 .mcp*.json

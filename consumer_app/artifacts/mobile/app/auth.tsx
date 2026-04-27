@@ -30,7 +30,7 @@ export default function AuthScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated } = useAuthSession();
+  const { isAuthenticated, loading: authLoading } = useAuthSession();
 
   const [mode, setMode] = useState<AuthMode>("sign_in");
   const [email, setEmail] = useState("");
@@ -64,6 +64,21 @@ export default function AuthScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (authLoading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.loadingWrap,
+          { backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 28 : insets.top + 8 },
+        ]}
+      >
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.helpText, { color: colors.mutedForeground }]}>Checking sign-in...</Text>
+      </View>
+    );
   }
 
   return (
@@ -230,6 +245,7 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  loadingWrap: { alignItems: "center", justifyContent: "center", paddingHorizontal: 16, gap: 10 },
   content: { paddingHorizontal: 16 },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12, alignSelf: "flex-start" },
   backText: { fontSize: 13, fontFamily: "Inter_500Medium" },

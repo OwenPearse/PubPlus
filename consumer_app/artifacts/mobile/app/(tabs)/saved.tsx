@@ -27,7 +27,7 @@ export default function SavedScreen() {
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : 0;
-  const { isAuthenticated } = useAuthSession();
+  const { isAuthenticated, loading: authLoading } = useAuthSession();
   const { savedVenues, loading, error, refreshSavedVenues, unsaveVenue } = useSavedVenues();
 
   function unsave(id: string) {
@@ -55,7 +55,14 @@ export default function SavedScreen() {
         ) : null}
       </View>
 
-      {!isAuthenticated ? (
+      {authLoading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Checking sign-in...</Text>
+        </View>
+      ) : null}
+
+      {!authLoading && !isAuthenticated ? (
         <EmptyState
           icon="bookmark"
           title="Sign in to save venues"
@@ -103,11 +110,11 @@ export default function SavedScreen() {
             />
             <View style={[styles.actions, { borderColor: colors.border }]}>
               <TouchableOpacity
-                style={[styles.actionBtn, { borderRightColor: colors.border }]}
-                onPress={() => {}}
+                style={[styles.actionBtn, styles.actionBtnDisabled, { borderRightColor: colors.border }]}
+                disabled
               >
                 <Feather name="share-2" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.actionText, { color: colors.mutedForeground }]}>Share</Text>
+                <Text style={[styles.actionText, { color: colors.mutedForeground }]}>Share soon</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.actionBtn}
@@ -175,6 +182,9 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: 9,
     borderRightWidth: StyleSheet.hairlineWidth,
+  },
+  actionBtnDisabled: {
+    opacity: 0.65,
   },
   actionText: {
     fontSize: 12,

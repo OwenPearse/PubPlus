@@ -20,8 +20,10 @@ export function ProfileRow({ icon, label, value, onPress, dangerous = false, sho
   return (
     <TouchableOpacity
       onPress={onPress}
+      disabled={!onPress}
       activeOpacity={0.7}
       style={[styles.row, { borderBottomColor: colors.border }]}
+      accessibilityRole={onPress ? "button" : "text"}
     >
       <View style={[styles.iconWrap, { backgroundColor: dangerous ? "rgba(217,79,45,0.1)" : colors.secondary }]}>
         <Feather name={icon} size={18} color={iconColor} />

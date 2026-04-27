@@ -1,17 +1,18 @@
-# Consumer App Structure (Stage 1C)
+# Consumer App Structure
 
 This workspace is a pnpm monorepo.
 
 ## Current frontend app target
 
 - The actual mobile app is `artifacts/mobile` (Expo Router, React Native).
-- Stage 2 integration should target this package directly.
+- Consumer/frontend integration work should target this package directly.
 - Do not treat full-width desktop web rendering as the product target; use Expo Go and mobile emulation.
+- Local run and QA instructions are in `README.local-run.md`.
 
 ## Workspace packages
 
 - `artifacts/mobile` - Production-target frontend app.
-  - Stage 2 foundation files:
+  - Integration foundation files:
     - `lib/env.ts` - Expo public env access for API/Auth config.
     - `lib/api.ts` - Shared API request helpers for public/private Django calls.
     - `lib/supabase.ts` - Supabase Auth bridge helpers + token/session access.

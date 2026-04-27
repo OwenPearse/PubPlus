@@ -40,6 +40,53 @@ function getOAuthRedirectUrl(): string {
   });
 }
 
+function getRedirectParams(url: string): URLSearchParams {
+  const queryStart = url.indexOf("?");
+  const hashStart = url.indexOf("#");
+  const params = new URLSearchParams();
+
+  if (queryStart >= 0) {
+    const queryEnd = hashStart >= 0 ? hashStart : undefined;
+    const query = url.slice(queryStart + 1, queryEnd);
+    new URLSearchParams(query).forEach((value, key) => params.set(key, value));
+  }
+
+  if (hashStart >= 0) {
+    const hash = url.slice(hashStart + 1);
+    new URLSearchParams(hash).forEach((value, key) => params.set(key, value));
+  }
+
+  return params;
+}
+
+async function completeOAuthSessionFromUrl(client: SupabaseClient, url: string): Promise<Session | null> {
+  const params = getRedirectParams(url);
+  const errorDescription = params.get("error_description") ?? params.get("error");
+  if (errorDescription) {
+    throw new Error(errorDescription);
+  }
+
+  const code = params.get("code");
+  if (code) {
+    const { data, error } = await client.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    return data.session;
+  }
+
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+  if (accessToken && refreshToken) {
+    const { data, error } = await client.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) throw error;
+    return data.session;
+  }
+
+  throw new Error("OAuth redirect did not include a session.");
+}
+
 async function signInWithOAuthProvider(provider: "google" | "facebook" | "apple") {
   const client = getSupabaseClient();
   const redirectTo = getOAuthRedirectUrl();
@@ -60,7 +107,7 @@ async function signInWithOAuthProvider(provider: "google" | "facebook" | "apple"
     throw new Error(`OAuth login was not completed: ${result.type}`);
   }
 
-  return getCurrentSession();
+  return completeOAuthSessionFromUrl(client, result.url);
 }
 
 export async function signInWithEmailPassword(email: string, password: string) {

@@ -53,7 +53,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
-  const { isAuthenticated } = useAuthSession();
+  const { isAuthenticated, loading: authLoading } = useAuthSession();
 
   function toggleDrink(d: string) {
     Haptics.selectionAsync();
@@ -148,6 +148,18 @@ export default function SearchScreen() {
     return pills;
   }, [selectedSuburb, distanceKm, openNowOnly, selectedMealSpecials, selectedDrinks, selectedFeatures]);
 
+  const searchQuery = useMemo(
+    () => ({
+      suburb: selectedSuburb ?? undefined,
+      open_now: openNowOnly ? true : undefined,
+      radius_m: distanceKm ? distanceKm * 1000 : undefined,
+      meal_specials: Array.from(selectedMealSpecials),
+      drink_types: Array.from(selectedDrinks),
+      venue_features: Array.from(selectedFeatures),
+    }),
+    [distanceKm, openNowOnly, selectedDrinks, selectedFeatures, selectedMealSpecials, selectedSuburb]
+  );
+
   useEffect(() => {
     let cancelled = false;
     async function loadSearch() {
@@ -155,14 +167,7 @@ export default function SearchScreen() {
       setError(null);
       try {
         const response = await publicApiRequest<SearchResponse>("/api/v1/search/venues", {
-          query: {
-            suburb: selectedSuburb ?? undefined,
-            open_now: openNowOnly ? true : undefined,
-            radius_m: distanceKm ? distanceKm * 1000 : undefined,
-            meal_specials: Array.from(selectedMealSpecials),
-            drink_types: Array.from(selectedDrinks),
-            venue_features: Array.from(selectedFeatures),
-          },
+          query: searchQuery,
         });
         if (cancelled) return;
         setVenues((response.data.venues ?? []).map(mapCardToVenue));
@@ -178,7 +183,7 @@ export default function SearchScreen() {
     return () => {
       cancelled = true;
     };
-  }, [selectedSuburb, openNowOnly, distanceKm, selectedMealSpecials, selectedDrinks, selectedFeatures]);
+  }, [searchQuery]);
 
   const results = useMemo(() => venues, [venues]);
 
@@ -458,14 +463,21 @@ export default function SearchScreen() {
             activeFilterCount > 0
               ? `${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`
               : query
-              ? "Text search coming in Stage 4"
+              ? "Text search is deferred; filters are live"
               : "All Melbourne"
           }
         />
 
         <TouchableOpacity
-          style={[styles.suggestVenueCta, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => router.push((isAuthenticated ? "/suggest-venue" : "/auth") as never)}
+          style={[
+            styles.suggestVenueCta,
+            { backgroundColor: colors.card, borderColor: colors.border, opacity: authLoading ? 0.6 : 1 },
+          ]}
+          onPress={() => {
+            if (authLoading) return;
+            router.push((isAuthenticated ? "/suggest-venue" : "/auth") as never);
+          }}
+          disabled={authLoading}
           accessibilityRole="button"
           accessibilityLabel="Suggest a missing venue"
           testID="search-suggest-venue-entry"
@@ -498,7 +510,7 @@ export default function SearchScreen() {
             onAction={() => {
               setLoading(true);
               setError(null);
-              publicApiRequest<SearchResponse>("/api/v1/search/venues")
+              publicApiRequest<SearchResponse>("/api/v1/search/venues", { query: searchQuery })
                 .then((response) => setVenues((response.data.venues ?? []).map(mapCardToVenue)))
                 .catch(() => setError("Could not load search results."))
                 .finally(() => setLoading(false));

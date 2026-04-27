@@ -20,7 +20,7 @@ export default function SuggestVenueScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated } = useAuthSession();
+  const { isAuthenticated, loading: authLoading } = useAuthSession();
   const { suggestNewVenue, submitting, error, fieldErrors, authRequired } = useSubmissions();
 
   const [name, setName] = useState("");
@@ -68,6 +68,15 @@ export default function SuggestVenueScreen() {
     } catch {
       // handled by hook state
     }
+  }
+
+  if (authLoading) {
+    return (
+      <View style={[styles.authWrap, styles.centerWrap, { backgroundColor: colors.background, paddingTop: topInset }]}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Checking sign-in...</Text>
+      </View>
+    );
   }
 
   if (!isAuthenticated || authRequired) {
@@ -209,6 +218,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 16 },
   authWrap: { flex: 1, paddingHorizontal: 16 },
+  centerWrap: { justifyContent: "center", alignItems: "center" },
   title: { fontFamily: "Inter_700Bold", fontSize: 24 },
   subtitle: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: 6, marginBottom: 14 },
   label: { fontFamily: "Inter_500Medium", fontSize: 13, marginBottom: 6, marginTop: 4 },

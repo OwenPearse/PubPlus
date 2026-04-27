@@ -104,6 +104,10 @@ export default function HomeScreen() {
       <TouchableOpacity
         activeOpacity={0.82}
         style={[styles.tonightBanner, { backgroundColor: colors.primary }]}
+        onPress={() => router.push("/(tabs)/map" as never)}
+        accessibilityRole="button"
+        accessibilityLabel="Open map for tonight nearby venues"
+        testID="home-tonight-map-cta"
       >
         <View>
           <Text style={[styles.bannerLabel, { color: "rgba(255,255,255,0.72)" }]}>

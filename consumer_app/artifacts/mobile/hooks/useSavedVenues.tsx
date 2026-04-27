@@ -61,6 +61,12 @@ export function SavedVenuesProvider({ children }: { children: React.ReactNode })
   const [syncingVenueIds, setSyncingVenueIds] = useState<Set<string>>(new Set());
   const [optimisticSavedIds, setOptimisticSavedIds] = useState<Set<string>>(new Set());
 
+  const savedVenueIds = useMemo(() => {
+    const ids = new Set(savedVenues.map((venue) => venue.id));
+    optimisticSavedIds.forEach((id) => ids.add(id));
+    return ids;
+  }, [optimisticSavedIds, savedVenues]);
+
   const markSyncing = useCallback((venueId: string, syncing: boolean) => {
     setSyncingVenueIds((current) => {
       const next = new Set(current);
@@ -114,6 +120,7 @@ export function SavedVenuesProvider({ children }: { children: React.ReactNode })
       if (syncingVenueIds.has(venueId)) return;
 
       markSyncing(venueId, true);
+      setError(null);
       setOptimisticSavedIds((current) => new Set(current).add(venueId));
       try {
         await privateApiRequest<{ data: { saved: boolean; venue_id: string } }>("/api/v1/saved/venues", {
@@ -150,6 +157,7 @@ export function SavedVenuesProvider({ children }: { children: React.ReactNode })
       if (syncingVenueIds.has(venueId)) return;
 
       markSyncing(venueId, true);
+      setError(null);
       setOptimisticSavedIds((current) => {
         const next = new Set(current);
         next.delete(venueId);
@@ -176,21 +184,15 @@ export function SavedVenuesProvider({ children }: { children: React.ReactNode })
 
   const toggleSaved = useCallback(
     async (venueId: string) => {
-      const currentlySaved = savedVenues.some((venue) => venue.id === venueId);
+      const currentlySaved = savedVenueIds.has(venueId);
       if (currentlySaved) {
         await unsaveVenue(venueId);
       } else {
         await saveVenue(venueId);
       }
     },
-    [savedVenues, saveVenue, unsaveVenue]
+    [savedVenueIds, saveVenue, unsaveVenue]
   );
-
-  const savedVenueIds = useMemo(() => {
-    const ids = new Set(savedVenues.map((venue) => venue.id));
-    optimisticSavedIds.forEach((id) => ids.add(id));
-    return ids;
-  }, [optimisticSavedIds, savedVenues]);
 
   const value = useMemo<SavedContextValue>(
     () => ({

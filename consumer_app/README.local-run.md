@@ -1,3 +1,79 @@
+# PubPlus Consumer App Local Run
+
+## Prerequisites
+
+- Node with Corepack enabled for pnpm.
+- Python/Django backend configured from `backend/.env.example`.
+- A Supabase project with email/password auth enabled.
+- Optional social auth providers configured in Supabase and their external dashboards.
+
+## Environment
+
+Copy `consumer_app/artifacts/mobile/.env.example` to a local `.env.local` or `.env` file for Expo. Use only frontend-safe `EXPO_PUBLIC_` variables in the mobile app.
+
+Required values:
+
+- `EXPO_PUBLIC_API_BASE_URL` - Django API origin, for example `http://localhost:8000`.
+- `EXPO_PUBLIC_SUPABASE_URL` - Supabase project URL.
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Supabase anon/publishable key. Do not use a service role key.
+- `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` - Expo deep link scheme, currently `pubplus`.
+
+Keep populated env files ignored and local. Do not commit credentials, passwords, Supabase service role keys, or demo user secrets.
+
+## Run Backend
+
+From `backend/`:
+
+```bash
+python manage.py runserver 8000
+```
+
+The backend uses explicit CORS and CSRF trusted-origin settings from its environment. Include `http://localhost:8081` and `http://127.0.0.1:8081` when running Expo web on port 8081.
+
+## Run Expo Web
+
+From `consumer_app/`:
+
+```bash
+corepack pnpm install
+corepack pnpm --filter @workspace/mobile exec expo start --web --localhost --port 8081 --clear
+```
+
+Use mobile device emulation in the browser for layout checks. Port `8081` is the default QA port; stop stale Expo processes before changing ports.
+
+## Run Expo Go
+
+From `consumer_app/`:
+
+```bash
+corepack pnpm --filter @workspace/mobile exec expo start --localhost --port 8081
+```
+
+Open the QR code with Expo Go. For a physical device, set `EXPO_PUBLIC_API_BASE_URL` to a backend origin reachable from that device rather than `localhost`.
+
+## Validation
+
+Frontend:
+
+```bash
+cd consumer_app
+corepack pnpm run typecheck
+```
+
+Backend integration tests:
+
+```bash
+cd backend
+python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_saved_venues_endpoints tests.test_profile_endpoints tests.test_submission_endpoints tests.test_discovery_public_endpoints tests.test_home_and_venue_detail_endpoints
+```
+
+## Known Deferred UI
+
+- Text search `q` and event-specific search filters are not exposed as live backend filters yet.
+- Correction submission supports basic profile, location, and hours payloads; attribute-domain lookup UX is deferred.
+- Profile preference chips for drinks/features are preview-only and are not sent to the backend.
+- Google, Facebook, and Apple sign-in require Supabase provider configuration plus external provider dashboard setup.
+- React Native Web browser automation is useful for smoke checks, but some native controls still require Expo Go or simulator verification.
 # PubPlus Mobile - Local Cursor Run Guide
 
 This workspace is a pnpm monorepo. The Expo Router app lives at `artifacts/mobile`.
