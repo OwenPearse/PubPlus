@@ -50,6 +50,32 @@ class AuthBoundaryEndpointTests(SimpleTestCase):
             {"status": "ok", "subject": "consumer-user-123"},
         )
 
+    def test_private_endpoint_allows_verified_token_regardless_of_provider_claims(self):
+        verified_context = AuthContext(
+            subject="consumer-user-123",
+            audience="authenticated",
+            issuer="https://example.supabase.co/auth/v1",
+            role="authenticated",
+            email="consumer@example.com",
+            claims={
+                "sub": "consumer-user-123",
+                "app_metadata": {"provider": "google", "providers": ["google"]},
+                "user_metadata": {"full_name": "Consumer Example"},
+                "identities": [{"provider": "google"}],
+            },
+        )
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=verified_context):
+            response = self.client.get(
+                "/api/v1/auth-probe/private",
+                HTTP_AUTHORIZATION="Bearer valid-google-token",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"status": "ok", "subject": "consumer-user-123"},
+        )
+
     def test_public_endpoint_accessible_without_auth(self):
         response = self.client.get("/api/v1/auth-probe/public")
 

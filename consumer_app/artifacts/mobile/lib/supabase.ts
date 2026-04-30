@@ -35,6 +35,10 @@ function getSupabaseClient(): SupabaseClient {
 }
 
 function getOAuthRedirectUrl(): string {
+  if (Platform.OS === "web") {
+    return Linking.createURL("auth/callback");
+  }
+
   return Linking.createURL("auth/callback", {
     scheme: getAuthRedirectScheme(),
   });

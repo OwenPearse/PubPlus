@@ -16,7 +16,7 @@ Required values:
 - `EXPO_PUBLIC_API_BASE_URL` - Django API origin, for example `http://localhost:8000`.
 - `EXPO_PUBLIC_SUPABASE_URL` - Supabase project URL.
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Supabase anon/publishable key. Do not use a service role key.
-- `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` - Expo deep link scheme, currently `pubplus`.
+- `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` - Expo native deep link scheme, currently `pubplus`.
 
 Keep populated env files ignored and local. Do not commit credentials, passwords, Supabase service role keys, or demo user secrets.
 
@@ -181,13 +181,19 @@ Enable providers in Supabase Auth and configure redirect URLs:
 
 - Expo app scheme is set to `pubplus` in `artifacts/mobile/app.json`.
 - OAuth redirect path used by the app is `auth/callback`.
-- Expected redirect URL shape:
+- Native redirect URL shape:
 
 ```text
 pubplus://auth/callback
 ```
 
-- Add this redirect URL (and any Supabase callback URLs shown in dashboard) to:
+- Expo web returns to the current app origin, for example:
+
+```text
+http://localhost:8081/auth/callback
+```
+
+- Add the native redirect URL, the web callback origin/path you actually use in development, and any Supabase callback URLs shown in dashboard to:
   - Supabase Auth URL allow-list
   - Provider dashboards (Google/Facebook/Apple)
 - Some provider flows and OAuth redirects are more reliable in a development build than Expo Go; if Expo Go flow is limited, use a dev build for end-to-end SSO validation.
