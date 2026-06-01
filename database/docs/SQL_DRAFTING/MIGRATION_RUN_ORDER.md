@@ -2,9 +2,9 @@
 
 ## Rule
 
-Apply migrations in **lexical filename order** under `database/supabase/migrations/`. Supabase and most migration runners sort `0001` … `0032` correctly; do not reorder files to “optimize” unless you are resolving an explicit dependency bug.
+Apply migrations in **lexical filename order** under `database/supabase/migrations/`. Supabase and most migration runners sort `0001` … `0033` correctly; do not reorder files to “optimize” unless you are resolving an explicit dependency bug.
 
-## Files (0001–0032)
+## Files (0001–0033)
 
 | Order | File | SQL drafting wave (approx.) |
 |------:|------|-------------------------------|
@@ -40,6 +40,7 @@ Apply migrations in **lexical filename order** under `database/supabase/migratio
 | 30 | `0030_business_subscription_backbone.sql` | 11 |
 | 31 | `0031_business_entitlements_and_venue_overlays.sql` | 11 |
 | 32 | `0032_commercial_overlay_adjacency.sql` | 11 (RLS for Wave 11) |
+| 33 | `0033_founder_venue_leads.sql` | Founder venue lead research (internal ops) |
 
 ## Planning doc vs migration numbers
 
@@ -48,6 +49,6 @@ Apply migrations in **lexical filename order** under `database/supabase/migratio
 ## After apply
 
 1. Run per-wave checks for any domain you touch, plus `check_first_tranche_end_to_end.sql`.
-2. On a full fresh apply of `0001`–`0032`, run `check_full_schema_readiness.sql` for a single cross-cutting pass.
+2. On a full fresh apply of `0001`–`0033`, run `check_full_schema_readiness.sql` for a single cross-cutting pass.
 
 See `WAVE_12_FINAL_READINESS_REVIEW.md` and `SQL_DRAFTING_NOTES.md` for verification and seed ordering.

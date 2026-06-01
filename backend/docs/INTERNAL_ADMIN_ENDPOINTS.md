@@ -91,6 +91,22 @@ Internal endpoints must require:
 
 ## MVP internal endpoint families
 
+## Founder venue leads (Stage 4)
+
+Namespace: `/api/v1/internal/founder-venues/`
+
+- `GET /leads` — filterable list (founder-fit sort default)
+- `GET /leads/{lead_id}` — detail with sources, field attributions, events (no `raw_payload` on sources)
+- `PATCH /leads/{lead_id}` — manual edits + score recompute
+- `POST /leads/{lead_id}/mark-do-not-contact` — outreach/permission DNC (not suppression)
+- `POST /import` — CSV import via `csv_text` (max 5MB)
+- `POST /recompute-scores` — batch founder-fit recompute
+- `GET /top` — ranked leads for outreach prioritisation
+
+See `backend/docs/founder-venues/README.md` for request examples.
+
+---
+
 ## 1. Moderation queue
 
 ### `GET /api/v1/internal/moderation/queue`

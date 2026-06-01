@@ -1,0 +1,3 @@
+business_name,type,street,city,state,postal_code,business_phone,business_website,email_1
+Sample Pub Alpha,Pub,1 Main St,Richmond,VIC,3121,03 9421 0001,https://sample-alpha.example,info@sample-alpha.example
+Sample Bar Beta,Bar,2 High St,Fitzroy,Victoria,3065,+61 3 9419 0002,www.sample-beta.example,owner.person@gmail.com

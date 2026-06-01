@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "apps.profile.apps.ProfileConfig",
     "apps.submissions.apps.SubmissionsConfig",
     "apps.internal_tools.apps.InternalToolsConfig",
+    "apps.founder_venues.apps.FounderVenuesConfig",
 ]
 
 MIDDLEWARE = [

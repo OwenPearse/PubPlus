@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 
 from api.v1.internal.views import (
     internal_auth_probe,
@@ -28,4 +28,8 @@ urlpatterns = [
         name="internal-moderation-item-notes",
     ),
     path("venues/<str:venue_id>", internal_venue_detail, name="internal-venue-detail"),
+    path(
+        "founder-venues/",
+        include("api.v1.internal.founder_venues.urls"),
+    ),
 ]
