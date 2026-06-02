@@ -473,6 +473,43 @@ Each updated lead gets `social_url_cleanup_applied` event, source row, and attri
 - Convert-to-venue-candidate
 - Publishing to `venue_published_*`
 
+## Stage 7 — Internal admin UI
+
+Web UI for operators (Vite + React). Lives in `portal_web/` (dedicated portal app, separate from the consumer mobile app).
+
+### Run locally
+
+```bash
+cd portal_web
+cp .env.example .env
+# VITE_API_BASE_URL=http://localhost:8000
+# VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY (internal-admin JWT)
+pnpm install
+pnpm dev
+```
+
+Or from the repo root: `pnpm portal:dev` (requires root `package.json` scripts).
+
+Open `http://localhost:3010` → `/internal/founder-venues`.
+
+Full UI guide: `portal_web/README.md`.
+
+### UI capabilities
+
+- List/filter leads (default VIC, founder-fit sort)
+- Quick queues: VIC 80+, VIC 60+ missing email, needs review, no contact channels
+- Lead detail: score breakdown, sources, attributions, events
+- PATCH editable fields (server recomputes score)
+- Website enrich dry-run / apply
+- Mark do-not-contact
+- Export filtered CSV (safe defaults)
+
+### Stage 7 does not include
+
+- Bulk email, automated outreach, publishing, convert-to-venue-candidate
+- New enrichment sources or broad crawling
+- Service-role keys in the browser
+
 ## Tests
 
 ```bash
