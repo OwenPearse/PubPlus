@@ -7,6 +7,7 @@ import { ContactShortcuts } from "@/components/ContactShortcuts";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { OutreachPanel } from "@/components/OutreachPanel";
+import { EventsTable } from "@/components/EventsTable";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import {
   enrichFounderVenueLead,
@@ -19,7 +20,6 @@ import type {
   EnrichmentResult,
   FounderVenueLeadDetail,
   LeadDetailResponse,
-  LeadEvent,
   PatchableLeadField,
 } from "@/lib/types";
 import { PATCHABLE_LEAD_FIELDS } from "@/lib/types";
@@ -32,13 +32,6 @@ const VENUE_EDIT_FIELDS = PATCHABLE_LEAD_FIELDS.filter(
     f !== "last_contacted_at" &&
     f !== "last_contact_channel",
 );
-
-function eventSummary(metadata: Record<string, unknown>): string {
-  const keys = Object.keys(metadata);
-  if (keys.length === 0) return "—";
-  const preview = keys.slice(0, 4).map((k) => `${k}: ${String(metadata[k])}`);
-  return preview.join(" · ");
-}
 
 export function FounderVenueDetailPage() {
   const { leadId } = useParams<{ leadId: string }>();
@@ -457,36 +450,6 @@ function DataTable({
                     {cell}
                   </td>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
-  );
-}
-
-function EventsTable({ events }: { events: LeadEvent[] }) {
-  return (
-    <section className="mb-6 overflow-x-auto rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="mb-3 text-lg font-semibold">Events</h2>
-      {events.length === 0 ? (
-        <p className="text-sm text-slate-500">No events.</p>
-      ) : (
-        <table className="min-w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-xs uppercase text-slate-500">
-              <th className="px-2 py-1">Type</th>
-              <th className="px-2 py-1">When</th>
-              <th className="px-2 py-1">Summary</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((e) => (
-              <tr key={e.id} className="border-b border-slate-100">
-                <td className="px-2 py-1">{e.event_type}</td>
-                <td className="px-2 py-1 text-xs text-slate-600">{e.created_at ?? "—"}</td>
-                <td className="px-2 py-1 text-xs">{eventSummary(e.metadata)}</td>
               </tr>
             ))}
           </tbody>

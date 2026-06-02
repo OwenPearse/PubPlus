@@ -232,3 +232,86 @@ class LeadValidationUnitTests(SimpleTestCase):
 
         with self.assertRaises(LeadValidationError):
             parse_list_filters({"sort": "DROP TABLE"})
+
+    def test_parse_list_filters_outreach_status_in(self) -> None:
+        from apps.founder_venues.services.lead_queries import parse_list_filters
+
+        f = parse_list_filters({"outreach_status_in": "called,emailed"})
+        self.assertEqual(f.outreach_status_in, ("called", "emailed"))
+        self.assertIsNone(f.outreach_status)
+
+    def test_parse_list_filters_contacted_before_iso(self) -> None:
+        from apps.founder_venues.services.lead_queries import parse_list_filters
+
+        f = parse_list_filters({"contacted_before": "2026-01-01T00:00:00Z"})
+        self.assertIsNotNone(f.contacted_before)
+
+    def test_parse_list_filters_invalid_contacted_before(self) -> None:
+        from apps.founder_venues.services.lead_queries import parse_list_filters
+
+        with self.assertRaises(LeadValidationError):
+            parse_list_filters({"contacted_before": "not-a-date"})
+
+
+class FounderVenueListDtoTests(SimpleTestCase):
+    def test_lead_list_item_dto_includes_last_contact_fields(self) -> None:
+        from apps.founder_venues.services.lead_queries import lead_list_item_dto
+
+        dto = lead_list_item_dto(
+            {
+                "id": LEAD_ID,
+                "name": "Test Pub",
+                "notes": "A" * 250,
+                "last_contacted_at": None,
+                "last_contact_channel": "phone",
+                "confidence_score": 1,
+                "founder_fit_score": 2,
+                "enrichment_status": "imported",
+                "outreach_status": "called",
+                "contact_permission_status": "public_business_contact",
+            }
+        )
+        self.assertIn("last_contacted_at", dto)
+        self.assertEqual(dto["last_contact_channel"], "phone")
+        self.assertTrue(dto["notes_summary"].endswith("..."))
+
+
+class FounderVenueSummaryEndpointTests(SimpleTestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+
+    def test_summary_requires_internal_admin(self) -> None:
+        self.assertEqual(
+            self.client.get("/api/v1/internal/founder-venues/summary").status_code,
+            401,
+        )
+
+    @patch("common.auth.guards.verify_supabase_jwt", return_value=_internal_ctx())
+    @patch("api.v1.internal.founder_venues.views.get_founder_venue_workspace_summary")
+    def test_summary_returns_expected_keys(self, mock_summary, _jwt) -> None:
+        mock_summary.return_value = {
+            "total_leads": 100,
+            "vic_leads": 40,
+            "vic_score_80_plus": 10,
+            "not_contacted": 50,
+            "called": 5,
+            "emailed": 3,
+            "replied": 2,
+            "signed_up": 1,
+            "rejected": 1,
+            "do_not_contact": 0,
+            "needs_review": 2,
+            "missing_email": 20,
+            "missing_website": 15,
+            "missing_phone": 5,
+            "enriched": 8,
+            "imported": 90,
+        }
+        r = self.client.get(
+            "/api/v1/internal/founder-venues/summary",
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["vic_leads"], 40)
+        self.assertEqual(body["not_contacted"], 50)

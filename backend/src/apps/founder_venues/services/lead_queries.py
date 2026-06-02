@@ -9,14 +9,18 @@ from typing import Any
 
 from django.db import connection
 
+from apps.founder_venues.services.notes_summary import truncate_notes_summary
 from apps.founder_venues.services.lead_validation import (
     DEFAULT_LIMIT,
+    LAST_CONTACT_CHANNELS,
     MAX_LIMIT,
+    OUTREACH_STATUSES,
     SORT_OPTIONS,
     LeadNotFoundError,
     LeadValidationError,
     parse_bool_param,
     parse_int_param,
+    parse_optional_iso_datetime,
     parse_uuid,
 )
 
@@ -64,6 +68,9 @@ def lead_list_item_dto(row: dict[str, Any]) -> dict[str, Any]:
         "enrichment_status": row.get("enrichment_status"),
         "outreach_status": row.get("outreach_status"),
         "contact_permission_status": row.get("contact_permission_status"),
+        "last_contacted_at": _iso(row.get("last_contacted_at")),
+        "last_contact_channel": row.get("last_contact_channel"),
+        "notes_summary": truncate_notes_summary(row.get("notes")),
         "created_at": _iso(row.get("created_at")),
         "updated_at": _iso(row.get("updated_at")),
     }
@@ -101,7 +108,11 @@ class ListLeadsFilters:
     search: str | None = None
     enrichment_status: str | None = None
     outreach_status: str | None = None
+    outreach_status_in: tuple[str, ...] = ()
     contact_permission_status: str | None = None
+    last_contact_channel: str | None = None
+    contacted_before: datetime | None = None
+    contacted_after: datetime | None = None
     score_min: int | None = None
     score_max: int | None = None
     confidence_min: int | None = None
@@ -132,15 +143,44 @@ def parse_list_filters(query: dict[str, str]) -> ListLeadsFilters:
         except (TypeError, ValueError) as exc:
             raise LeadValidationError(f"{key} must be an integer.") from exc
 
+    outreach_status = (query.get("outreach_status") or "").strip() or None
+    raw_status_in = (query.get("outreach_status_in") or "").strip()
+    outreach_status_in: tuple[str, ...] = ()
+    if raw_status_in:
+        statuses = [s.strip() for s in raw_status_in.split(",") if s.strip()]
+        invalid = [s for s in statuses if s not in OUTREACH_STATUSES]
+        if invalid:
+            raise LeadValidationError(
+                f"outreach_status_in contains invalid values: {', '.join(invalid)}."
+            )
+        outreach_status_in = tuple(statuses)
+        outreach_status = None
+
+    last_channel = (query.get("last_contact_channel") or "").strip() or None
+    if last_channel and last_channel not in LAST_CONTACT_CHANNELS:
+        raise LeadValidationError(
+            f"last_contact_channel must be one of: {', '.join(sorted(LAST_CONTACT_CHANNELS))}."
+        )
+
     return ListLeadsFilters(
         state=(query.get("state") or "").strip().upper() or None,
         suburb=(query.get("suburb") or "").strip() or None,
         postcode=(query.get("postcode") or "").strip() or None,
         search=(query.get("search") or "").strip() or None,
         enrichment_status=(query.get("enrichment_status") or "").strip() or None,
-        outreach_status=(query.get("outreach_status") or "").strip() or None,
+        outreach_status=outreach_status,
+        outreach_status_in=outreach_status_in,
         contact_permission_status=(
             (query.get("contact_permission_status") or "").strip() or None
+        ),
+        last_contact_channel=last_channel,
+        contacted_before=parse_optional_iso_datetime(
+            query.get("contacted_before"),
+            field_name="contacted_before",
+        ),
+        contacted_after=parse_optional_iso_datetime(
+            query.get("contacted_after"),
+            field_name="contacted_after",
         ),
         score_min=_optional_int("score_min"),
         score_max=_optional_int("score_max"),
@@ -201,9 +241,22 @@ def _build_list_where(filters: ListLeadsFilters) -> tuple[str, list[Any]]:
     if filters.enrichment_status:
         clauses.append("l.enrichment_status = %s")
         params.append(filters.enrichment_status)
-    if filters.outreach_status:
+    if filters.outreach_status_in:
+        placeholders = ", ".join(["%s"] * len(filters.outreach_status_in))
+        clauses.append(f"l.outreach_status IN ({placeholders})")
+        params.extend(filters.outreach_status_in)
+    elif filters.outreach_status:
         clauses.append("l.outreach_status = %s")
         params.append(filters.outreach_status)
+    if filters.last_contact_channel:
+        clauses.append("l.last_contact_channel = %s")
+        params.append(filters.last_contact_channel)
+    if filters.contacted_before is not None:
+        clauses.append("l.last_contacted_at IS NOT NULL AND l.last_contacted_at < %s")
+        params.append(filters.contacted_before)
+    if filters.contacted_after is not None:
+        clauses.append("l.last_contacted_at IS NOT NULL AND l.last_contacted_at > %s")
+        params.append(filters.contacted_after)
     if filters.contact_permission_status:
         clauses.append("l.contact_permission_status = %s")
         params.append(filters.contact_permission_status)
@@ -463,3 +516,40 @@ def get_founder_venue_lead_detail(lead_id: str) -> dict[str, Any]:
         "field_attributions": attributions,
         "events": events,
     }
+
+
+_WORKSPACE_BASE_WHERE = """
+    l.suppressed_at IS NULL
+    AND l.outreach_status <> 'do_not_contact'
+    AND l.contact_permission_status NOT IN ('opted_out', 'do_not_contact')
+"""
+
+
+def get_founder_venue_workspace_summary() -> dict[str, int]:
+    """Aggregate counts for internal operator dashboard (default workspace visibility)."""
+    sql = f"""
+        SELECT
+          COUNT(*)::int AS total_leads,
+          COUNT(*) FILTER (WHERE l.state = 'VIC')::int AS vic_leads,
+          COUNT(*) FILTER (WHERE l.state = 'VIC' AND l.founder_fit_score >= 80)::int AS vic_score_80_plus,
+          COUNT(*) FILTER (WHERE l.outreach_status = 'not_contacted')::int AS not_contacted,
+          COUNT(*) FILTER (WHERE l.outreach_status = 'called')::int AS called,
+          COUNT(*) FILTER (WHERE l.outreach_status = 'emailed')::int AS emailed,
+          COUNT(*) FILTER (WHERE l.outreach_status = 'replied')::int AS replied,
+          COUNT(*) FILTER (WHERE l.outreach_status = 'signed_up')::int AS signed_up,
+          COUNT(*) FILTER (WHERE l.outreach_status = 'rejected')::int AS rejected,
+          COUNT(*) FILTER (WHERE l.outreach_status = 'do_not_contact')::int AS do_not_contact,
+          COUNT(*) FILTER (WHERE l.enrichment_status = 'needs_review')::int AS needs_review,
+          COUNT(*) FILTER (WHERE l.email IS NULL OR btrim(l.email) = '')::int AS missing_email,
+          COUNT(*) FILTER (WHERE l.website IS NULL OR btrim(l.website) = '')::int AS missing_website,
+          COUNT(*) FILTER (WHERE l.phone IS NULL OR btrim(l.phone) = '')::int AS missing_phone,
+          COUNT(*) FILTER (WHERE l.enrichment_status = 'enriched')::int AS enriched,
+          COUNT(*) FILTER (WHERE l.enrichment_status = 'imported')::int AS imported
+        FROM public.founder_venue_leads l
+        WHERE {_WORKSPACE_BASE_WHERE}
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        row = cursor.fetchone()
+        columns = [col[0] for col in cursor.description]
+    return dict(zip(columns, row, strict=True))

@@ -14,8 +14,30 @@ export type FounderVenueLeadListItem = {
   enrichment_status: string;
   outreach_status: string;
   contact_permission_status: string;
+  last_contacted_at: string | null;
+  last_contact_channel: string | null;
+  notes_summary: string;
   created_at: string | null;
   updated_at: string | null;
+};
+
+export type FounderVenueWorkspaceSummary = {
+  total_leads: number;
+  vic_leads: number;
+  vic_score_80_plus: number;
+  not_contacted: number;
+  called: number;
+  emailed: number;
+  replied: number;
+  signed_up: number;
+  rejected: number;
+  do_not_contact: number;
+  needs_review: number;
+  missing_email: number;
+  missing_website: number;
+  missing_phone: number;
+  enriched: number;
+  imported: number;
 };
 
 export type ListLeadsResponse = {
@@ -121,6 +143,10 @@ export type ListFilters = {
   search: string;
   enrichment_status: string;
   outreach_status: string;
+  outreach_status_in: string;
+  last_contact_channel: string;
+  contacted_before: string;
+  contacted_after: string;
   contact_permission_status: string;
   score_min: string;
   missing_email: boolean;
@@ -139,6 +165,10 @@ export const DEFAULT_LIST_FILTERS: ListFilters = {
   search: "",
   enrichment_status: "",
   outreach_status: "",
+  outreach_status_in: "",
+  last_contact_channel: "",
+  contacted_before: "",
+  contacted_after: "",
   contact_permission_status: "",
   score_min: "",
   missing_email: false,

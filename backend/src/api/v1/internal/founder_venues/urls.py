@@ -3,6 +3,7 @@ from django.urls import path
 from api.v1.internal.founder_venues import views
 
 urlpatterns = [
+    path("summary", views.workspace_summary, name="internal-founder-venues-summary"),
     path("leads", views.list_leads, name="internal-founder-venues-leads"),
     path(
         "leads/<str:lead_id>",

@@ -22,6 +22,20 @@ export function filtersToSearchParams(filters: ListFilters): URLSearchParams {
   setIfNonDefault(params, "outreach_status", filters.outreach_status, d.outreach_status);
   setIfNonDefault(
     params,
+    "outreach_status_in",
+    filters.outreach_status_in,
+    d.outreach_status_in,
+  );
+  setIfNonDefault(
+    params,
+    "last_contact_channel",
+    filters.last_contact_channel,
+    d.last_contact_channel,
+  );
+  setIfNonDefault(params, "contacted_before", filters.contacted_before, d.contacted_before);
+  setIfNonDefault(params, "contacted_after", filters.contacted_after, d.contacted_after);
+  setIfNonDefault(
+    params,
     "contact_permission_status",
     filters.contact_permission_status,
     d.contact_permission_status,
@@ -56,6 +70,10 @@ export function filtersFromSearchParams(search: URLSearchParams): ListFilters {
     search: str("search", d.search),
     enrichment_status: str("enrichment_status", d.enrichment_status),
     outreach_status: str("outreach_status", d.outreach_status),
+    outreach_status_in: str("outreach_status_in", d.outreach_status_in),
+    last_contact_channel: str("last_contact_channel", d.last_contact_channel),
+    contacted_before: str("contacted_before", d.contacted_before),
+    contacted_after: str("contacted_after", d.contacted_after),
     contact_permission_status: str("contact_permission_status", d.contact_permission_status),
     score_min: str("score_min", d.score_min),
     missing_email: bool("missing_email"),

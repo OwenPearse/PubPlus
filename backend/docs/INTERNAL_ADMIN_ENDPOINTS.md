@@ -95,7 +95,8 @@ Internal endpoints must require:
 
 Namespace: `/api/v1/internal/founder-venues/`
 
-- `GET /leads` — filterable list (founder-fit sort default)
+- `GET /summary` — workspace outreach/enrichment counts (dashboard)
+- `GET /leads` — filterable list (founder-fit sort default; includes `last_contacted_at`, `last_contact_channel`, `notes_summary`)
 - `GET /leads/{lead_id}` — detail with sources, field attributions, events (no `raw_payload` on sources)
 - `PATCH /leads/{lead_id}` — manual edits + score recompute
 - `POST /leads/{lead_id}/mark-do-not-contact` — outreach/permission DNC (not suppression)

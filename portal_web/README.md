@@ -39,6 +39,28 @@ Open [http://localhost:3010](http://localhost:3010).
 
 ## Workflows
 
+### Daily outreach (recommended order)
+
+1. Check **dashboard cards** and outreach status counts at the top of the list.
+2. Work **High score, not contacted** or **VIC 80+ not contacted** in **call sheet mode**.
+3. Mark outcomes as you go (**called** / **emailed** / **replied** / **rejected**).
+4. End of day: run **Follow up** (called/emailed with no reply for 7+ days).
+5. **Export CSV** only after reviewing the active filter summary (confirm dialog shows safe defaults).
+
+### Dashboard and follow-up queues
+
+The list loads workspace counts from `GET /api/v1/internal/founder-venues/summary` (VIC totals, outreach buckets, missing email, needs review).
+
+| Quick filter | Meaning |
+|--------------|---------|
+| Follow up | `called` or `emailed`, last contacted more than 7 days ago |
+| Called, no reply | `outreach_status=called` |
+| Emailed, no reply | `outreach_status=emailed` |
+| High score, not contacted | VIC, score ≥ 80, `not_contacted` |
+| Missing email | VIC workspace rows missing email |
+
+List rows now include `last_contacted_at`, `last_contact_channel`, and truncated `notes_summary` from the API.
+
 ### Call-sheet outreach (manual only)
 
 Use **Call sheet mode** on the list for an operator-focused table: venue, suburb, score, phone, email indicator, website/social links, outreach status, last contacted, and per-row actions.
@@ -105,7 +127,9 @@ Edit venue/contact fields on the detail page and **Save changes**. Outreach note
 
 ### Export CSV
 
-**Export CSV** on the list uses current filters. By default:
+**Export CSV** shows a confirmation with the active filter summary and safe-default reminders before download.
+
+By default:
 
 - excludes do-not-contact leads
 - redacts unsafe personal emails

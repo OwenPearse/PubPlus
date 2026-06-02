@@ -24,7 +24,10 @@ from apps.founder_venues.services.lead_validation import (
     parse_int_param,
 )
 
-NOTES_SUMMARY_MAX_LEN = 200
+from apps.founder_venues.services.notes_summary import (
+    NOTES_SUMMARY_MAX_LEN,
+    truncate_notes_summary,
+)
 
 UNSAFE_EMAIL_SAFETY_CLASSES = frozenset(
     {"personal_business_contact", "likely_personal_or_unsafe"}
@@ -96,15 +99,6 @@ class ExportLeadsFilters:
     include_raw_notes: bool = False
     limit: int = EXPORT_DEFAULT_LIMIT
     offset: int = 0
-
-
-def truncate_notes_summary(notes: str | None, *, max_len: int = NOTES_SUMMARY_MAX_LEN) -> str:
-    if not notes:
-        return ""
-    collapsed = " ".join(str(notes).split())
-    if len(collapsed) <= max_len:
-        return collapsed
-    return collapsed[: max_len - 3] + "..."
 
 
 def resolve_export_email(

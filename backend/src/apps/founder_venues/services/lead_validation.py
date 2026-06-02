@@ -87,6 +87,28 @@ def parse_uuid(value: str, *, field_name: str = "id") -> str:
         raise LeadValidationError(f"{field_name} must be a valid UUID.") from exc
 
 
+def parse_optional_iso_datetime(
+    value: str | None,
+    *,
+    field_name: str,
+) -> "datetime | None":
+    from datetime import datetime
+
+    if value in (None, ""):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        return datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise LeadValidationError(
+            f"{field_name} must be a valid ISO 8601 datetime."
+        ) from exc
+
+
 def parse_bool_param(value: str | None, *, default: bool = False) -> bool:
     if value is None or value == "":
         return default

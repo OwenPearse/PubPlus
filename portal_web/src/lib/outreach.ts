@@ -126,6 +126,7 @@ export function mergeLeadFromDetail(
     confidence_score: lead.confidence_score,
     updated_at: lead.updated_at,
     last_contacted_at: lead.last_contacted_at,
+    last_contact_channel: lead.last_contact_channel,
   };
 }
 

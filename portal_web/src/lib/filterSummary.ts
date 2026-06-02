@@ -23,6 +23,18 @@ export function describeActiveFilters(filters: ListFilters): string {
   if (filters.score_min.trim()) parts.push(`score ≥ ${filters.score_min.trim()}`);
   if (filters.enrichment_status) parts.push(`enrichment ${filters.enrichment_status}`);
   if (filters.outreach_status) parts.push(`outreach ${filters.outreach_status}`);
+  if (filters.outreach_status_in.trim()) {
+    parts.push(`outreach in (${filters.outreach_status_in.trim()})`);
+  }
+  if (filters.last_contact_channel.trim()) {
+    parts.push(`last channel ${filters.last_contact_channel.trim()}`);
+  }
+  if (filters.contacted_before.trim()) {
+    parts.push(`contacted before ${filters.contacted_before.trim()}`);
+  }
+  if (filters.contacted_after.trim()) {
+    parts.push(`contacted after ${filters.contacted_after.trim()}`);
+  }
   if (filters.contact_permission_status) {
     parts.push(`permission ${filters.contact_permission_status}`);
   }

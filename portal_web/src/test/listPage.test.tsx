@@ -5,16 +5,44 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FounderVenuesListPage } from "@/pages/FounderVenuesListPage";
 
 const listFounderVenueLeads = vi.fn();
+const getFounderVenueWorkspaceSummary = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   listFounderVenueLeads: (...args: unknown[]) => listFounderVenueLeads(...args),
+  getFounderVenueWorkspaceSummary: (...args: unknown[]) =>
+    getFounderVenueWorkspaceSummary(...args),
   formatApiError: (e: unknown) => String(e),
   enrichFounderVenueLead: vi.fn(),
   markLeadDoNotContact: vi.fn(),
+  markFounderVenueCalled: vi.fn(),
+  markFounderVenueEmailed: vi.fn(),
+  markFounderVenueReplied: vi.fn(),
+  markFounderVenueRejected: vi.fn(),
+  markFounderVenueSignedUp: vi.fn(),
+  markFounderVenueDoNotContact: vi.fn(),
+  markFounderVenueQueued: vi.fn(),
 }));
 
 describe("FounderVenuesListPage", () => {
   beforeEach(() => {
+    getFounderVenueWorkspaceSummary.mockResolvedValue({
+      total_leads: 1,
+      vic_leads: 1,
+      vic_score_80_plus: 1,
+      not_contacted: 1,
+      called: 0,
+      emailed: 0,
+      replied: 0,
+      signed_up: 0,
+      rejected: 0,
+      do_not_contact: 0,
+      needs_review: 0,
+      missing_email: 0,
+      missing_website: 0,
+      missing_phone: 0,
+      enriched: 0,
+      imported: 1,
+    });
     listFounderVenueLeads.mockResolvedValue({
       items: [
         {
@@ -33,6 +61,9 @@ describe("FounderVenuesListPage", () => {
           enrichment_status: "imported",
           outreach_status: "not_contacted",
           contact_permission_status: "public_business_contact",
+          last_contacted_at: null,
+          last_contact_channel: null,
+          notes_summary: "",
           created_at: null,
           updated_at: null,
         },

@@ -30,6 +30,7 @@ from apps.founder_venues.services.lead_mutations import (
 )
 from apps.founder_venues.services.lead_queries import (
     get_founder_venue_lead_detail,
+    get_founder_venue_workspace_summary,
     list_founder_venue_leads,
     parse_list_filters,
 )
@@ -114,6 +115,14 @@ def list_leads(request):
             status=400,
         )
     return JsonResponse(payload)
+
+
+@require_http_methods(["GET", "HEAD"])
+@require_internal_admin_auth
+def workspace_summary(request):
+    if request.method == "HEAD":
+        return JsonResponse({}, status=200)
+    return JsonResponse(get_founder_venue_workspace_summary())
 
 
 @require_http_methods(["GET", "PATCH", "HEAD"])

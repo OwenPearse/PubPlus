@@ -4,13 +4,17 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ActiveFilterSummary } from "@/components/ActiveFilterSummary";
 import { ContactIndicators } from "@/components/ContactIndicators";
 import { ContactLegend } from "@/components/ContactLegend";
+import { DashboardCards } from "@/components/DashboardCards";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { OutreachStatusCounts } from "@/components/OutreachStatusCounts";
+import { StatusBadge } from "@/components/StatusBadge";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
 import { ExternalLink } from "@/components/ExternalLink";
 import { OutreachActionButtons } from "@/components/OutreachActionButtons";
 import {
   enrichFounderVenueLead,
   formatApiError,
+  getFounderVenueWorkspaceSummary,
   listFounderVenueLeads,
   markFounderVenueCalled,
   markFounderVenueDoNotContact,
@@ -20,7 +24,12 @@ import {
   markFounderVenueReplied,
   markFounderVenueSignedUp,
 } from "@/lib/api";
-import { applyQuickFilter, downloadExportCsv, type QuickFilterPreset } from "@/lib/filters";
+import {
+  applyQuickFilter,
+  buildExportConfirmMessage,
+  downloadExportCsv,
+  type QuickFilterPreset,
+} from "@/lib/filters";
 import {
   filtersFromSearchParams,
   filtersToSearchParams,
@@ -32,10 +41,15 @@ import {
   mergeLeadFromDetail,
 } from "@/lib/outreach";
 import { getAccessToken } from "@/lib/supabase";
-import type { EnrichmentResult, FounderVenueLeadListItem, ListFilters } from "@/lib/types";
+import type {
+  EnrichmentResult,
+  FounderVenueLeadListItem,
+  FounderVenueWorkspaceSummary,
+  ListFilters,
+} from "@/lib/types";
 import { DEFAULT_LIST_FILTERS } from "@/lib/types";
 
-type ListRow = FounderVenueLeadListItem & { last_contacted_at?: string | null };
+type ListRow = FounderVenueLeadListItem;
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
@@ -68,6 +82,21 @@ export function FounderVenuesListPage() {
   const [enrichLeadId, setEnrichLeadId] = useState<string | null>(null);
   const [enrichResult, setEnrichResult] = useState<EnrichmentResult | null>(null);
   const [enrichLoading, setEnrichLoading] = useState(false);
+  const [summary, setSummary] = useState<FounderVenueWorkspaceSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [busyLeadId, setBusyLeadId] = useState<string | null>(null);
+
+  const loadSummary = useCallback(async () => {
+    setSummaryLoading(true);
+    try {
+      const data = await getFounderVenueWorkspaceSummary();
+      setSummary(data);
+    } catch {
+      setSummary(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     setSearchParams(filtersToSearchParams(filters), { replace: true });
@@ -96,6 +125,10 @@ export function FounderVenuesListPage() {
     void loadLeads();
   }, [loadLeads]);
 
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary]);
+
   function updateFilter<K extends keyof ListFilters>(key: K, value: ListFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value, offset: 0 }));
   }
@@ -113,6 +146,8 @@ export function FounderVenuesListPage() {
   async function handleExport() {
     setError("");
     setSuccess("");
+    const confirmed = window.confirm(buildExportConfirmMessage(filters, total));
+    if (!confirmed) return;
     try {
       const token = await getAccessToken();
       if (!token) throw new Error("Sign in required.");
@@ -129,14 +164,18 @@ export function FounderVenuesListPage() {
     successLabel: string,
   ) {
     setError("");
+    setBusyLeadId(lead.id);
     try {
       const response = await action();
       setItems((prev) =>
         prev.map((row) => (row.id === lead.id ? mergeLeadFromDetail(row, response) : row)),
       );
       setSuccess(`${lead.name}: ${successLabel}`);
+      void loadSummary();
     } catch (err) {
       setError(formatApiError(err));
+    } finally {
+      setBusyLeadId(null);
     }
   }
 
@@ -160,29 +199,34 @@ export function FounderVenuesListPage() {
   }
 
   function outreachActions(lead: ListRow) {
+    const rowBusy = busyLeadId === lead.id;
     return [
-      { id: "detail", label: "Open detail", onClick: () => openDetail(lead.id) },
+      { id: "detail", label: "Open detail", disabled: rowBusy, onClick: () => openDetail(lead.id) },
       {
         id: "called",
-        label: "Mark called",
+        label: rowBusy ? "Saving…" : "Mark called",
+        disabled: rowBusy,
         onClick: () =>
           void applyOutreachToLead(lead, () => markFounderVenueCalled(lead.id), "marked called."),
       },
       {
         id: "emailed",
-        label: "Mark emailed",
+        label: rowBusy ? "Saving…" : "Mark emailed",
+        disabled: rowBusy,
         onClick: () =>
           void applyOutreachToLead(lead, () => markFounderVenueEmailed(lead.id), "marked emailed."),
       },
       {
         id: "replied",
         label: "Mark replied",
+        disabled: rowBusy,
         onClick: () =>
           void applyOutreachToLead(lead, () => markFounderVenueReplied(lead.id), "marked replied."),
       },
       {
         id: "rejected",
         label: "Mark rejected",
+        disabled: rowBusy,
         onClick: () =>
           void applyOutreachToLead(
             lead,
@@ -193,6 +237,7 @@ export function FounderVenuesListPage() {
       {
         id: "signed_up",
         label: "Mark signed up",
+        disabled: rowBusy,
         onClick: () =>
           void applyOutreachToLead(
             lead,
@@ -204,6 +249,7 @@ export function FounderVenuesListPage() {
         id: "dnc",
         label: "Mark DNC",
         className: "text-red-800",
+        disabled: rowBusy,
         onClick: () => void handleMarkDnc(lead),
       },
     ];
@@ -267,6 +313,11 @@ export function FounderVenuesListPage() {
   }
 
   const quickFilters: { preset: QuickFilterPreset; label: string }[] = [
+    { preset: "follow_up", label: "Follow up" },
+    { preset: "called_no_reply", label: "Called, no reply" },
+    { preset: "emailed_no_reply", label: "Emailed, no reply" },
+    { preset: "high_score_not_contacted", label: "High score, not contacted" },
+    { preset: "missing_email", label: "Missing email" },
     { preset: "vic_80_not_contacted", label: "VIC 80+ not contacted" },
     { preset: "vic_60_missing_email", label: "VIC 60+ missing email" },
     { preset: "vic_phone_first", label: "VIC phone-first" },
@@ -325,9 +376,12 @@ export function FounderVenuesListPage() {
         </div>
       </div>
 
+      <DashboardCards summary={summary} loading={summaryLoading} />
+
       <div className="mb-3 space-y-2">
         <ContactLegend />
         <ActiveFilterSummary filters={filters} />
+        <OutreachStatusCounts summary={summary} />
       </div>
 
       <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -412,9 +466,9 @@ export function FounderVenuesListPage() {
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <div className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 bg-white">
         <table className="min-w-full text-left text-sm">
-          <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="sticky top-0 z-10 border-b bg-slate-50 text-xs uppercase text-slate-500 shadow-sm">
             <tr>
               {callSheetMode ? <th className="px-2 py-2">Sel</th> : null}
               <th className="px-3 py-2">Venue</th>
@@ -488,28 +542,46 @@ export function FounderVenuesListPage() {
                   <>
                     <td className="px-3 py-2">{lead.suburb ?? "—"}</td>
                     <td className="px-3 py-2 font-semibold">{lead.founder_fit_score}</td>
-                    <td className="px-3 py-2 text-xs">{lead.phone?.trim() ? "Yes" : "—"}</td>
-                    <td className="px-3 py-2 text-xs">{lead.email?.trim() ? "Yes" : "—"}</td>
-                    <td className="px-3 py-2">
+                    <td className="max-w-[8rem] truncate px-3 py-1.5 text-xs">
+                      {lead.phone?.trim() ? (
+                        <a className="text-blue-700 underline" href={`tel:${lead.phone}`}>
+                          {lead.phone}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs">{lead.email?.trim() ? "Yes" : "—"}</td>
+                    <td className="px-3 py-1.5">
                       {lead.website?.trim() ? (
-                        <ExternalLink href={lead.website}>Link</ExternalLink>
+                        <ExternalLink href={lead.website} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs no-underline">
+                          Web
+                        </ExternalLink>
                       ) : (
                         "—"
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-1.5">
                       {socialHref(lead) ? (
-                        <ExternalLink href={socialHref(lead)!}>Link</ExternalLink>
+                        <ExternalLink href={socialHref(lead)!} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs no-underline">
+                          Social
+                        </ExternalLink>
                       ) : (
                         "—"
                       )}
                     </td>
-                    <td className="px-3 py-2 text-xs">{lead.outreach_status}</td>
-                    <td className="px-3 py-2 text-xs text-slate-600">
+                    <td className="px-3 py-1.5">
+                      <StatusBadge status={lead.outreach_status} />
+                    </td>
+                    <td className="px-3 py-1.5 text-xs text-slate-600">
                       {formatDate(lead.last_contacted_at)}
                     </td>
-                    <td className="px-3 py-2">
-                      <OutreachActionButtons actions={outreachActions(lead)} />
+                    <td className="px-3 py-1.5">
+                      <OutreachActionButtons
+                        layout="row"
+                        variant="button"
+                        actions={outreachActions(lead)}
+                      />
                     </td>
                   </>
                 ) : (

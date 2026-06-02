@@ -2,6 +2,7 @@ import { getAccessToken } from "@/lib/supabase";
 import { getApiBaseUrl } from "@/lib/env";
 import type {
   EnrichmentResult,
+  FounderVenueWorkspaceSummary,
   LeadDetailResponse,
   ListFilters,
   ListLeadsResponse,
@@ -114,6 +115,12 @@ export function listFounderVenueLeads(filters: ListFilters) {
   return apiRequest<ListLeadsResponse>("/api/v1/internal/founder-venues/leads", {
     query: buildListQueryParams(filters),
   });
+}
+
+export function getFounderVenueWorkspaceSummary() {
+  return apiRequest<FounderVenueWorkspaceSummary>(
+    "/api/v1/internal/founder-venues/summary",
+  );
 }
 
 export function getFounderVenueLead(leadId: string) {

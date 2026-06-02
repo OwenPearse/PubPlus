@@ -10,10 +10,13 @@ import { applyQuickFilter } from "@/lib/filters";
 import { DEFAULT_LIST_FILTERS } from "@/lib/types";
 
 const listFounderVenueLeads = vi.fn();
+const getFounderVenueWorkspaceSummary = vi.fn();
 const patchFounderVenueLead = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   listFounderVenueLeads: (...args: unknown[]) => listFounderVenueLeads(...args),
+  getFounderVenueWorkspaceSummary: (...args: unknown[]) =>
+    getFounderVenueWorkspaceSummary(...args),
   patchFounderVenueLead: (...args: unknown[]) => patchFounderVenueLead(...args),
   formatApiError: (e: unknown) => String(e),
   enrichFounderVenueLead: vi.fn(),
@@ -58,6 +61,24 @@ describe("quick filters", () => {
 
 describe("call-sheet mode", () => {
   beforeEach(() => {
+    getFounderVenueWorkspaceSummary.mockResolvedValue({
+      total_leads: 1,
+      vic_leads: 1,
+      vic_score_80_plus: 1,
+      not_contacted: 1,
+      called: 0,
+      emailed: 0,
+      replied: 0,
+      signed_up: 0,
+      rejected: 0,
+      do_not_contact: 0,
+      needs_review: 0,
+      missing_email: 0,
+      missing_website: 0,
+      missing_phone: 0,
+      enriched: 0,
+      imported: 1,
+    });
     listFounderVenueLeads.mockResolvedValue({
       items: [
         {
@@ -76,6 +97,9 @@ describe("call-sheet mode", () => {
           enrichment_status: "imported",
           outreach_status: "not_contacted",
           contact_permission_status: "public_business_contact",
+          last_contacted_at: "2026-05-01T10:00:00Z",
+          last_contact_channel: "phone",
+          notes_summary: "",
           created_at: null,
           updated_at: null,
         },

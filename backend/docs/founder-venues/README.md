@@ -510,6 +510,15 @@ Manual call-sheet mode, outreach quick actions (called/emailed/replied/rejected/
 
 See `portal_web/README.md` for operator workflows and status definitions.
 
+### Stage 7.3 — Outreach operations polish
+
+- **List DTO:** `last_contacted_at`, `last_contact_channel`, `notes_summary` (truncated; not full notes).
+- **List filters:** `contacted_before`, `contacted_after`, `last_contact_channel`, `outreach_status_in` (comma-separated).
+- **Summary:** `GET /api/v1/internal/founder-venues/summary` — workspace outreach/enrichment counts for dashboard cards.
+- **Portal:** dashboard cards, follow-up quick filters, call-sheet polish (full phone, status badges, button actions), export confirm dialog, grouped outreach panel, readable activity log.
+
+Final portal-focused stage before pausing portal work for a TestFlight-ready consumer app prototype.
+
 ### Stage 7 does not include
 
 - Bulk email, automated outreach, publishing, convert-to-venue-candidate

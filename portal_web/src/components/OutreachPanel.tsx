@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { OutreachActionButtons } from "@/components/OutreachActionButtons";
+import { StatusBadge } from "@/components/StatusBadge";
 import {
   markFounderVenueCalled,
   markFounderVenueDoNotContact,
@@ -78,14 +79,55 @@ export function OutreachPanel({
     );
   }
 
+  const contactedActions = [
+    {
+      id: "called",
+      label: busy ? "Saving…" : "Mark called",
+      disabled: busy,
+      onClick: () =>
+        void runAction("Marked as called.", () => markFounderVenueCalled(lead.id)),
+    },
+    {
+      id: "emailed",
+      label: busy ? "Saving…" : "Mark emailed",
+      disabled: busy,
+      onClick: () =>
+        void runAction("Marked as emailed.", () => markFounderVenueEmailed(lead.id)),
+    },
+  ];
+
+  const outcomeActions = [
+    {
+      id: "replied",
+      label: "Mark replied",
+      disabled: busy,
+      onClick: () =>
+        void runAction("Marked as replied.", () => markFounderVenueReplied(lead.id)),
+    },
+    {
+      id: "signed_up",
+      label: "Mark signed up",
+      disabled: busy,
+      onClick: () =>
+        void runAction("Marked as signed up.", () => markFounderVenueSignedUp(lead.id)),
+    },
+    {
+      id: "rejected",
+      label: "Mark rejected",
+      disabled: busy,
+      onClick: () =>
+        void runAction("Marked as rejected.", () => markFounderVenueRejected(lead.id)),
+    },
+  ];
+
   return (
     <section className="mb-6 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
-      <h2 className="mb-3 text-lg font-semibold">Outreach</h2>
-      <dl className="mb-4 grid gap-2 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="text-slate-500">Outreach status</dt>
-          <dd className="font-medium">{lead.outreach_status}</dd>
-        </div>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-semibold">Outreach</h2>
+        <StatusBadge status={lead.outreach_status} />
+      </div>
+
+      <dl className="mb-4 grid gap-3 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-slate-500">Contact permission</dt>
           <dd className="font-medium">{lead.contact_permission_status}</dd>
@@ -94,62 +136,60 @@ export function OutreachPanel({
           <dt className="text-slate-500">Last contacted</dt>
           <dd className="font-medium">{formatDate(lead.last_contacted_at)}</dd>
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <dt className="text-slate-500">Last channel</dt>
           <dd className="font-medium">{lead.last_contact_channel ?? "—"}</dd>
         </div>
       </dl>
 
-      <OutreachActionButtons
-        layout="row"
-        size="sm"
-        actions={[
-          {
-            id: "called",
-            label: "Mark called",
-            disabled: busy,
-            onClick: () =>
-              void runAction("Marked as called.", () => markFounderVenueCalled(lead.id)),
-          },
-          {
-            id: "emailed",
-            label: "Mark emailed",
-            disabled: busy,
-            onClick: () =>
-              void runAction("Marked as emailed.", () => markFounderVenueEmailed(lead.id)),
-          },
-          {
-            id: "replied",
-            label: "Mark replied",
-            disabled: busy,
-            onClick: () =>
-              void runAction("Marked as replied.", () => markFounderVenueReplied(lead.id)),
-          },
-          {
-            id: "rejected",
-            label: "Mark rejected",
-            disabled: busy,
-            onClick: () =>
-              void runAction("Marked as rejected.", () => markFounderVenueRejected(lead.id)),
-          },
-          {
-            id: "signed_up",
-            label: "Mark signed up",
-            disabled: busy,
-            onClick: () =>
-              void runAction("Marked as signed up.", () => markFounderVenueSignedUp(lead.id)),
-          },
-          {
-            id: "dnc",
-            label: "Mark DNC",
-            className: "text-red-800",
-            disabled: busy,
-            onClick: () => void handleDnc(),
-          },
-        ]}
-      />
+      <div className="space-y-3">
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Contacted
+          </p>
+          <OutreachActionButtons
+            layout="row"
+            size="sm"
+            variant="button"
+            actions={contactedActions}
+          />
+        </div>
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Outcome
+          </p>
+          <OutreachActionButtons
+            layout="row"
+            size="sm"
+            variant="button"
+            actions={outcomeActions}
+          />
+        </div>
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Safety
+          </p>
+          <OutreachActionButtons
+            layout="row"
+            size="sm"
+            variant="button"
+            actions={[
+              {
+                id: "dnc",
+                label: "Mark DNC",
+                className: "border-red-300 text-red-800",
+                disabled: busy,
+                onClick: () => void handleDnc(),
+              },
+            ]}
+          />
+          <p className="mt-2 text-xs text-red-800">
+            DNC removes this venue from normal outreach queues and default exports.
+          </p>
+        </div>
+      </div>
 
-      <div className="mt-4">
+      <div className="mt-4 border-t border-blue-200/80 pt-4">
         <label className="block text-sm font-medium text-slate-700">Outreach notes</label>
         <textarea
           className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm"
@@ -162,17 +202,17 @@ export function OutreachPanel({
           <button
             type="button"
             disabled={busy}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
             onClick={() =>
               void runAction("Notes saved.", () => saveFounderVenueNotes(lead.id, notes))
             }
           >
-            Save notes
+            {busy ? "Saving…" : "Save notes"}
           </button>
           <button
             type="button"
             disabled={busy}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
             onClick={() =>
               void runAction("Notes saved and marked called.", () =>
                 saveNotesWithOutreach(lead.id, notes, {
@@ -188,7 +228,7 @@ export function OutreachPanel({
           <button
             type="button"
             disabled={busy}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
             onClick={() =>
               void runAction("Notes saved and marked replied.", () =>
                 saveNotesWithOutreach(lead.id, notes, {
@@ -204,7 +244,7 @@ export function OutreachPanel({
           <button
             type="button"
             disabled={busy}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
             onClick={() =>
               void runAction("Notes saved and marked rejected.", () =>
                 saveNotesWithOutreach(lead.id, notes, {

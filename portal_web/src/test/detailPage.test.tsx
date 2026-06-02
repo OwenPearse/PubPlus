@@ -151,6 +151,15 @@ describe("FounderVenueDetailPage", () => {
     expect(screen.getByRole("button", { name: "Mark called" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mark emailed" })).toBeInTheDocument();
   });
+
+  it("DNC warning is visible", async () => {
+    renderDetail();
+    await waitFor(() =>
+      expect(
+        screen.getByText(/removes this venue from normal outreach queues/i),
+      ).toBeInTheDocument(),
+    );
+  });
 });
 
 describe("ExternalLink on detail", () => {
