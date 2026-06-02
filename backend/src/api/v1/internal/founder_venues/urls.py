@@ -14,6 +14,11 @@ urlpatterns = [
         views.mark_do_not_contact,
         name="internal-founder-venues-mark-dnc",
     ),
+    path(
+        "leads/<str:lead_id>/enrich",
+        views.enrich_lead_website,
+        name="internal-founder-venues-enrich",
+    ),
     path("import", views.import_leads, name="internal-founder-venues-import"),
     path(
         "recompute-scores",
@@ -21,4 +26,9 @@ urlpatterns = [
         name="internal-founder-venues-recompute-scores",
     ),
     path("top", views.top_leads, name="internal-founder-venues-top"),
+    path(
+        "export.csv",
+        views.export_leads_csv,
+        name="internal-founder-venues-export-csv",
+    ),
 ]

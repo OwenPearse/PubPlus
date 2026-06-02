@@ -29,8 +29,11 @@ from apps.founder_venues.services.normalization import (
     normalize_postcode,
     normalize_state,
     normalize_venue_name,
-    normalize_website_url,
     website_host,
+)
+from apps.founder_venues.services.url_classification import (
+    apply_import_url_routing,
+    classify_url_kind,
 )
 
 VALID_SOURCE_TYPES = frozenset(
@@ -224,6 +227,12 @@ def normalize_import_row(
     if state_raw and state_raw.strip() and not state:
         state = state_raw.strip()
 
+    routed_website, routed_facebook, routed_instagram = apply_import_url_routing(
+        website=raw_fields.get("website"),
+        facebook_url=raw_fields.get("facebook_url"),
+        instagram_url=raw_fields.get("instagram_url"),
+    )
+
     normalized = _NormalizedRow(
         row_number=row_number,
         raw_fields=raw_fields,
@@ -238,10 +247,10 @@ def normalize_import_row(
         latitude=_parse_coordinate(raw_fields.get("latitude")),
         longitude=_parse_coordinate(raw_fields.get("longitude")),
         phone=normalize_phone_au(raw_fields.get("phone")),
-        website=normalize_website_url(raw_fields.get("website")),
+        website=routed_website,
         email=normalize_email(raw_fields.get("email")),
-        instagram_url=raw_fields.get("instagram_url"),
-        facebook_url=raw_fields.get("facebook_url"),
+        instagram_url=routed_instagram,
+        facebook_url=routed_facebook,
         contact_name=raw_fields.get("contact_name"),
         contact_role=raw_fields.get("contact_role"),
         website_host_value=None,
@@ -541,7 +550,37 @@ def _insert_attributions(
         ("state", row.raw_fields.get("state"), row.state, None),
         ("postcode", row.raw_fields.get("postcode"), row.postcode, None),
         ("phone", row.raw_fields.get("phone"), row.phone, None),
-        ("website", row.raw_fields.get("website"), row.website, None),
+    ]
+    website_raw = row.raw_fields.get("website")
+    if website_raw:
+        website_kind = classify_url_kind(website_raw)
+        if website_kind == "facebook" and row.facebook_url:
+            field_pairs.append(
+                (
+                    "facebook_url",
+                    website_raw,
+                    row.facebook_url,
+                    None,
+                )
+            )
+            field_pairs.append(("website", website_raw, None, None))
+        elif website_kind == "instagram" and row.instagram_url:
+            field_pairs.append(
+                (
+                    "instagram_url",
+                    website_raw,
+                    row.instagram_url,
+                    None,
+                )
+            )
+            field_pairs.append(("website", website_raw, None, None))
+        else:
+            field_pairs.append(("website", website_raw, row.website, None))
+    elif row.website:
+        field_pairs.append(("website", None, row.website, None))
+
+    field_pairs.extend(
+        [
         ("email", row.raw_fields.get("email"), row.email, row.email_safety),
         (
             "instagram_url",
@@ -569,7 +608,8 @@ def _insert_attributions(
             str(row.longitude) if row.longitude is not None else None,
             None,
         ),
-    ]
+        ]
+    )
     for field_name, raw_value, normalized_value, safety in field_pairs:
         if raw_value is None and normalized_value is None:
             continue

@@ -159,7 +159,7 @@ Founder-fit scores are **prioritisation aids** for founder outreach — not publ
 
 Penalties apply for `do_not_contact`, `opted_out`, `rejected` outreach, and `suppressed_at`.
 
-**Stage 3 limitation:** scoring uses **imported fields only** — no website enrichment yet. Every breakdown includes a warning: imported data only.
+**Stage 3 note:** scoring uses lead fields and `source_summary` (including website signals after Stage 6 enrichment). Unenriched leads include an import-only warning in the breakdown.
 
 ### Recompute scores
 
@@ -208,6 +208,8 @@ Base path: `/api/v1/internal/founder-venues/`
 | POST | `/import` | CSV import (`csv_text`, max 5MB) |
 | POST | `/recompute-scores` | Batch founder-fit recompute |
 | GET | `/top` | Ranked top leads |
+| GET | `/export.csv` | Filtered CSV export (Stage 5) |
+| POST | `/leads/{id}/enrich` | Website enrichment (Stage 6) |
 
 ### Example: import
 
@@ -246,10 +248,227 @@ Authorization: Bearer <internal-admin-jwt>
 
 Scores are prioritisation aids, not published truth.
 
+## Stage 5 — CSV export
+
+Filtered CSV export for manual calling sheets or CRM import. No messages are sent.
+
+### Default safety behavior
+
+By default, export:
+
+- excludes `outreach_status = do_not_contact`
+- excludes `contact_permission_status` in (`opted_out`, `do_not_contact`)
+- excludes rows with `suppressed_at` set
+- includes only outreach-safe emails (`generic_business_contact`, `role_based_contact`)
+- redacts `personal_business_contact` and `likely_personal_or_unsafe` emails (blank `email`, reason in `email_redacted_reason`)
+- truncates `notes` into `notes_summary` (200 chars); full `notes` only with `include_raw_notes=true`
+
+Even when `include_do_not_contact=true`, emails stay redacted unless `include_unsafe_emails=true`; status columns still show DNC/opt-out.
+
+### Email redaction (`email_redacted_reason`)
+
+| Value | Meaning |
+|-------|---------|
+| *(blank)* | Email exported as-is |
+| `personal_business_contact` | Redacted (unsafe class) |
+| `likely_personal_or_unsafe` | Redacted (unsafe class) |
+| `do_not_contact` | Redacted (DNC status) |
+| `opted_out` | Redacted (opt-out) |
+| `suppressed` | Redacted (suppression) |
+
+Classification uses latest `founder_venue_lead_field_attributions` row for `email`, else `contact_safety.classify_email_contact_safety`.
+
+### Export command
+
+```bash
+cd backend
+
+python manage.py export_founder_venue_leads \
+  --state VIC \
+  --score-min 60 \
+  --limit 500 \
+  --output /tmp/pubplus_founder_venues_vic.csv
+```
+
+Without `--output`, CSV is written to stdout. The command prints row count, filters applied, and exclusion/redaction summary.
+
+Options mirror list filters plus:
+
+| Flag | Description |
+|------|-------------|
+| `--include-do-not-contact` | Include DNC/opt-out rows (email still redacted by default) |
+| `--include-suppressed` | Include suppressed rows |
+| `--include-unsafe-emails` | Export personal/unsafe emails |
+| `--include-raw-notes` | Add full `notes` column |
+| `--limit` | Default 1000, max 5000 |
+| `--offset` | Pagination offset |
+
+### API export
+
+```http
+GET /api/v1/internal/founder-venues/export.csv?state=VIC&score_min=60&limit=500
+Authorization: Bearer <internal-admin-jwt>
+```
+
+Response: `text/csv` with `Content-Disposition: attachment; filename="pubplus_founder_venues_YYYYMMDD.csv"`.
+
+Query params match the export service (`include_unsafe_emails`, `include_raw_notes`, etc.).
+
+### CSV columns (default)
+
+`founder_venue_lead_id`, `venue_name`, `suburb`, `state`, `postcode`, `category`, `phone`, `email`, `email_redacted_reason`, `website`, `instagram_url`, `facebook_url`, `founder_fit_score`, `confidence_score`, `enrichment_status`, `outreach_status`, `contact_permission_status`, `source_summary`, `notes_summary`, `last_contacted_at`, `last_contact_channel`.
+
+Ordered by founder-fit score (desc), then confidence, then updated_at.
+
+### Audit events
+
+Each exported lead (up to the export limit) gets `founder_venue_lead_events.event_type = lead_exported` with metadata: `export_type`, `filters_applied`, inclusion flags.
+
+### CRM / calling workflow
+
+1. Filter and export a ranked list (e.g. VIC pubs, `score_min=60`).
+2. Import CSV into your CRM or use as a call sheet.
+3. Update lead status via internal API (`PATCH`, `mark-do-not-contact`) after contact.
+4. Re-export only when needed; prior exports are auditable via events.
+
+## Stage 6 — Website enrichment
+
+Conservative enrichment from each lead’s **own known website** — not a broad internet scraper.
+
+### Purpose
+
+Improve lead quality by filling missing contact/social fields and capturing PubPlus-relevant product signals (trivia, live music, functions, etc.) with full provenance.
+
+### Fetch policy
+
+| Rule | Value |
+|------|--------|
+| Pages per lead | Homepage + up to 4 same-origin allowlisted paths (max 5 total) |
+| Timeout | 8 seconds per request |
+| Max body size | ~1 MB per page |
+| Content types | `text/html`, `application/xhtml+xml` only |
+| Same-origin only | Links must match venue website host |
+| Path keywords | contact, about, functions, events, whats-on, bookings, sport, trivia, live-music, … |
+| Not fetched | PDFs/images, social hosts (Instagram/Facebook URLs recorded, not fetched), non-http(s) |
+
+Sequential processing with ~1 second minimum interval per domain in batch runs. No headless browser, no login bypass, no third-party site crawling.
+
+Leads whose `website` is a Facebook/Instagram URL are **excluded from batch enrichment** (social profiles are not fetched). Single-lead enrich returns `website_not_fetchable` with a clear warning.
+
+### Auto-promotion vs review
+
+| Field | Auto-promote when |
+|-------|-------------------|
+| Email | Empty and `generic_business_contact` or `role_based_contact` on venue/group domain |
+| Phone / Instagram / Facebook | Empty and extracted with sufficient confidence |
+| Product signals | Appended to `source_summary` (not raw notes) |
+
+| Situation | Result |
+|-----------|--------|
+| `personal_business_contact` / `likely_personal_or_unsafe` email | Attribution only; `needs_review` if no safe email |
+| Conflicting existing email/phone/social | `enrichment_status = needs_review` |
+| Successful safe enrichment | `enrichment_status = enriched` + founder-fit recompute |
+
+### Management command
+
+```bash
+cd backend
+
+python manage.py enrich_founder_venue_websites \
+  --state VIC \
+  --missing-email \
+  --limit 25 \
+  --dry-run
+
+python manage.py enrich_founder_venue_websites --lead-id <uuid> --limit 1
+```
+
+Options: `--lead-id` (repeatable), `--state`, `--suburb`, `--missing-email`, `--missing-phone`, `--missing-socials`, `--score-min`, `--limit` (default 10, max 100), `--dry-run`.
+
+### API
+
+```http
+POST /api/v1/internal/founder-venues/leads/{lead_id}/enrich
+Authorization: Bearer <internal-admin-jwt>
+Content-Type: application/json
+
+{ "dry_run": true }
+```
+
+Returns JSON summary (candidates, signals, warnings, errors) — not raw HTML.
+
+### Provenance
+
+Each run adds:
+
+- `founder_venue_lead_sources` (`source_type = venue_website`, `raw_payload.fetched_urls`)
+- `founder_venue_lead_field_attributions` per candidate
+- Event `website_enrichment_completed` or `website_enrichment_failed`
+
+Uses stdlib `urllib` (no new HTTP dependencies).
+
+## Stage 6.5 — Social URL cleanup
+
+Many purchased datasets store Facebook/Instagram URLs in `business_website`. Stage 6.5 routes them to the correct fields and cleans existing data.
+
+### Import behavior (new rows)
+
+`url_classification.apply_import_url_routing()` runs during CSV import:
+
+| Website column classifies as | Stored in |
+|------------------------------|-----------|
+| `facebook` | `facebook_url` (if empty) |
+| `instagram` | `instagram_url` (if empty) |
+| `website` | `website` (normalized) |
+| `other_social` / `invalid` | not stored as `website` |
+
+Existing `facebook_url` / `instagram_url` values are never overwritten. Original CSV values are kept in field attributions.
+
+Google Maps, Linktree, TripAdvisor, login/share URLs are **not** treated as venue websites.
+
+### Cleanup command (existing leads)
+
+```bash
+cd backend
+
+python manage.py cleanup_founder_venue_social_urls \
+  --state VIC \
+  --limit 500 \
+  --dry-run
+
+python manage.py cleanup_founder_venue_social_urls --state VIC --limit 500
+```
+
+Options: `--lead-id`, `--state`, `--limit`, `--dry-run`, `--no-recompute`.
+
+Each updated lead gets `social_url_cleanup_applied` event, source row, and attributions. Founder-fit scores recompute by default.
+
+### Impact
+
+- Website enrichment batch no longer wastes slots on Facebook URLs
+- `website` completeness reflects real venue domains
+- Social links populate `facebook_url` / `instagram_url` for export and scoring
+
+## Stage 6 does not include
+
+- Headless browser / search-engine lookup
+- Google Places, Apify, data brokers
+- Broad crawling or parallel batch fetch
+- Admin UI, bulk email, automated outreach
+- Convert-to-venue-candidate or publishing to `venue_published_*`
+
+## Stage 5 does not include
+
+- Website enrichment (see Stage 6)
+- Admin UI
+- Bulk email, outreach automation
+- Convert-to-venue-candidate
+- Publishing to `venue_published_*`
+
 ## Stage 4 does not include
 
 - Website enrichment or external APIs
-- Admin UI / CSV export
+- Admin UI / CSV export (see Stage 5)
 - Bulk email, outreach automation
 - Convert-to-venue-candidate
 - Publishing to `venue_published_*`
@@ -263,6 +482,9 @@ python manage.py test \
   tests.test_founder_venue_import \
   tests.test_founder_venue_scoring \
   tests.test_founder_venue_internal_api \
+  tests.test_founder_venue_export \
+  tests.test_founder_venue_enrichment \
+  tests.test_founder_venue_social_cleanup \
   --noinput -v 2
 ```
 

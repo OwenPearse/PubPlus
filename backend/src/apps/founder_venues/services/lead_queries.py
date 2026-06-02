@@ -169,6 +169,13 @@ def parse_list_filters(query: dict[str, str]) -> ListLeadsFilters:
     )
 
 
+def build_founder_venue_lead_filter_where(
+    filters: ListLeadsFilters,
+) -> tuple[str, list[Any]]:
+    """Shared WHERE clause for list and export queries."""
+    return _build_list_where(filters)
+
+
 def _build_list_where(filters: ListLeadsFilters) -> tuple[str, list[Any]]:
     clauses = ["1=1"]
     params: list[Any] = []
@@ -228,7 +235,7 @@ def _build_list_where(filters: ListLeadsFilters) -> tuple[str, list[Any]]:
 
 
 def list_founder_venue_leads(filters: ListLeadsFilters) -> dict[str, Any]:
-    where_sql, params = _build_list_where(filters)
+    where_sql, params = build_founder_venue_lead_filter_where(filters)
     order_sql = _SORT_SQL[filters.sort]
 
     count_sql = f"""

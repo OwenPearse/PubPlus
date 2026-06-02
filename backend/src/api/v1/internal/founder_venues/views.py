@@ -3,10 +3,19 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
-from django.http import JsonResponse
+from datetime import datetime, timezone
+
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from apps.discovery.http import error_response
+from apps.founder_venues.services.enrichment_service import (
+    enrich_founder_venue_lead_from_website,
+)
+from apps.founder_venues.services.export_service import (
+    export_founder_venue_leads_csv,
+    parse_export_filters,
+)
 from apps.founder_venues.services.founder_fit_db import (
     get_top_founder_venue_leads,
     recompute_founder_fit_scores,
@@ -301,3 +310,75 @@ def top_leads(request):
         return error_response(
             code="validation_error", message=exc.message, status=400
         )
+
+
+@require_http_methods(["POST", "HEAD"])
+@require_internal_admin_auth
+def enrich_lead_website(request, lead_id: str):
+    if request.method == "HEAD":
+        return JsonResponse({}, status=200)
+    try:
+        body = _parse_json_body(request)
+        dry_run = bool(body.get("dry_run", False))
+        result = enrich_founder_venue_lead_from_website(
+            lead_id,
+            requested_by_admin_account_id=_admin_account_id_optional(request),
+            dry_run=dry_run,
+        )
+        status = 200
+        if result.errors and not result.fetched_urls:
+            status = 400
+        return JsonResponse(result.to_dict(), status=status)
+    except LeadValidationError as exc:
+        return error_response(
+            code="validation_error", message=exc.message, status=400
+        )
+    except LeadNotFoundError:
+        return error_response(
+            code="not_found", message="Founder venue lead not found.", status=404
+        )
+
+
+@require_http_methods(["GET", "HEAD"])
+@require_internal_admin_auth
+def export_leads_csv(request):
+    if request.method == "HEAD":
+        return HttpResponse(status=200, content_type="text/csv")
+    try:
+        filters = parse_export_filters(
+            {k: request.GET.get(k, "") for k in request.GET.keys()}
+        )
+        result = export_founder_venue_leads_csv(
+            state=filters.state,
+            suburb=filters.suburb,
+            postcode=filters.postcode,
+            search=filters.search,
+            enrichment_status=filters.enrichment_status,
+            outreach_status=filters.outreach_status,
+            contact_permission_status=filters.contact_permission_status,
+            score_min=filters.score_min,
+            confidence_min=filters.confidence_min,
+            missing_email=filters.missing_email,
+            missing_phone=filters.missing_phone,
+            missing_website=filters.missing_website,
+            needs_review=filters.needs_review,
+            include_do_not_contact=filters.include_do_not_contact,
+            include_suppressed=filters.include_suppressed,
+            include_unsafe_emails=filters.include_unsafe_emails,
+            include_raw_notes=filters.include_raw_notes,
+            limit=filters.limit,
+            offset=filters.offset,
+            exported_by_admin_account_id=_admin_account_id_optional(request),
+        )
+    except LeadValidationError as exc:
+        return error_response(
+            code="validation_error",
+            message=exc.message,
+            status=400,
+        )
+
+    date_stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"pubplus_founder_venues_{date_stamp}.csv"
+    response = HttpResponse(result.csv_text, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response

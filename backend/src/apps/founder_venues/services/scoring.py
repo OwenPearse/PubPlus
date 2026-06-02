@@ -418,7 +418,10 @@ def compute_founder_fit_score(lead: Mapping[str, Any]) -> FounderFitScoreResult:
     """
     positive_signals: list[str] = []
     negative_signals: list[str] = []
-    warnings: list[str] = ["Imported data only; not website-enriched yet"]
+    if lead.get("enrichment_status") == "enriched":
+        warnings: list[str] = ["Includes website-enriched signals where available"]
+    else:
+        warnings = ["Imported data only; website enrichment not applied or pending review"]
 
     location = _score_location(
         lead, positive=positive_signals, negative=negative_signals

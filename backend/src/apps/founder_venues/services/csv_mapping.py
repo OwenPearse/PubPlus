@@ -29,7 +29,7 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "postcode": ("postcode", "postal_code", "zip"),
     "phone": ("phone", "business_phone", "telephone", "contact_phone"),
     "website": ("website", "business_website", "url", "site"),
-    "email": ("email", "business_email", "contact_email"),
+    "email": ("email", "business_email", "contact_email", "email_1", "email_2"),
     "instagram_url": ("instagram", "instagram_url"),
     "facebook_url": ("facebook", "facebook_url"),
     "latitude": ("latitude", "lat"),
@@ -93,5 +93,16 @@ def map_row_to_lead_fields(
         raw = row.get(original_header)
         value = _cell_str(raw)
         if value is not None:
+            if canonical == "email" and out.get("email"):
+                continue
             out[canonical] = value
+
+    if not out.get("email"):
+        for header, raw in row.items():
+            norm = _normalize_header(header)
+            if norm in ("email_2", "email_3"):
+                value = _cell_str(raw)
+                if value:
+                    out["email"] = value
+                    break
     return out

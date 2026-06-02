@@ -91,7 +91,7 @@ Internal endpoints must require:
 
 ## MVP internal endpoint families
 
-## Founder venue leads (Stage 4)
+## Founder venue leads (Stages 4–5)
 
 Namespace: `/api/v1/internal/founder-venues/`
 
@@ -102,8 +102,10 @@ Namespace: `/api/v1/internal/founder-venues/`
 - `POST /import` — CSV import via `csv_text` (max 5MB)
 - `POST /recompute-scores` — batch founder-fit recompute
 - `GET /top` — ranked leads for outreach prioritisation
+- `GET /export.csv` — filtered CSV export for CRM/call sheets (default safe exclusions; limit max 5000)
+- `POST /leads/{lead_id}/enrich` — conservative website enrichment (`dry_run` optional)
 
-See `backend/docs/founder-venues/README.md` for request examples.
+See `backend/docs/founder-venues/README.md` for request examples, export safety rules, and enrichment fetch policy.
 
 ---
 

@@ -61,6 +61,17 @@ class CsvMappingTests(SimpleTestCase):
         header_map = build_header_map(["phone", "website"])
         self.assertNotIn("name", header_map.values())
 
+    def test_email_1_and_email_2_columns_map(self) -> None:
+        headers = ["business_name", "email_1", "email_2"]
+        header_map = build_header_map(headers)
+        row = {
+            "business_name": "Test Pub",
+            "email_1": "",
+            "email_2": "bookings@venue.com.au",
+        }
+        fields = map_row_to_lead_fields(row, header_map)
+        self.assertEqual(fields["email"], "bookings@venue.com.au")
+
 
 class NormalizationIntegrationTests(SimpleTestCase):
     def test_required_venue_name_validation(self) -> None:
