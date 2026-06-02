@@ -55,6 +55,16 @@ describe("FounderVenuesListPage", () => {
     expect(screen.getByText("92")).toBeInTheDocument();
   });
 
+  it("renders contact legend", async () => {
+    render(
+      <MemoryRouter>
+        <FounderVenuesListPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText("Test Pub")).toBeInTheDocument());
+    expect(screen.getByText(/= phone/)).toBeInTheDocument();
+  });
+
   it("calls list API with default VIC filters", async () => {
     render(
       <MemoryRouter>

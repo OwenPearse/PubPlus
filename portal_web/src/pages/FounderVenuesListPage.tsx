@@ -1,22 +1,43 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { ActiveFilterSummary } from "@/components/ActiveFilterSummary";
 import { ContactIndicators } from "@/components/ContactIndicators";
+import { ContactLegend } from "@/components/ContactLegend";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
+import { ExternalLink } from "@/components/ExternalLink";
+import { OutreachActionButtons } from "@/components/OutreachActionButtons";
 import {
   enrichFounderVenueLead,
   formatApiError,
   listFounderVenueLeads,
-  markLeadDoNotContact,
+  markFounderVenueCalled,
+  markFounderVenueDoNotContact,
+  markFounderVenueEmailed,
+  markFounderVenueQueued,
+  markFounderVenueRejected,
+  markFounderVenueReplied,
+  markFounderVenueSignedUp,
 } from "@/lib/api";
 import { applyQuickFilter, downloadExportCsv, type QuickFilterPreset } from "@/lib/filters";
+import {
+  filtersFromSearchParams,
+  filtersToSearchParams,
+  listSearchString,
+} from "@/lib/filterUrl";
 import { getApiBaseUrl } from "@/lib/env";
+import {
+  findNextBestLeadId,
+  mergeLeadFromDetail,
+} from "@/lib/outreach";
 import { getAccessToken } from "@/lib/supabase";
 import type { EnrichmentResult, FounderVenueLeadListItem, ListFilters } from "@/lib/types";
 import { DEFAULT_LIST_FILTERS } from "@/lib/types";
 
-function formatDate(value: string | null) {
+type ListRow = FounderVenueLeadListItem & { last_contacted_at?: string | null };
+
+function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   try {
     return new Date(value).toLocaleString();
@@ -25,16 +46,34 @@ function formatDate(value: string | null) {
   }
 }
 
+function socialHref(lead: FounderVenueLeadListItem): string | null {
+  return lead.instagram_url?.trim() || lead.facebook_url?.trim() || null;
+}
+
+const BATCH_ALLOWED = ["queued", "called", "emailed", "rejected"] as const;
+
 export function FounderVenuesListPage() {
-  const [filters, setFilters] = useState<ListFilters>({ ...DEFAULT_LIST_FILTERS });
-  const [items, setItems] = useState<FounderVenueLeadListItem[]>([]);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState<ListFilters>(() =>
+    filtersFromSearchParams(searchParams),
+  );
+  const [items, setItems] = useState<ListRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [callSheetMode, setCallSheetMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [enrichLeadId, setEnrichLeadId] = useState<string | null>(null);
   const [enrichResult, setEnrichResult] = useState<EnrichmentResult | null>(null);
   const [enrichLoading, setEnrichLoading] = useState(false);
+
+  useEffect(() => {
+    setSearchParams(filtersToSearchParams(filters), { replace: true });
+  }, [filters, setSearchParams]);
+
+  const listQuery = useMemo(() => listSearchString(filters), [filters]);
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -43,6 +82,7 @@ export function FounderVenuesListPage() {
       const data = await listFounderVenueLeads(filters);
       setItems(data.items);
       setTotal(data.pagination.total);
+      setSelected(new Set());
     } catch (err) {
       setError(formatApiError(err));
       setItems([]);
@@ -64,6 +104,12 @@ export function FounderVenuesListPage() {
     setFilters((prev) => applyQuickFilter(preset, prev));
   }
 
+  function openDetail(leadId: string) {
+    navigate(`/internal/founder-venues/${leadId}${listQuery}`, {
+      state: { leadIds: items.map((i) => i.id) },
+    });
+  }
+
   async function handleExport() {
     setError("");
     setSuccess("");
@@ -71,10 +117,96 @@ export function FounderVenuesListPage() {
       const token = await getAccessToken();
       if (!token) throw new Error("Sign in required.");
       await downloadExportCsv(getApiBaseUrl(), filters, token);
-      setSuccess("Export downloaded.");
+      setSuccess("Export downloaded for the current filters.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed.");
     }
+  }
+
+  async function applyOutreachToLead(
+    lead: ListRow,
+    action: () => ReturnType<typeof markFounderVenueCalled>,
+    successLabel: string,
+  ) {
+    setError("");
+    try {
+      const response = await action();
+      setItems((prev) =>
+        prev.map((row) => (row.id === lead.id ? mergeLeadFromDetail(row, response) : row)),
+      );
+      setSuccess(`${lead.name}: ${successLabel}`);
+    } catch (err) {
+      setError(formatApiError(err));
+    }
+  }
+
+  async function handleMarkDnc(lead: ListRow) {
+    const reason = window.prompt(
+      `Mark "${lead.name}" as do-not-contact?\n\nOptional reason:`,
+      "",
+    );
+    if (reason === null) return;
+    if (!window.confirm(`Confirm do-not-contact for "${lead.name}".`)) return;
+    setError("");
+    try {
+      const response = await markFounderVenueDoNotContact(lead.id, reason.trim() || undefined);
+      setItems((prev) =>
+        prev.map((row) => (row.id === lead.id ? mergeLeadFromDetail(row, response) : row)),
+      );
+      setSuccess(`Marked ${lead.name} as do-not-contact.`);
+    } catch (err) {
+      setError(formatApiError(err));
+    }
+  }
+
+  function outreachActions(lead: ListRow) {
+    return [
+      { id: "detail", label: "Open detail", onClick: () => openDetail(lead.id) },
+      {
+        id: "called",
+        label: "Mark called",
+        onClick: () =>
+          void applyOutreachToLead(lead, () => markFounderVenueCalled(lead.id), "marked called."),
+      },
+      {
+        id: "emailed",
+        label: "Mark emailed",
+        onClick: () =>
+          void applyOutreachToLead(lead, () => markFounderVenueEmailed(lead.id), "marked emailed."),
+      },
+      {
+        id: "replied",
+        label: "Mark replied",
+        onClick: () =>
+          void applyOutreachToLead(lead, () => markFounderVenueReplied(lead.id), "marked replied."),
+      },
+      {
+        id: "rejected",
+        label: "Mark rejected",
+        onClick: () =>
+          void applyOutreachToLead(
+            lead,
+            () => markFounderVenueRejected(lead.id),
+            "marked rejected.",
+          ),
+      },
+      {
+        id: "signed_up",
+        label: "Mark signed up",
+        onClick: () =>
+          void applyOutreachToLead(
+            lead,
+            () => markFounderVenueSignedUp(lead.id),
+            "marked signed up.",
+          ),
+      },
+      {
+        id: "dnc",
+        label: "Mark DNC",
+        className: "text-red-800",
+        onClick: () => void handleMarkDnc(lead),
+      },
+    ];
   }
 
   async function runEnrich(leadId: string, dryRun: boolean) {
@@ -95,23 +227,58 @@ export function FounderVenuesListPage() {
     }
   }
 
-  async function handleMarkDnc(lead: FounderVenueLeadListItem) {
-    if (
-      !window.confirm(
-        `Mark "${lead.name}" as do-not-contact? This updates outreach and permission status.`,
-      )
-    ) {
+  function openNextBestLead() {
+    const id = findNextBestLeadId(items);
+    if (!id) {
+      setError("No not_contacted or queued leads in the current list.");
       return;
     }
-    setError("");
-    try {
-      await markLeadDoNotContact(lead.id);
-      setSuccess(`Marked ${lead.name} as do-not-contact.`);
-      await loadLeads();
-    } catch (err) {
-      setError(formatApiError(err));
-    }
+    openDetail(id);
   }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function batchUpdate(status: (typeof BATCH_ALLOWED)[number]) {
+    if (selected.size === 0) return;
+    const label = status.replace("_", " ");
+    if (!window.confirm(`Mark ${selected.size} lead(s) as ${label}?`)) return;
+    setError("");
+    let ok = 0;
+    for (const id of selected) {
+      try {
+        if (status === "queued") await markFounderVenueQueued(id);
+        else if (status === "called") await markFounderVenueCalled(id);
+        else if (status === "emailed") await markFounderVenueEmailed(id);
+        else if (status === "rejected") await markFounderVenueRejected(id);
+        ok += 1;
+      } catch {
+        /* continue */
+      }
+    }
+    setSuccess(`Batch update: ${ok} of ${selected.size} marked ${label}.`);
+    await loadLeads();
+  }
+
+  const quickFilters: { preset: QuickFilterPreset; label: string }[] = [
+    { preset: "vic_80_not_contacted", label: "VIC 80+ not contacted" },
+    { preset: "vic_60_missing_email", label: "VIC 60+ missing email" },
+    { preset: "vic_phone_first", label: "VIC phone-first" },
+    { preset: "vic_needs_review", label: "VIC needs review" },
+    { preset: "already_called", label: "Already called" },
+    { preset: "replied", label: "Replied" },
+    { preset: "signed_up", label: "Signed up" },
+    { preset: "rejected", label: "Rejected" },
+    { preset: "dnc", label: "DNC" },
+    { preset: "vic_80_plus", label: "VIC 80+" },
+    { preset: "no_contact_channels", label: "No phone/email/website" },
+  ];
 
   return (
     <div>
@@ -123,6 +290,24 @@ export function FounderVenuesListPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={`rounded border px-3 py-1.5 text-sm ${
+              callSheetMode
+                ? "border-blue-600 bg-blue-600 text-white"
+                : "border-slate-300 bg-white"
+            }`}
+            onClick={() => setCallSheetMode((v) => !v)}
+          >
+            Call sheet mode
+          </button>
+          <button
+            type="button"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm"
+            onClick={() => openNextBestLead()}
+          >
+            Open next best lead
+          </button>
           <button
             type="button"
             className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm"
@@ -140,8 +325,14 @@ export function FounderVenuesListPage() {
         </div>
       </div>
 
+      <div className="mb-3 space-y-2">
+        <ContactLegend />
+        <ActiveFilterSummary filters={filters} />
+      </div>
+
       <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        Export excludes do-not-contact and unsafe emails by default.
+        Export excludes do-not-contact and unsafe emails by default. The portal does not send
+        email or SMS.
       </p>
 
       <ErrorBanner message={error} onDismiss={() => setError("")} />
@@ -152,21 +343,48 @@ export function FounderVenuesListPage() {
       ) : null}
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <QuickButton label="VIC 80+" onClick={() => applyPreset("vic_80_plus")} />
-        <QuickButton
-          label="VIC 60+ missing email"
-          onClick={() => applyPreset("vic_60_missing_email")}
-        />
-        <QuickButton label="VIC needs review" onClick={() => applyPreset("vic_needs_review")} />
-        <QuickButton
-          label="No phone/email/website"
-          onClick={() => applyPreset("no_contact_channels")}
-        />
+        {quickFilters.map(({ preset, label }) => (
+          <QuickButton key={preset} label={label} onClick={() => applyPreset(preset)} />
+        ))}
         <QuickButton
           label="Reset filters"
           onClick={() => setFilters({ ...DEFAULT_LIST_FILTERS })}
         />
       </div>
+
+      {callSheetMode && selected.size > 0 ? (
+        <div className="mb-4 flex flex-wrap gap-2 rounded border border-slate-200 bg-white p-3">
+          <span className="text-sm text-slate-600">{selected.size} selected</span>
+          <button
+            type="button"
+            className="rounded border px-2 py-1 text-xs"
+            onClick={() => void batchUpdate("queued")}
+          >
+            Batch: mark queued
+          </button>
+          <button
+            type="button"
+            className="rounded border px-2 py-1 text-xs"
+            onClick={() => void batchUpdate("called")}
+          >
+            Batch: mark called
+          </button>
+          <button
+            type="button"
+            className="rounded border px-2 py-1 text-xs"
+            onClick={() => void batchUpdate("emailed")}
+          >
+            Batch: mark emailed
+          </button>
+          <button
+            type="button"
+            className="rounded border px-2 py-1 text-xs"
+            onClick={() => void batchUpdate("rejected")}
+          >
+            Batch: mark rejected
+          </button>
+        </div>
+      ) : null}
 
       <FiltersPanel filters={filters} onChange={updateFilter} />
 
@@ -198,79 +416,138 @@ export function FounderVenuesListPage() {
         <table className="min-w-full text-left text-sm">
           <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
+              {callSheetMode ? <th className="px-2 py-2">Sel</th> : null}
               <th className="px-3 py-2">Venue</th>
-              <th className="px-3 py-2">Location</th>
-              <th className="px-3 py-2">Category</th>
-              <th className="px-3 py-2">Fit</th>
-              <th className="px-3 py-2">Conf</th>
-              <th className="px-3 py-2">Contact</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Updated</th>
-              <th className="px-3 py-2">Actions</th>
+              {callSheetMode ? (
+                <>
+                  <th className="px-3 py-2">Suburb</th>
+                  <th className="px-3 py-2">Score</th>
+                  <th className="px-3 py-2">Phone</th>
+                  <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Web</th>
+                  <th className="px-3 py-2">Social</th>
+                  <th className="px-3 py-2">Outreach</th>
+                  <th className="px-3 py-2">Last contact</th>
+                  <th className="px-3 py-2">Actions</th>
+                </>
+              ) : (
+                <>
+                  <th className="px-3 py-2">Location</th>
+                  <th className="px-3 py-2">Category</th>
+                  <th className="px-3 py-2">Fit</th>
+                  <th className="px-3 py-2">Conf</th>
+                  <th className="px-3 py-2">Contact</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Updated</th>
+                  <th className="px-3 py-2">Actions</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && !loading ? (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
+                <td
+                  colSpan={callSheetMode ? 11 : 9}
+                  className="px-3 py-8 text-center text-slate-500"
+                >
                   No leads found for these filters.
                 </td>
               </tr>
             ) : null}
             {items.map((lead) => (
-              <tr key={lead.id} className="border-b border-slate-100 hover:bg-slate-50">
+              <tr
+                key={lead.id}
+                className={`border-b border-slate-100 hover:bg-slate-50 ${
+                  lead.outreach_status === "do_not_contact" ? "bg-red-50/40" : ""
+                }`}
+              >
+                {callSheetMode ? (
+                  <td className="px-2 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(lead.id)}
+                      onChange={() => toggleSelected(lead.id)}
+                      aria-label={`Select ${lead.name}`}
+                    />
+                  </td>
+                ) : null}
                 <td className="px-3 py-2 font-medium">
-                  <Link
-                    to={`/internal/founder-venues/${lead.id}`}
-                    className="text-blue-700 hover:underline"
+                  <button
+                    type="button"
+                    className="text-left text-blue-700 underline"
+                    onClick={() => openDetail(lead.id)}
                   >
                     {lead.name}
-                  </Link>
+                  </button>
+                  {lead.outreach_status === "do_not_contact" ? (
+                    <span className="ml-1 rounded bg-red-100 px-1 text-xs text-red-900">DNC</span>
+                  ) : null}
                 </td>
-                <td className="px-3 py-2">
-                  {[lead.suburb, lead.state].filter(Boolean).join(", ") || "—"}
-                </td>
-                <td className="px-3 py-2">{lead.category ?? "—"}</td>
-                <td className="px-3 py-2 font-semibold">{lead.founder_fit_score}</td>
-                <td className="px-3 py-2">{lead.confidence_score}</td>
-                <td className="px-3 py-2">
-                  <ContactIndicators {...lead} />
-                </td>
-                <td className="px-3 py-2 text-xs">
-                  <div>{lead.enrichment_status}</div>
-                  <div className="text-slate-500">{lead.outreach_status}</div>
-                </td>
-                <td className="px-3 py-2 text-xs text-slate-600">
-                  {formatDate(lead.updated_at)}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-col gap-1 text-xs">
-                    <Link
-                      to={`/internal/founder-venues/${lead.id}`}
-                      className="text-blue-700 underline"
-                    >
-                      Detail
-                    </Link>
-                    <button
-                      type="button"
-                      className="text-left text-slate-700 underline"
-                      onClick={() => {
-                        setEnrichResult(null);
-                        setEnrichLeadId(lead.id);
-                        void runEnrich(lead.id, true);
-                      }}
-                    >
-                      Enrich dry-run
-                    </button>
-                    <button
-                      type="button"
-                      className="text-left text-red-700 underline"
-                      onClick={() => void handleMarkDnc(lead)}
-                    >
-                      Mark DNC
-                    </button>
-                  </div>
-                </td>
+                {callSheetMode ? (
+                  <>
+                    <td className="px-3 py-2">{lead.suburb ?? "—"}</td>
+                    <td className="px-3 py-2 font-semibold">{lead.founder_fit_score}</td>
+                    <td className="px-3 py-2 text-xs">{lead.phone?.trim() ? "Yes" : "—"}</td>
+                    <td className="px-3 py-2 text-xs">{lead.email?.trim() ? "Yes" : "—"}</td>
+                    <td className="px-3 py-2">
+                      {lead.website?.trim() ? (
+                        <ExternalLink href={lead.website}>Link</ExternalLink>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {socialHref(lead) ? (
+                        <ExternalLink href={socialHref(lead)!}>Link</ExternalLink>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{lead.outreach_status}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600">
+                      {formatDate(lead.last_contacted_at)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <OutreachActionButtons actions={outreachActions(lead)} />
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-3 py-2">
+                      {[lead.suburb, lead.state].filter(Boolean).join(", ") || "—"}
+                    </td>
+                    <td className="px-3 py-2">{lead.category ?? "—"}</td>
+                    <td className="px-3 py-2 font-semibold">{lead.founder_fit_score}</td>
+                    <td className="px-3 py-2">{lead.confidence_score}</td>
+                    <td className="px-3 py-2">
+                      <ContactIndicators {...lead} />
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      <div>{lead.enrichment_status}</div>
+                      <div className="text-slate-500">{lead.outreach_status}</div>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-slate-600">
+                      {formatDate(lead.updated_at)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <OutreachActionButtons
+                        actions={[
+                          ...outreachActions(lead),
+                          {
+                            id: "enrich",
+                            label: "Enrich dry-run",
+                            onClick: () => {
+                              setEnrichResult(null);
+                              setEnrichLeadId(lead.id);
+                              void runEnrich(lead.id, true);
+                            },
+                          },
+                        ]}
+                      />
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>

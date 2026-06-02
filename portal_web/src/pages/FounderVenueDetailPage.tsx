@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import { ContactIndicators } from "@/components/ContactIndicators";
+import { ContactLegend } from "@/components/ContactLegend";
+import { ContactShortcuts } from "@/components/ContactShortcuts";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { OutreachPanel } from "@/components/OutreachPanel";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import {
   enrichFounderVenueLead,
   formatApiError,
   getFounderVenueLead,
-  markLeadDoNotContact,
   patchFounderVenueLead,
 } from "@/lib/api";
+import { findNextLeadIdInList } from "@/lib/outreach";
 import type {
   EnrichmentResult,
   FounderVenueLeadDetail,
@@ -20,6 +23,15 @@ import type {
   PatchableLeadField,
 } from "@/lib/types";
 import { PATCHABLE_LEAD_FIELDS } from "@/lib/types";
+
+const VENUE_EDIT_FIELDS = PATCHABLE_LEAD_FIELDS.filter(
+  (f) =>
+    f !== "notes" &&
+    f !== "outreach_status" &&
+    f !== "contact_permission_status" &&
+    f !== "last_contacted_at" &&
+    f !== "last_contact_channel",
+);
 
 function eventSummary(metadata: Record<string, unknown>): string {
   const keys = Object.keys(metadata);
@@ -30,6 +42,13 @@ function eventSummary(metadata: Record<string, unknown>): string {
 
 export function FounderVenueDetailPage() {
   const { leadId } = useParams<{ leadId: string }>();
+  const location = useLocation();
+  const listBackHref = `/internal/founder-venues${location.search}`;
+  const leadIds = useMemo(() => {
+    const state = location.state as { leadIds?: string[] } | null;
+    return state?.leadIds ?? [];
+  }, [location.state]);
+  const nextLeadId = leadId ? findNextLeadIdInList(leadIds, leadId) : null;
   const [detail, setDetail] = useState<LeadDetailResponse | null>(null);
   const [form, setForm] = useState<Partial<Record<PatchableLeadField, string>>>({});
   const [loading, setLoading] = useState(true);
@@ -71,7 +90,7 @@ export function FounderVenueDetailPage() {
     setSuccess("");
     try {
       const body: Partial<Record<PatchableLeadField, string | null>> = {};
-      for (const field of PATCHABLE_LEAD_FIELDS) {
+      for (const field of VENUE_EDIT_FIELDS) {
         const next = form[field] ?? "";
         const prev = stringifyField(detail.lead, field);
         if (next !== prev) {
@@ -107,20 +126,6 @@ export function FounderVenueDetailPage() {
     }
   }
 
-  async function handleMarkDnc() {
-    if (!leadId || !detail) return;
-    if (!window.confirm(`Mark "${detail.lead.name}" as do-not-contact?`)) return;
-    setError("");
-    try {
-      const updated = await markLeadDoNotContact(leadId);
-      setDetail(updated);
-      setForm(leadToForm(updated.lead));
-      setSuccess("Marked as do-not-contact.");
-    } catch (err) {
-      setError(formatApiError(err));
-    }
-  }
-
   if (!leadId) {
     return <p className="text-red-700">Missing lead id.</p>;
   }
@@ -133,7 +138,7 @@ export function FounderVenueDetailPage() {
     return (
       <div>
         <ErrorBanner message={error || "Lead not found."} />
-        <Link to="/internal/founder-venues" className="text-blue-700 underline">
+        <Link to={listBackHref} className="text-blue-700 underline">
           Back to list
         </Link>
       </div>
@@ -146,7 +151,7 @@ export function FounderVenueDetailPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <Link to="/internal/founder-venues" className="text-sm text-blue-700 underline">
+          <Link to={listBackHref} className="text-sm text-blue-700 underline">
             ← Back to list
           </Link>
           <h1 className="mt-1 text-2xl font-bold">{lead.name}</h1>
@@ -155,14 +160,20 @@ export function FounderVenueDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-800"
-            onClick={() => void handleMarkDnc()}
-          >
-            Mark do-not-contact
-          </button>
+          {nextLeadId ? (
+            <Link
+              to={`/internal/founder-venues/${nextLeadId}${location.search}`}
+              state={{ leadIds }}
+              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-blue-800 underline"
+            >
+              Next lead →
+            </Link>
+          ) : null}
         </div>
+      </div>
+
+      <div className="mb-3">
+        <ContactLegend />
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError("")} />
@@ -187,6 +198,20 @@ export function FounderVenueDetailPage() {
         </div>
       </section>
 
+      <OutreachPanel
+        lead={lead}
+        notes={form.notes ?? ""}
+        onNotesChange={(value) => updateField("notes", value)}
+        onUpdated={(response) => {
+          setDetail(response);
+          setForm(leadToForm(response.lead));
+        }}
+        onError={setError}
+        onSuccess={setSuccess}
+      />
+
+      <ContactShortcuts lead={lead} onCopied={setSuccess} />
+
       <ScoreBreakdown
         breakdown={lead.founder_fit_breakdown}
         founderFitScore={lead.founder_fit_score}
@@ -208,7 +233,7 @@ export function FounderVenueDetailPage() {
       >
         <h2 className="text-lg font-semibold">Edit lead</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {PATCHABLE_LEAD_FIELDS.map((field) => (
+          {VENUE_EDIT_FIELDS.map((field) => (
             <EditField
               key={field}
               field={field}

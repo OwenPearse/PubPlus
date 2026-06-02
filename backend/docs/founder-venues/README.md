@@ -504,6 +504,12 @@ Full UI guide: `portal_web/README.md`.
 - Mark do-not-contact
 - Export filtered CSV (safe defaults)
 
+### Stage 7.2 — Outreach workflow UI
+
+Manual call-sheet mode, outreach quick actions (called/emailed/replied/rejected/signed up), DNC with confirmation, outreach notes, next-best-lead navigation, expanded quick filters, and optional batch status updates (queued/called/emailed/rejected only). State changes use existing `PATCH` and `POST .../mark-do-not-contact` — no messaging from the portal.
+
+See `portal_web/README.md` for operator workflows and status definitions.
+
 ### Stage 7 does not include
 
 - Bulk email, automated outreach, publishing, convert-to-venue-candidate

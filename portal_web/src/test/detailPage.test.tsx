@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ExternalLink } from "@/components/ExternalLink";
 import { FounderVenueDetailPage } from "@/pages/FounderVenueDetailPage";
 
 const getFounderVenueLead = vi.fn();
@@ -107,14 +108,14 @@ describe("FounderVenueDetailPage", () => {
     expect(screen.getByText("Strong category match")).toBeInTheDocument();
   });
 
-  it("PATCH save sends allowed fields", async () => {
+  it("Save notes PATCHes notes field", async () => {
     const user = userEvent.setup();
     renderDetail();
     await waitFor(() => expect(screen.getByDisplayValue("Initial note")).toBeInTheDocument());
     const notes = screen.getByDisplayValue("Initial note");
     await user.clear(notes);
     await user.type(notes, "Updated note");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Save notes" }));
     await waitFor(() => expect(patchFounderVenueLead).toHaveBeenCalled());
     const [, body] = patchFounderVenueLead.mock.calls[0];
     expect(body).toEqual({ notes: "Updated note" });
@@ -132,10 +133,31 @@ describe("FounderVenueDetailPage", () => {
 
   it("mark do-not-contact calls correct endpoint", async () => {
     const user = userEvent.setup();
+    vi.spyOn(window, "prompt").mockReturnValue("");
     vi.spyOn(window, "confirm").mockReturnValue(true);
     renderDetail();
     await waitFor(() => expect(screen.getByText("Detail Pub")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Mark do-not-contact" }));
-    await waitFor(() => expect(markLeadDoNotContact).toHaveBeenCalledWith("lead-1"));
+    await user.click(screen.getByRole("button", { name: "Mark DNC" }));
+    await waitFor(() =>
+      expect(markLeadDoNotContact).toHaveBeenCalledWith("lead-1", undefined),
+    );
+  });
+
+  it("outreach panel renders on detail page", async () => {
+    renderDetail();
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Outreach" })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Mark called" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark emailed" })).toBeInTheDocument();
+  });
+});
+
+describe("ExternalLink on detail", () => {
+  it("renders with noreferrer", () => {
+    render(<ExternalLink href="https://example.com">Open website</ExternalLink>);
+    const link = screen.getByRole("link");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+    expect(link).toHaveAttribute("target", "_blank");
   });
 });

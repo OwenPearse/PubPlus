@@ -44,4 +44,10 @@ describe("applyQuickFilter", () => {
     expect(next.missing_website).toBe(true);
     expect(next.missing_phone).toBe(true);
   });
+
+  it("sets VIC 80+ not contacted preset", () => {
+    const next = applyQuickFilter("vic_80_not_contacted", DEFAULT_LIST_FILTERS);
+    expect(next.score_min).toBe("80");
+    expect(next.outreach_status).toBe("not_contacted");
+  });
 });

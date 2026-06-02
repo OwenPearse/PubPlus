@@ -152,6 +152,17 @@ export function internalAuthProbe() {
   );
 }
 
+export {
+  markFounderVenueCalled,
+  markFounderVenueDoNotContact,
+  markFounderVenueEmailed,
+  markFounderVenueQueued,
+  markFounderVenueRejected,
+  markFounderVenueReplied,
+  markFounderVenueSignedUp,
+  saveFounderVenueNotes,
+} from "@/lib/outreach";
+
 export function formatApiError(error: unknown): string {
   if (error && typeof error === "object" && "code" in error) {
     const e = error as ApiRequestError;

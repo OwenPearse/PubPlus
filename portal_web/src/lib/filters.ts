@@ -79,13 +79,17 @@ export type QuickFilterPreset =
   | "vic_80_plus"
   | "vic_60_missing_email"
   | "vic_needs_review"
-  | "no_contact_channels";
+  | "no_contact_channels"
+  | "vic_80_not_contacted"
+  | "vic_phone_first"
+  | "already_called"
+  | "replied"
+  | "signed_up"
+  | "rejected"
+  | "dnc";
 
-export function applyQuickFilter(
-  preset: QuickFilterPreset,
-  current: ListFilters,
-): ListFilters {
-  const base: ListFilters = {
+function resetQueueFilters(current: ListFilters): ListFilters {
+  return {
     ...current,
     state: "VIC",
     offset: 0,
@@ -94,7 +98,19 @@ export function applyQuickFilter(
     missing_phone: false,
     needs_review: false,
     score_min: "",
+    outreach_status: "",
+    enrichment_status: "",
+    contact_permission_status: "",
+    include_do_not_contact: false,
+    sort: "founder_fit_score_desc",
   };
+}
+
+export function applyQuickFilter(
+  preset: QuickFilterPreset,
+  current: ListFilters,
+): ListFilters {
+  const base = resetQueueFilters(current);
 
   switch (preset) {
     case "vic_80_plus":
@@ -109,6 +125,24 @@ export function applyQuickFilter(
         missing_email: true,
         missing_website: true,
         missing_phone: true,
+      };
+    case "vic_80_not_contacted":
+      return { ...base, score_min: "80", outreach_status: "not_contacted" };
+    case "vic_phone_first":
+      return { ...base, score_min: "60", outreach_status: "not_contacted" };
+    case "already_called":
+      return { ...base, outreach_status: "called" };
+    case "replied":
+      return { ...base, outreach_status: "replied" };
+    case "signed_up":
+      return { ...base, outreach_status: "signed_up" };
+    case "rejected":
+      return { ...base, outreach_status: "rejected" };
+    case "dnc":
+      return {
+        ...base,
+        outreach_status: "do_not_contact",
+        include_do_not_contact: true,
       };
     default:
       return base;
