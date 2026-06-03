@@ -8,6 +8,8 @@ Define the initial REST API surface for the PubPlus backend so frontend integrat
 
 Implemented MVP backend contract baseline with Stage D internal/admin moderation endpoints.
 
+Machine-readable consumer contract (implemented paths only): `consumer_app/lib/api-spec/openapi.yaml`.
+
 ## API principles
 
 - All public application APIs are served by Django
@@ -110,6 +112,8 @@ Notes
 
 Home is not just generic search. It should return sectioned content.
 
+Consumer app (Stage 6+): sends optional `lat`/`lng` from resolved discovery origin (device → profile default); does not persist GPS coordinates to profile.
+
 3. Search
 GET /api/v1/search/venues
 Purpose
@@ -134,9 +138,8 @@ drink_types
 venue_features
 q (venue name + suburb/locality text search)
 events — **deferred** (`400 events_unavailable`; no published event catalog for Search filtering yet)
-Optional pagination parameters
-limit
-offset or cursor-based pagination later
+Pagination
+limit (1–200, default 50). Offset/cursor pagination is **not implemented** in MVP.
 Notes
 
 Search uses the shared discovery query core.
@@ -225,7 +228,7 @@ Semantics
 
 - `id` — `locality.id`; use as `default_locality_id` on `PATCH /api/v1/profile`.
 - `geographic_region_id` — required companion field for profile default location PATCH.
-- `latitude` / `longitude` — optional centroid (mean of published venue map points in that locality); for future Search-origin consolidation, not required by Profile MVP.
+- `latitude` / `longitude` — optional centroid (mean of published venue map points in that locality); used by consumer Search radius origin and Profile fallback discovery origin when device GPS is unavailable.
 - Scope: localities that have at least one discovery-eligible published venue (same published spine as Search). Not a national suburb directory.
 - Ordering: `state`, then `name`.
 - Empty DB → `200` with `"localities": []`.

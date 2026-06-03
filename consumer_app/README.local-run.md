@@ -78,6 +78,19 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 7. With location denied, set a Profile default suburb and reload — confirm distance search works using profile/reference coordinates when no suburb is selected in Search.
 8. With location denied and no profile suburb, confirm distance chips stay disabled until a Search suburb is selected (Stage 2 rule: no `radius_m` without `lat`/`lng`).
 
+## Stage 8 Contract verification
+
+1. `GET /api/v1/search/filters` — confirm `event_filters` is `[]`.
+2. `GET /api/v1/reference/localities` — confirm Search and Profile suburb pickers match this list.
+3. Search with `q` — confirm partial venue/locality text search works.
+4. Search with `suburb` from a reference locality name (e.g. `Brunswick`).
+5. Search with `lat`, `lng`, and `radius_m` together (device or selected locality origin).
+6. Confirm event filter chips remain hidden in Search.
+7. Profile — default suburb picker uses reference localities; PATCH sends locality/region UUIDs.
+8. Home/Map — with location allowed, feeds use device origin; with location denied, profile default locality coordinates apply as fallback.
+
+OpenAPI source: `consumer_app/lib/api-spec/openapi.yaml` (implemented consumer paths only).
+
 ## Stage 7 Search locality reference alignment manual verification
 
 1. Re-run dev DB seed.

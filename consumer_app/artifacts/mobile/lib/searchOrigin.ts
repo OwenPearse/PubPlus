@@ -1,5 +1,3 @@
-import { SUBURB_ORIGIN_COORDINATES } from "@/data/mockData";
-
 export type SearchOriginCoordinates = {
   lat: number;
   lng: number;
@@ -18,14 +16,4 @@ export function isValidSearchOrigin(
     return false;
   }
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
-}
-
-/** Suburb label → approximate centroid for radius search (Melbourne inner MVP). */
-export function getSearchOriginFromSuburb(
-  suburb: string | null | undefined
-): SearchOriginCoordinates | null {
-  if (!suburb?.trim()) return null;
-  const coords = SUBURB_ORIGIN_COORDINATES[suburb.trim()];
-  if (!coords) return null;
-  return isValidSearchOrigin(coords) ? coords : null;
 }

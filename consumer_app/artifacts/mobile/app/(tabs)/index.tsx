@@ -22,6 +22,7 @@ import { useColors } from "@/hooks/useColors";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { isValidSearchOrigin } from "@/lib/searchOrigin";
 
+/** Placeholder header label only — Home API uses discovery origin lat/lng, not this string. */
 const CURRENT_SUBURB = "Fitzroy";
 
 export default function HomeScreen() {

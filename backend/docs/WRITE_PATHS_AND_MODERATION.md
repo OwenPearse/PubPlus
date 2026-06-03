@@ -149,6 +149,8 @@ May include:
 - specials/event/tap inaccuracies
 - other structured venue-data corrections
 
+**MVP API:** `POST /api/v1/submissions/corrections` accepts `domain` of `profile`, `location`, `attributes`, or `hours`. Consumer attribute-correction UI may be deferred; the backend path is implemented when clients send structured `proposed_values`.
+
 ### Recommended request shape principles
 Payload should separate:
 - target venue identity

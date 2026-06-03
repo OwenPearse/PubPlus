@@ -55,7 +55,10 @@ export function resolveDiscoveryOrigin(input: {
   return { origin: null, source: null };
 }
 
-/** Map viewport (~5 km) centered on an origin; falls back to Melbourne inner defaults. */
+/**
+ * Map viewport (~5 km) centered on resolved discovery origin.
+ * Falls back to Melbourne inner defaults only when no valid origin (same as backend map without client location).
+ */
 export function mapViewportAroundOrigin(
   origin: SearchOriginCoordinates | null,
   delta = 0.045

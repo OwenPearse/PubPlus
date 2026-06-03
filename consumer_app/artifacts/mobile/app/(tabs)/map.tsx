@@ -25,6 +25,7 @@ import { mapCardToVenue, type MapResponse } from "@/lib/mappers";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const POPUP_HEIGHT = Math.round(SCREEN_HEIGHT * 0.33);
+/** Decorative map scaffold labels only — viewport/query use discoveryOrigin + GET /api/v1/map/venues. */
 const SUBURB_LABELS = [
   { name: "Brunswick",   top: 0.10, left: 0.28 },
   { name: "Fitzroy",     top: 0.26, left: 0.50 },

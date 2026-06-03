@@ -1,26 +1,42 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: |
+    PubPlus consumer API (MVP). Documents implemented `/api/v1` contracts only.
+    Canonical narrative docs: `backend/docs/API_ENDPOINT_OVERVIEW.md`.
 servers:
   - url: /api
     description: Base API path
+security: []
 tags:
   - name: health
     description: Health operations
   - name: search
-    description: Search and discovery operations
+    description: Search and discovery list mode
   - name: reference
     description: Public reference metadata
+  - name: home
+    description: Home feed
+  - name: map
+    description: Map discovery
+  - name: venues
+    description: Venue detail
+  - name: profile
+    description: Consumer profile (authenticated)
+  - name: saved
+    description: Saved venues (authenticated)
+  - name: submissions
+    description: Consumer submissions (authenticated)
 paths:
   /v1/health:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
+      description: Returns server health status.
+      security: []
       responses:
         "200":
           description: Healthy
@@ -28,12 +44,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /v1/search/venues:
+    get:
+      operationId: searchVenues
+      tags: [search]
+      security: []
+      summary: Search venues (list/card mode)
+      description: |
+        Public venue search using the shared discovery core. Optional JWT enriches `is_saved` on cards.
+        Suburb picker options should come from `GET /v1/reference/localities`; send `suburb` as locality `name` (exact, case-insensitive).
+        Do not send `events=true` (deferred). Do not send `radius_m` without `lat` and `lng`.
+      parameters:
+        - $ref: "#/components/parameters/DiscoveryQ"
+        - $ref: "#/components/parameters/DiscoverySuburb"
+        - $ref: "#/components/parameters/DiscoveryLat"
+        - $ref: "#/components/parameters/DiscoveryLng"
+        - $ref: "#/components/parameters/DiscoveryRadiusM"
+        - $ref: "#/components/parameters/DiscoveryOpenNow"
+        - $ref: "#/components/parameters/DiscoveryVenueFeatures"
+        - $ref: "#/components/parameters/DiscoveryDrinkTypes"
+        - $ref: "#/components/parameters/DiscoveryMealSpecials"
+        - $ref: "#/components/parameters/DiscoveryEvents"
+        - $ref: "#/components/parameters/DiscoveryLimit"
+      responses:
+        "200":
+          description: Venue search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchVenuesResponse"
+        "400":
+          description: "Invalid filters (e.g. location_incomplete, invalid_q, events_unavailable)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/search/filters:
     get:
       operationId: searchFilters
       tags: [search]
+      security: []
       summary: Search filter reference metadata
-      description: Public reference data for Search filter chips (canonical keys/ids with display labels).
+      description: |
+        Public reference data for Search filter chips (canonical keys/ids with display labels).
+        `event_filters` is intentionally empty until a published event catalog exists; clients must not render event filter chips when empty.
       responses:
         "200":
           description: Filter reference payload
@@ -41,20 +95,465 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchFiltersResponse"
+        "500":
+          description: Database error loading filter reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/reference/localities:
     get:
       operationId: referenceLocalities
       tags: [reference]
+      security: []
       summary: Supported locality reference
-      description: Public list of discovery localities with IDs for Profile default suburb and Search suburb filter options. Search sends `suburb` as locality `name` (exact, case-insensitive). Scoped to localities with published discovery-eligible venues.
+      description: |
+        Public, read-only, cacheable list of discovery localities (localities with at least one discovery-eligible published venue).
+        Used by Search suburb picker and Profile default locality. Not a complete Australian suburb directory.
+        Search sends `suburb` as locality `name` (exact, case-insensitive).
       responses:
         "200":
           description: Locality reference payload
+          headers:
+            Cache-Control:
+              description: Response cache hint (public, max-age=300 when set).
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LocalitiesReferenceResponse"
+  /v1/home:
+    get:
+      operationId: homeFeed
+      tags: [home]
+      security: []
+      summary: Home feed sections
+      description: |
+        Public sectioned home payload. **Current MVP sections:** `nearby`, `open_now`, `specials_tonight`.
+        `events_tonight` is not returned until a published public event catalog exists.
+        Optional JWT enriches `is_saved`. Consumer app sends `lat`/`lng` when resolved discovery origin is available (device, then profile default); GPS is not persisted via profile.
+      parameters:
+        - $ref: "#/components/parameters/DiscoveryLat"
+        - $ref: "#/components/parameters/DiscoveryLng"
+        - $ref: "#/components/parameters/DiscoverySuburb"
+        - name: radius_m
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 5000
+          description: Used only when lat and lng are both provided.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 12
+      responses:
+        "200":
+          description: Home feed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HomeFeedResponse"
+        "400":
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/map/venues:
+    get:
+      operationId: mapVenues
+      tags: [map]
+      security: []
+      summary: Map venue markers
+      description: |
+        Viewport-bounded map discovery. Requires all of `north`, `south`, `east`, `west`.
+        Supports `open_now`, `meal_specials`, `drink_types`, `venue_features`, and `q` like Search.
+        `events=true` is deferred (`400 events_unavailable`). Optional JWT enriches `is_saved`.
+      parameters:
+        - $ref: "#/components/parameters/MapNorth"
+        - $ref: "#/components/parameters/MapSouth"
+        - $ref: "#/components/parameters/MapEast"
+        - $ref: "#/components/parameters/MapWest"
+        - $ref: "#/components/parameters/DiscoveryQ"
+        - $ref: "#/components/parameters/DiscoverySuburb"
+        - $ref: "#/components/parameters/DiscoveryOpenNow"
+        - $ref: "#/components/parameters/DiscoveryVenueFeatures"
+        - $ref: "#/components/parameters/DiscoveryDrinkTypes"
+        - $ref: "#/components/parameters/DiscoveryMealSpecials"
+        - $ref: "#/components/parameters/DiscoveryEvents"
+        - $ref: "#/components/parameters/DiscoveryLimit"
+      responses:
+        "200":
+          description: Map markers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapVenuesResponse"
+        "400":
+          description: Invalid filters or viewport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/venues/{venue_id}:
+    get:
+      operationId: venueDetail
+      tags: [venues]
+      security: []
+      summary: Venue detail
+      description: |
+        Full published venue detail. Event UI should render only when `events.items` is non-empty (MVP typically empty).
+        Optional JWT sets `authenticated_actions.is_saved`.
+      parameters:
+        - name: venue_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Venue detail payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenueDetailResponse"
+        "404":
+          description: Venue not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/profile:
+    get:
+      operationId: getProfile
+      tags: [profile]
+      summary: Get consumer profile
+      security:
+        - ConsumerBearer: []
+      responses:
+        "200":
+          description: Profile state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: patchProfile
+      tags: [profile]
+      summary: Update consumer profile
+      description: |
+        Only documented fields are accepted; unknown keys return `400`.
+        Taste/personalisation preferences (favourite drinks, venue features, event interests, distance) are **deferred** and not in the allowlist.
+      security:
+        - ConsumerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfilePatchRequest"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/saved/venues:
+    get:
+      operationId: listSavedVenues
+      tags: [saved]
+      summary: List saved venues
+      security:
+        - ConsumerBearer: []
+      responses:
+        "200":
+          description: Saved venue cards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedVenuesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: saveVenue
+      tags: [saved]
+      summary: Save a venue
+      security:
+        - ConsumerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveVenueRequest"
+      responses:
+        "200":
+          description: Save acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaveVenueResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Venue not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/saved/venues/{venue_id}:
+    delete:
+      operationId: unsaveVenue
+      tags: [saved]
+      summary: Unsave a venue
+      security:
+        - ConsumerBearer: []
+      parameters:
+        - name: venue_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Removed from saved list
+        "400":
+          description: Invalid venue_id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/submissions/corrections:
+    post:
+      operationId: submitCorrection
+      tags: [submissions]
+      summary: Submit venue correction
+      description: |
+        Structured correction intake; does not mutate published truth directly.
+        Supported `domain` values: `profile`, `location`, `attributes`, `hours`.
+        Consumer attribute-correction UI may be deferred; backend accepts `attributes` when sent.
+      security:
+        - ConsumerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectionSubmissionRequest"
+      responses:
+        "201":
+          description: Acknowledgement only (no moderation state exposed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionAckResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Venue not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/submissions/new-venues:
+    post:
+      operationId: submitNewVenue
+      tags: [submissions]
+      summary: Suggest a new venue
+      security:
+        - ConsumerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewVenueSubmissionRequest"
+      responses:
+        "201":
+          description: Acknowledgement only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionAckResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
+  securitySchemes:
+    ConsumerBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase consumer access token (required on private endpoints).
+  parameters:
+    DiscoveryQ:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 100
+      description: |
+        MVP text search over published venue display name and locality name only (case-insensitive partial ILIKE).
+        Trimmed; whitespace-only ignored. Max 100 characters (`400 invalid_q` if longer).
+    DiscoverySuburb:
+      name: suburb
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Exact locality name match (case-insensitive). No aliases or locality UUIDs.
+    DiscoveryLat:
+      name: lat
+      in: query
+      required: false
+      schema:
+        type: number
+        format: double
+      description: Required together with lng and radius_m for radius search.
+    DiscoveryLng:
+      name: lng
+      in: query
+      required: false
+      schema:
+        type: number
+        format: double
+      description: Required together with lat and radius_m for radius search.
+    DiscoveryRadiusM:
+      name: radius_m
+      in: query
+      required: false
+      schema:
+        type: number
+      description: Radius in metres. Invalid without both lat and lng (400 location_incomplete).
+    DiscoveryOpenNow:
+      name: open_now
+      in: query
+      required: false
+      schema:
+        type: boolean
+      description: Backend-computed open-now filter. Omit or true only (false not supported in MVP).
+    DiscoveryVenueFeatures:
+      name: venue_features
+      in: query
+      required: false
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+      description: Attribute stable_key values (repeat param or comma-separated).
+    DiscoveryDrinkTypes:
+      name: drink_types
+      in: query
+      required: false
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          format: uuid
+      description: beverage_product UUIDs.
+    DiscoveryMealSpecials:
+      name: meal_specials
+      in: query
+      required: false
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum: [meal_special]
+      description: Supported kind values (MVP meal_special only).
+    DiscoveryEvents:
+      name: events
+      in: query
+      required: false
+      schema:
+        type: boolean
+      description: Deferred. events=true returns 400 events_unavailable; clients must not send.
+    DiscoveryLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+      description: Result cap (Search/Map). Pagination offset/cursor not implemented in MVP.
+    MapNorth:
+      name: north
+      in: query
+      required: true
+      schema:
+        type: number
+    MapSouth:
+      name: south
+      in: query
+      required: true
+      schema:
+        type: number
+    MapEast:
+      name: east
+      in: query
+      required: true
+      schema:
+        type: number
+    MapWest:
+      name: west
+      in: query
+      required: true
+      schema:
+        type: number
+  responses:
+    Unauthorized:
+      description: Missing or invalid consumer JWT
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
     HealthStatus:
       type: object
@@ -63,6 +562,119 @@ components:
           type: string
       required:
         - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+          required:
+            - code
+            - message
+      required:
+        - error
+    PublicVenueCard:
+      type: object
+      description: Compact venue card shared by Search, Home, and saved list.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        venue_type:
+          type: string
+          nullable: true
+        suburb:
+          type: string
+        address_short:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        hero_photo_url:
+          type: string
+          nullable: true
+        open_now:
+          type: boolean
+          nullable: true
+        open_now_uncomputed:
+          type: boolean
+        distance_m:
+          type: number
+          nullable: true
+        feature_badges:
+          type: array
+          items:
+            type: string
+        specials_summary:
+          type: array
+          items:
+            type: string
+        events_summary:
+          type: array
+          description: Empty in MVP until published event catalog exists.
+          items:
+            type: string
+        drink_highlights:
+          type: array
+          items:
+            type: string
+        is_saved:
+          type: boolean
+          nullable: true
+          description: null when unauthenticated; boolean when JWT present.
+      required:
+        - id
+        - name
+        - suburb
+        - address_short
+        - latitude
+        - longitude
+        - open_now_uncomputed
+        - feature_badges
+        - specials_summary
+        - events_summary
+        - drink_highlights
+    SearchVenuesResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            venues:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublicVenueCard"
+          required:
+            - venues
+        meta:
+          type: object
+          properties:
+            mode:
+              type: string
+            count:
+              type: integer
+            limit:
+              type: integer
+          required:
+            - mode
+            - count
+            - limit
+      required:
+        - data
+        - meta
     SearchFilterKeyLabel:
       type: object
       properties:
@@ -161,4 +773,284 @@ components:
           $ref: "#/components/schemas/LocalitiesReferenceData"
       required:
         - data
-
+    HomeFeedSection:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        venues:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicVenueCard"
+      required:
+        - id
+        - title
+        - venues
+    HomeFeedResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            sections:
+              type: array
+              items:
+                $ref: "#/components/schemas/HomeFeedSection"
+          required:
+            - sections
+        meta:
+          type: object
+          properties:
+            sections:
+              type: array
+              items:
+                type: string
+      required:
+        - data
+    MapVenueMarker:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        suburb:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        hero_photo_url:
+          type: string
+          nullable: true
+        open_now:
+          type: boolean
+          nullable: true
+        open_now_uncomputed:
+          type: boolean
+        is_saved:
+          type: boolean
+          nullable: true
+      required:
+        - id
+        - name
+        - suburb
+        - latitude
+        - longitude
+        - open_now_uncomputed
+    MapVenuesResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            venues:
+              type: array
+              items:
+                $ref: "#/components/schemas/MapVenueMarker"
+          required:
+            - venues
+        meta:
+          type: object
+          properties:
+            mode:
+              type: string
+            count:
+              type: integer
+            limit:
+              type: integer
+      required:
+        - data
+        - meta
+    VenueDetailResponse:
+      type: object
+      description: Full detail document; events.items typically empty in MVP.
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+      required:
+        - data
+    ProfileState:
+      type: object
+      properties:
+        display_name:
+          type: string
+          nullable: true
+        avatar_storage_ref:
+          type: string
+          nullable: true
+        default_locality_id:
+          type: string
+          format: uuid
+          nullable: true
+        default_geographic_region_id:
+          type: string
+          format: uuid
+          nullable: true
+        email_marketing_opt_in:
+          type: boolean
+        email_transactional_opt_in:
+          type: boolean
+        push_notifications_opt_in:
+          type: boolean
+        sms_marketing_opt_in:
+          type: boolean
+        sms_transactional_opt_in:
+          type: boolean
+        quiet_hours_start_local:
+          type: string
+          nullable: true
+          description: HH:MM or HH:MM:SS local time, or null.
+        quiet_hours_end_local:
+          type: string
+          nullable: true
+    ProfileResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/ProfileState"
+      required:
+        - data
+    ProfilePatchRequest:
+      type: object
+      description: Partial update; only listed fields accepted.
+      properties:
+        display_name:
+          type: string
+          nullable: true
+        avatar_storage_ref:
+          type: string
+          nullable: true
+        default_locality_id:
+          type: string
+          format: uuid
+          nullable: true
+        default_geographic_region_id:
+          type: string
+          format: uuid
+          nullable: true
+        email_marketing_opt_in:
+          type: boolean
+        email_transactional_opt_in:
+          type: boolean
+        push_notifications_opt_in:
+          type: boolean
+        sms_marketing_opt_in:
+          type: boolean
+        sms_transactional_opt_in:
+          type: boolean
+        quiet_hours_start_local:
+          type: string
+          nullable: true
+        quiet_hours_end_local:
+          type: string
+          nullable: true
+    SavedVenuesResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            venues:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublicVenueCard"
+          required:
+            - venues
+      required:
+        - data
+    SaveVenueRequest:
+      type: object
+      properties:
+        venue_id:
+          type: string
+          format: uuid
+      required:
+        - venue_id
+    SaveVenueResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            venue_id:
+              type: string
+              format: uuid
+            saved:
+              type: boolean
+          required:
+            - venue_id
+            - saved
+      required:
+        - data
+    SubmissionAckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [received]
+        message:
+          type: string
+      required:
+        - status
+        - message
+    CorrectionSubmissionRequest:
+      type: object
+      properties:
+        venue_id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+          enum: [profile, location, attributes, hours]
+        proposed_values:
+          type: object
+          additionalProperties: true
+        note:
+          type: string
+          nullable: true
+      required:
+        - venue_id
+        - domain
+        - proposed_values
+    NewVenueSubmissionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address_line_1:
+          type: string
+        address_line_2:
+          type: string
+          nullable: true
+        locality_id:
+          type: string
+          format: uuid
+          nullable: true
+        geographic_region_id:
+          type: string
+          format: uuid
+          nullable: true
+        postcode:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        country_code:
+          type: string
+          nullable: true
+          description: Two-letter ISO 3166-1 alpha-2 when provided.
+        note:
+          type: string
+          nullable: true
+      required:
+        - name
+        - address_line_1

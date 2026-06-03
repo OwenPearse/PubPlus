@@ -218,8 +218,8 @@ Search should return:
 
 Search should support:
 
-- suburb filtering
-- distance/radius filtering
+- suburb filtering (exact locality `name`; consumer suburb picker options from `GET /api/v1/reference/localities`)
+- distance/radius filtering (`lat` + `lng` + `radius_m` triplet required)
 - open-now filtering
 - specials filtering
 - drink-type filtering
