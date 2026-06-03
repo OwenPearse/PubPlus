@@ -67,6 +67,21 @@ cd backend
 python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_saved_venues_endpoints tests.test_profile_endpoints tests.test_submission_endpoints tests.test_discovery_public_endpoints tests.test_home_and_venue_detail_endpoints
 ```
 
+## Stage 5 Profile locality + preference cleanup manual verification
+
+1. Log in to the consumer app.
+2. Open Profile.
+3. Confirm drink, venue feature, event interest, distance, and personalization chip sections are not shown.
+4. Change default suburb (e.g. Brunswick) using the suburb picker.
+5. Confirm saving shows a loading state and completes without error.
+6. Reload Profile — confirm the selected default suburb persists.
+7. In network tools, confirm `PATCH /api/v1/profile/` sends only supported fields (`default_locality_id`, `default_geographic_region_id`, notification toggles, etc.).
+8. Confirm unsupported fields such as `favourite_venue_features` are not sent.
+9. Toggle push, marketing email, and SMS marketing — confirm each persists after reload.
+10. Clear default suburb (X on chip) — confirm both locality IDs clear if backend allows `null`.
+
+Requires Melbourne inner locality seeds (`dev_seed_reference_melbourne_localities.sql`) in the dev database.
+
 ## Stage 4 Events honesty manual verification
 
 1. Re-run backend and consumer app.
@@ -99,7 +114,7 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 
 - Event discovery is deferred: Search `event_filters` stays empty, Home has no `events_tonight` section, and venue event UI only renders when the API returns non-empty published event data.
 - Correction submission supports basic profile, location, and hours payloads; attribute-domain lookup UX is deferred.
-- Profile preference chips for drinks/features are preview-only and are not sent to the backend.
+- Profile taste preferences (drinks, venue features, events, distance, personalization) are deferred; only default suburb and supported notification settings are editable.
 - Google, Facebook, and Apple sign-in require Supabase provider configuration plus external provider dashboard setup.
 - React Native Web browser automation is useful for smoke checks, but some native controls still require Expo Go or simulator verification.
 # PubPlus Mobile - Local Cursor Run Guide

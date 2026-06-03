@@ -105,13 +105,17 @@ This is not a moderation domain.
 ### Product behaviour
 Authenticated consumer can update profile basics and preferences.
 
-### MVP preference areas
-- default suburb
+### MVP profile fields (implemented)
+- `display_name`, `avatar_storage_ref` (`consumer_profile`)
+- `default_locality_id`, `default_geographic_region_id` (`consumer_default_location_preference`)
+- notification opt-ins and quiet hours (`consumer_notification_settings`)
+
+### Deferred preference areas (not in PATCH allowlist)
 - distance preference
 - favourite drink types
 - favourite venue features
 - event interests
-- notification preference placeholders
+- rich personalization / Home `for_you`
 
 ### Backend rules
 - requires valid consumer auth

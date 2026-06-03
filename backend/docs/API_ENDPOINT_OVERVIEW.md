@@ -311,16 +311,19 @@ Auth
 
 Consumer auth required
 
-MVP preference areas
-default suburb
-distance preference
-favourite drink types
-favourite venue features
-event interests
-notification preference placeholders
+MVP profile fields (PATCH allowlist — unknown keys return `400`):
+
+- `display_name`, `avatar_storage_ref`
+- `default_locality_id`, `default_geographic_region_id` (FK-valid UUIDs or `null`)
+- `email_marketing_opt_in`, `email_transactional_opt_in`, `push_notifications_opt_in`
+- `sms_marketing_opt_in`, `sms_transactional_opt_in`
+- `quiet_hours_start_local`, `quiet_hours_end_local` (both null or both set)
+
+Deferred until persistence and personalization models exist: distance preference, favourite drink types, favourite venue features, event interests, and rich Home personalization.
+
 Notes
 
-Keep payload structured.
+Keep payload structured; reject unsupported keys explicitly.
 
 8. Submissions
 POST /api/v1/submissions/corrections

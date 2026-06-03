@@ -13,13 +13,17 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
-import { Chip } from "@/components/Chip";
 import { EmptyState } from "@/components/EmptyState";
 import { ProfileRow } from "@/components/ProfileRow";
 import { SectionHeader } from "@/components/SectionHeader";
-import { DRINK_TYPES, SUBURBS, VENUE_FEATURES } from "@/data/mockData";
+import { SuburbSelector } from "@/components/SuburbSelector";
 import { useProfile } from "@/hooks/useProfile";
 import { useColors } from "@/hooks/useColors";
+import {
+  buildDefaultLocalityPatch,
+  getSuburbLabelForLocalityId,
+  PROFILE_PICKABLE_SUBURBS,
+} from "@/lib/localityReference";
 import { signOut } from "@/lib/supabase";
 
 export default function ProfileScreen() {
@@ -41,6 +45,26 @@ export default function ProfileScreen() {
     return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   }, [session?.user?.created_at]);
 
+  const savedSuburbLabel = useMemo(
+    () => getSuburbLabelForLocalityId(profile?.default_locality_id),
+    [profile?.default_locality_id]
+  );
+
+  const savedSuburbDisplay = useMemo(() => {
+    if (savedSuburbLabel) return savedSuburbLabel;
+    if (profile?.default_locality_id) return "Saved locality";
+    return null;
+  }, [savedSuburbLabel, profile?.default_locality_id]);
+
+  async function handleDefaultSuburbChange(suburb: string | null) {
+    Haptics.selectionAsync();
+    const patch = buildDefaultLocalityPatch(suburb);
+    const currentId = profile?.default_locality_id ?? null;
+    const nextId = patch.default_locality_id;
+    if (currentId === nextId) return;
+    await patchProfile(patch);
+  }
+
   async function togglePushNotifications() {
     Haptics.selectionAsync();
     if (!profile) return;
@@ -51,6 +75,12 @@ export default function ProfileScreen() {
     Haptics.selectionAsync();
     if (!profile) return;
     await patchProfile({ email_marketing_opt_in: !profile.email_marketing_opt_in });
+  }
+
+  async function toggleSmsMarketing() {
+    Haptics.selectionAsync();
+    if (!profile) return;
+    await patchProfile({ sms_marketing_opt_in: !profile.sms_marketing_opt_in });
   }
 
   async function handleSignOut() {
@@ -166,56 +196,25 @@ export default function ProfileScreen() {
         />
       ) : null}
 
-      <SectionHeader title="Suburb preferences" subtitle="Backend locality IDs are supported" />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.prefChips}
-      >
-        <Chip
-          label={profile?.default_locality_id ? "Default locality set" : "No default locality"}
-          selected={Boolean(profile?.default_locality_id)}
-          onPress={() => {}}
-          size="sm"
+      <SectionHeader
+        title="Default suburb"
+        subtitle="Choose a default suburb to make local discovery easier."
+      />
+      <View style={styles.localityRow}>
+        <SuburbSelector
+          selected={savedSuburbDisplay}
+          onChange={handleDefaultSuburbChange}
+          suburbs={PROFILE_PICKABLE_SUBURBS}
+          placeholder="Choose default suburb"
         />
-        <Chip
-          label={profile?.default_geographic_region_id ? "Default region set" : "No default region"}
-          selected={Boolean(profile?.default_geographic_region_id)}
-          onPress={() => {}}
-          size="sm"
-        />
-      </ScrollView>
-
-      <SectionHeader title="Drink preferences" />
-      <View style={styles.prefChipsWrap}>
-        {DRINK_TYPES.slice(0, 6).map((d) => (
-          <Chip
-            key={d}
-            label={d}
-            selected={false}
-            onPress={() => {}}
-            size="sm"
-          />
-        ))}
       </View>
-      <Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>
-        Drink chips are preview-only and are not sent to the backend yet.
-      </Text>
-
-      <SectionHeader title="Venue preferences" />
-      <View style={styles.prefChipsWrap}>
-        {VENUE_FEATURES.slice(0, 6).map((f) => (
-          <Chip
-            key={f}
-            label={f}
-            selected={false}
-            onPress={() => {}}
-            size="sm"
-          />
-        ))}
-      </View>
-      <Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>
-        Venue feature chips are currently UI-only and are not sent to the backend.
+      {profile?.default_locality_id && !savedSuburbLabel ? (
+        <Text style={[styles.helperCopy, { color: colors.mutedForeground }]}>
+          Your saved locality is not in the Melbourne inner seed list shown here.
+        </Text>
+      ) : null}
+      <Text style={[styles.helperCopy, { color: colors.mutedForeground }]}>
+        More taste and personalization controls are coming later.
       </Text>
 
       <SectionHeader title="Settings" />
@@ -227,7 +226,7 @@ export default function ProfileScreen() {
       >
         <ProfileRow
           icon="bell"
-          label="Notifications"
+          label="Push notifications"
           value={profile?.push_notifications_opt_in ? "On" : "Off"}
           onPress={togglePushNotifications}
         />
@@ -236,6 +235,12 @@ export default function ProfileScreen() {
           label="Marketing emails"
           value={profile?.email_marketing_opt_in ? "On" : "Off"}
           onPress={toggleMarketingEmails}
+        />
+        <ProfileRow
+          icon="message-circle"
+          label="SMS marketing"
+          value={profile?.sms_marketing_opt_in ? "On" : "Off"}
+          onPress={toggleSmsMarketing}
         />
         <ProfileRow
           icon="moon"
@@ -350,18 +355,16 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginTop: 2,
   },
-  prefChips: {
+  localityRow: {
     paddingHorizontal: 16,
-    paddingBottom: 4,
-    gap: 6,
-    flexDirection: "row",
+    paddingBottom: 6,
   },
-  prefChipsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
+  helperCopy: {
     paddingHorizontal: 16,
-    paddingBottom: 4,
+    paddingBottom: 12,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 17,
   },
   settingsGroup: {
     marginHorizontal: 16,
@@ -372,12 +375,6 @@ const styles = StyleSheet.create({
   },
   settingsGroupTop: {
     marginTop: 4,
-  },
-  unsupportedCopy: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
   },
   loadingWrap: {
     alignItems: "center",

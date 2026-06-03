@@ -18,15 +18,24 @@ import { useColors } from "@/hooks/useColors";
 type Props = {
   selected: string | null;
   onChange: (suburb: string | null) => void;
+  /** When set, only these suburb labels appear (e.g. seed-backed profile localities). */
+  suburbs?: string[];
+  placeholder?: string;
 };
 
-export function SuburbSelector({ selected, onChange }: Props) {
+export function SuburbSelector({
+  selected,
+  onChange,
+  suburbs,
+  placeholder = "Any suburb",
+}: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [modalOpen, setModalOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const filtered = SUBURBS.filter((s) =>
+  const options = suburbs ?? SUBURBS;
+  const filtered = options.filter((s) =>
     s.toLowerCase().includes(query.toLowerCase())
   );
 
@@ -72,7 +81,7 @@ export function SuburbSelector({ selected, onChange }: Props) {
       >
         <Feather name="map-pin" size={14} color={colors.mutedForeground} />
         <Text style={[styles.triggerText, { color: colors.mutedForeground }]}>
-          Any suburb
+          {placeholder}
         </Text>
         <Feather name="chevron-down" size={14} color={colors.mutedForeground} />
       </TouchableOpacity>
