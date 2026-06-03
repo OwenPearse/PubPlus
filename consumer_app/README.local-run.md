@@ -78,6 +78,15 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 7. With location denied, set a Profile default suburb and reload — confirm distance search works using profile/reference coordinates when no suburb is selected in Search.
 8. With location denied and no profile suburb, confirm distance chips stay disabled until a Search suburb is selected (Stage 2 rule: no `radius_m` without `lat`/`lng`).
 
+## Stage 9 Venue detail contract verification
+
+1. `GET /api/v1/venues/{venue_id}` for a seeded published venue — compare JSON to OpenAPI `VenueDetailResponse` / `VenueDetail*` schemas.
+2. Confirm `events.items` is `[]` and `events.not_implemented` is `true`.
+3. Confirm `contact.not_implemented` is `true` when contact items are empty.
+4. Open the same venue in the consumer app — detail screen loads without errors.
+5. Confirm no fake event rows when `events.items` is empty.
+6. When authenticated, confirm save toggle still reflects `authenticated_actions.is_saved`.
+
 ## Stage 8 Contract verification
 
 1. `GET /api/v1/search/filters` — confirm `event_filters` is `[]`.

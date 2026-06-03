@@ -306,7 +306,9 @@ The detail payload must be able to support:
 - drink/tap highlights where available
 - contact links
 - authenticated save action state
-- correction/new-submission entry point support
+- correction/new-submission entry point support (separate submissions API; not embedded in detail JSON)
+
+**Contract:** `GET /api/v1/venues/{venue_id}` returns `{ "data": { ... } }` with blocks `identity`, `location`, `hours`, `photos`, `features`, `specials`, `events`, `drinks`, `contact`, `authenticated_actions`. Machine-readable field list: `consumer_app/lib/api-spec/openapi.yaml` (`VenueDetail*` schemas). **MVP:** `events.items` is empty with `not_implemented: true`; `contact.items` is empty with `not_implemented: true`.
 
 ### Freshness/provenance handling
 

@@ -278,25 +278,30 @@ Auth
 
 Public, with optional authenticated enrichment
 
-Must include for MVP
-name
-type
-address
-suburb
-map coordinates
-hours
-open_now
-photos
-venue features
-specials
-events
-tap/drink highlights where available
-contact links
-save state if authenticated
-correction/new-submission entry affordance data if useful
+Response wrapper
+
+```json
+{ "data": { "identity": {}, "location": {}, "hours": {}, "photos": {}, "features": {}, "specials": {}, "events": {}, "drinks": {}, "contact": {}, "authenticated_actions": {} } }
+```
+
+Implemented blocks (see `consumer_app/lib/api-spec/openapi.yaml` `VenueDetail*` schemas):
+
+- `identity` — id, name, slug, venue_type, descriptions, operational_status
+- `location` — suburb, address lines, postal_code, country_code, lat/lng
+- `hours` — open_now (nullable until computed), open_now_uncomputed, regular[], exceptions[]
+- `photos` — hero_photo_url, items[] (storage paths + resolved public URLs)
+- `features` — items[] with stable_key, label, value fields
+- `specials` — items[] with structured_kind, short_label, headline
+- `events` — **MVP:** `items: []`, `not_implemented: true` (no published event catalog)
+- `drinks` — highlights[] (tap lines)
+- `contact` — **MVP:** `items: []`, `not_implemented: true`
+- `authenticated_actions` — can_save, is_saved (null when anonymous), save_requires_auth
+
 Notes
 
-Freshness/provenance should remain mostly internal in MVP, with only light user-facing freshness messaging where useful.
+- No moderation/workflow/owner fields in public detail.
+- Correction affordance is a separate authenticated submission flow, not embedded in this response.
+- Freshness/provenance remains mostly internal in MVP.
 
 Consumer-authenticated endpoint groups
 6. Saved venues

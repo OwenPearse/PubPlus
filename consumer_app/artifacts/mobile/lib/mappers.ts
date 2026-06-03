@@ -50,39 +50,62 @@ export type MapResponse = {
   };
 };
 
+/** Mirrors GET /api/v1/venues/{venue_id} (see openapi VenueDetail* schemas). */
 type VenueDetailResponse = {
   data: {
     identity: {
       id: string;
       name: string;
+      slug: string | null;
       venue_type: string | null;
       short_description: string | null;
       long_description: string | null;
+      operational_status: string | null;
     };
     location: {
       suburb: string;
       address_line_1: string | null;
       address_line_2: string | null;
+      postal_code: string | null;
+      country_code: string;
       latitude: number;
       longitude: number;
     };
     hours: {
       open_now: boolean | null;
+      open_now_uncomputed: boolean;
       regular: Array<{
         day_of_week: number;
         opens_at: string;
         closes_at: string;
+        crosses_midnight: boolean;
+        sort_order: number;
+      }>;
+      exceptions: Array<{
+        start_date: string;
+        end_date: string;
+        exception_kind: string;
+        opens_at: string | null;
+        closes_at: string | null;
+        crosses_midnight: boolean;
+        note: string | null;
       }>;
     };
     photos: {
       hero_photo_url: string | null;
       items: Array<{
+        id: string | null;
+        sort_order: number | null;
+        storage_object_path: string | null;
         url: string | null;
+        is_hero: boolean;
       }>;
     };
     features: {
       items: Array<{
+        stable_key: string;
         label: string;
+        value_code: string | null;
         value_label: string | null;
         value_boolean: boolean | null;
       }>;
@@ -90,6 +113,7 @@ type VenueDetailResponse = {
     specials: {
       items: Array<{
         id: string;
+        structured_kind: string;
         short_label: string;
         headline: string | null;
       }>;
@@ -99,14 +123,18 @@ type VenueDetailResponse = {
         id: string;
         title: string;
         starts_at: string | null;
+        ends_at: string | null;
         description: string | null;
       }>;
+      not_implemented: boolean;
     };
     drinks: {
       highlights: Array<{
         id: string;
         line_label: string;
         product_name: string | null;
+        is_rotating: boolean;
+        is_guest_tap: boolean;
       }>;
     };
     contact: {
@@ -115,9 +143,12 @@ type VenueDetailResponse = {
         value: string;
         display_label: string | null;
       }>;
+      not_implemented: boolean;
     };
-    authenticated_actions?: {
+    authenticated_actions: {
+      can_save: boolean;
       is_saved: boolean | null;
+      save_requires_auth: boolean;
     };
   };
 };
@@ -271,7 +302,7 @@ export function mapVenueDetailResponse(response: VenueDetailResponse): Venue {
     imageColor: DEFAULT_IMAGE_COLOR,
     latitude: location.latitude,
     longitude: location.longitude,
-    isSaved: data.authenticated_actions?.is_saved ?? false,
+    isSaved: data.authenticated_actions.is_saved ?? false,
     phone: contact.phone,
     website: contact.website,
     openingHours: mapRegularHours(data.hours.regular),
