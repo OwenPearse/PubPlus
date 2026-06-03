@@ -8,6 +8,8 @@ Canonical narrative docs: `backend/docs/API_ENDPOINT_OVERVIEW.md`.
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./correctionAttributeItem";
+export * from "./correctionAttributesProposedValues";
 export * from "./correctionSubmissionRequest";
 export * from "./correctionSubmissionRequestDomain";
 export * from "./correctionSubmissionRequestProposedValues";
@@ -58,6 +60,7 @@ export * from "./searchFilterDrinkType";
 export * from "./searchFilterKeyLabel";
 export * from "./searchFiltersData";
 export * from "./searchFiltersResponse";
+export * from "./searchFilterVenueFeature";
 export * from "./searchVenuesParams";
 export * from "./searchVenuesResponse";
 export * from "./searchVenuesResponseData";

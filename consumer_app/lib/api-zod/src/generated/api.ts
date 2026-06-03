@@ -137,11 +137,28 @@ export const SearchVenuesResponse = zod.object({
 export const SearchFiltersResponse = zod.object({
   data: zod.object({
     venue_features: zod.array(
-      zod.object({
-        key: zod.string(),
-        label: zod.string(),
-        group: zod.string().nullish(),
-      }),
+      zod
+        .object({
+          key: zod
+            .string()
+            .describe(
+              "Attribute stable_key accepted by `venue_features` on Search.",
+            ),
+          definition_id: zod
+            .string()
+            .uuid()
+            .describe(
+              "Attribute definition UUID for structured correction submissions.",
+            ),
+          label: zod.string(),
+          group: zod
+            .string()
+            .nullish()
+            .describe("Optional UI grouping label (not stored in schema)."),
+        })
+        .describe(
+          "Canonical boolean venue feature for Search filters and attribute corrections.",
+        ),
     ),
     drink_types: zod.array(
       zod.object({
@@ -662,7 +679,11 @@ Consumer attribute-correction UI may be deferred; backend accepts `attributes` w
 export const SubmitCorrectionBody = zod.object({
   venue_id: zod.string().uuid(),
   domain: zod.enum(["profile", "location", "attributes", "hours"]),
-  proposed_values: zod.record(zod.string(), zod.unknown()),
+  proposed_values: zod
+    .record(zod.string(), zod.unknown())
+    .describe(
+      "Domain-specific payload. For `attributes`, use CorrectionAttributesProposedValues (`items[]` with `attribute_definition_id` and exactly one of value_boolean, allowed_value_id, or value_numeric).",
+    ),
   note: zod.string().nullish(),
 });
 

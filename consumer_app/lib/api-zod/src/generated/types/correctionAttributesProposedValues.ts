@@ -7,8 +7,9 @@ Canonical narrative docs: `backend/docs/API_ENDPOINT_OVERVIEW.md`.
 
  * OpenAPI spec version: 0.1.0
  */
-import type { VenueDetailSpecial } from './venueDetailSpecial';
+import type { CorrectionAttributeItem } from "./correctionAttributeItem";
 
-export interface VenueDetailSpecials {
-  items: VenueDetailSpecial[];
+export interface CorrectionAttributesProposedValues {
+  /** @minItems 1 */
+  items: CorrectionAttributeItem[];
 }

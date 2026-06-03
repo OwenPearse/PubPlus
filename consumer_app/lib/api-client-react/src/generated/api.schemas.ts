@@ -76,13 +76,29 @@ export interface SearchFilterKeyLabel {
   group?: string | null;
 }
 
+/**
+ * Canonical boolean venue feature for Search filters and attribute corrections.
+ */
+export interface SearchFilterVenueFeature {
+  /** Attribute stable_key accepted by `venue_features` on Search. */
+  key: string;
+  /** Attribute definition UUID for structured correction submissions. */
+  definition_id: string;
+  label: string;
+  /**
+   * Optional UI grouping label (not stored in schema).
+   * @nullable
+   */
+  group?: string | null;
+}
+
 export interface SearchFilterDrinkType {
   id: string;
   label: string;
 }
 
 export interface SearchFiltersData {
-  venue_features: SearchFilterKeyLabel[];
+  venue_features: SearchFilterVenueFeature[];
   drink_types: SearchFilterDrinkType[];
   meal_specials: SearchFilterKeyLabel[];
   /** Empty until a published event catalog exists; clients must not render event filter chips when empty. */
@@ -440,6 +456,23 @@ export interface SubmissionAckResponse {
   message: string;
 }
 
+/**
+ * One proposed boolean attribute value for domain `attributes`.
+ */
+export interface CorrectionAttributeItem {
+  attribute_definition_id: string;
+  value_boolean?: boolean;
+  /** @nullable */
+  allowed_value_id?: string | null;
+  /** @nullable */
+  value_numeric?: number | null;
+}
+
+export interface CorrectionAttributesProposedValues {
+  /** @minItems 1 */
+  items: CorrectionAttributeItem[];
+}
+
 export type CorrectionSubmissionRequestDomain =
   (typeof CorrectionSubmissionRequestDomain)[keyof typeof CorrectionSubmissionRequestDomain];
 
@@ -450,6 +483,9 @@ export const CorrectionSubmissionRequestDomain = {
   hours: "hours",
 } as const;
 
+/**
+ * Domain-specific payload. For `attributes`, use CorrectionAttributesProposedValues (`items[]` with `attribute_definition_id` and exactly one of value_boolean, allowed_value_id, or value_numeric).
+ */
 export type CorrectionSubmissionRequestProposedValues = {
   [key: string]: unknown;
 };
@@ -457,6 +493,7 @@ export type CorrectionSubmissionRequestProposedValues = {
 export interface CorrectionSubmissionRequest {
   venue_id: string;
   domain: CorrectionSubmissionRequestDomain;
+  /** Domain-specific payload. For `attributes`, use CorrectionAttributesProposedValues (`items[]` with `attribute_definition_id` and exactly one of value_boolean, allowed_value_id, or value_numeric). */
   proposed_values: CorrectionSubmissionRequestProposedValues;
   /** @nullable */
   note?: string | null;

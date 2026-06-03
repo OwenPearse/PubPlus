@@ -689,6 +689,27 @@ components:
       required:
         - key
         - label
+    SearchFilterVenueFeature:
+      type: object
+      description: Canonical boolean venue feature for Search filters and attribute corrections.
+      properties:
+        key:
+          type: string
+          description: Attribute stable_key accepted by `venue_features` on Search.
+        definition_id:
+          type: string
+          format: uuid
+          description: Attribute definition UUID for structured correction submissions.
+        label:
+          type: string
+        group:
+          type: string
+          nullable: true
+          description: Optional UI grouping label (not stored in schema).
+      required:
+        - key
+        - definition_id
+        - label
     SearchFilterDrinkType:
       type: object
       properties:
@@ -706,7 +727,7 @@ components:
         venue_features:
           type: array
           items:
-            $ref: "#/components/schemas/SearchFilterKeyLabel"
+            $ref: "#/components/schemas/SearchFilterVenueFeature"
         drink_types:
           type: array
           items:
@@ -1340,6 +1361,34 @@ components:
       required:
         - status
         - message
+    CorrectionAttributeItem:
+      type: object
+      description: One proposed boolean attribute value for domain `attributes`.
+      properties:
+        attribute_definition_id:
+          type: string
+          format: uuid
+        value_boolean:
+          type: boolean
+        allowed_value_id:
+          type: string
+          format: uuid
+          nullable: true
+        value_numeric:
+          type: number
+          nullable: true
+      required:
+        - attribute_definition_id
+    CorrectionAttributesProposedValues:
+      type: object
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CorrectionAttributeItem"
+      required:
+        - items
     CorrectionSubmissionRequest:
       type: object
       properties:
@@ -1352,6 +1401,10 @@ components:
         proposed_values:
           type: object
           additionalProperties: true
+          description: >-
+            Domain-specific payload. For `attributes`, use CorrectionAttributesProposedValues
+            (`items[]` with `attribute_definition_id` and exactly one of value_boolean,
+            allowed_value_id, or value_numeric).
         note:
           type: string
           nullable: true

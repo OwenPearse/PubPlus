@@ -7,7 +7,12 @@ from django.db.utils import DatabaseError
 
 _MOCK_REFERENCE = {
     "venue_features": [
-        {"key": "beer_garden", "label": "Beer garden", "group": "spaces"},
+        {
+            "key": "beer_garden",
+            "definition_id": "a1111111-1111-4111-8111-111111111101",
+            "label": "Beer garden",
+            "group": "spaces",
+        },
     ],
     "drink_types": [
         {
@@ -40,6 +45,10 @@ class SearchFiltersEndpointTests(SimpleTestCase):
         self.assertIn("event_filters", data)
         self.assertEqual(data["event_filters"], [])
         self.assertEqual(data["venue_features"][0]["key"], "beer_garden")
+        self.assertEqual(
+            data["venue_features"][0]["definition_id"],
+            "a1111111-1111-4111-8111-111111111101",
+        )
         self.assertEqual(
             data["drink_types"][0]["id"],
             "b3333333-3333-4333-8333-333333333401",
@@ -134,8 +143,10 @@ class SearchFiltersDbIntegrationTests(TestCase):
 
         for feature in data["venue_features"]:
             self.assertIn("key", feature)
+            self.assertIn("definition_id", feature)
             self.assertIn("label", feature)
             self.assertTrue(feature["key"].strip())
+            uuid.UUID(str(feature["definition_id"]))
 
         for drink in data["drink_types"]:
             self.assertIn("id", drink)

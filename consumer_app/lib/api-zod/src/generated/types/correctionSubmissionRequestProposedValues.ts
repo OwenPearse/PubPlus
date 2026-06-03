@@ -8,6 +8,9 @@ Canonical narrative docs: `backend/docs/API_ENDPOINT_OVERVIEW.md`.
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Domain-specific payload. For `attributes`, use CorrectionAttributesProposedValues (`items[]` with `attribute_definition_id` and exactly one of value_boolean, allowed_value_id, or value_numeric).
+ */
 export type CorrectionSubmissionRequestProposedValues = {
   [key: string]: unknown;
 };

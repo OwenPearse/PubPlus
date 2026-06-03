@@ -1,15 +1,21 @@
 import { useCallback, useState } from "react";
 
+import type {
+  CorrectionAttributeItem,
+  CorrectionAttributesProposedValues,
+} from "@workspace/api-client-react";
 import { privateApiRequest, type ApiRequestError } from "@/lib/api";
 
-export type CorrectionDomain = "profile" | "location" | "hours";
+export type CorrectionDomain = "profile" | "location" | "attributes" | "hours";
 
 export type SubmitCorrectionPayload = {
   venue_id: string;
   domain: CorrectionDomain;
-  proposed_values: Record<string, unknown>;
+  proposed_values: Record<string, unknown> | CorrectionAttributesProposedValues;
   note?: string;
 };
+
+export type { CorrectionAttributeItem, CorrectionAttributesProposedValues };
 
 export type SuggestVenuePayload = {
   name: string;

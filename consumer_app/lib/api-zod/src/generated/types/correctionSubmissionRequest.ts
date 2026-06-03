@@ -13,6 +13,7 @@ import type { CorrectionSubmissionRequestProposedValues } from "./correctionSubm
 export interface CorrectionSubmissionRequest {
   venue_id: string;
   domain: CorrectionSubmissionRequestDomain;
+  /** Domain-specific payload. For `attributes`, use CorrectionAttributesProposedValues (`items[]` with `attribute_definition_id` and exactly one of value_boolean, allowed_value_id, or value_numeric). */
   proposed_values: CorrectionSubmissionRequestProposedValues;
   /** @nullable */
   note?: string | null;

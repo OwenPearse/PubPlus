@@ -9,9 +9,10 @@ Canonical narrative docs: `backend/docs/API_ENDPOINT_OVERVIEW.md`.
  */
 import type { SearchFilterDrinkType } from "./searchFilterDrinkType";
 import type { SearchFilterKeyLabel } from "./searchFilterKeyLabel";
+import type { SearchFilterVenueFeature } from "./searchFilterVenueFeature";
 
 export interface SearchFiltersData {
-  venue_features: SearchFilterKeyLabel[];
+  venue_features: SearchFilterVenueFeature[];
   drink_types: SearchFilterDrinkType[];
   meal_specials: SearchFilterKeyLabel[];
   /** Empty until a published event catalog exists; clients must not render event filter chips when empty. */

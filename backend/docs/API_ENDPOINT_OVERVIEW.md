@@ -159,7 +159,12 @@ Response shape
 {
   "data": {
     "venue_features": [
-      { "key": "beer_garden", "label": "Beer garden", "group": "spaces" }
+      {
+        "key": "beer_garden",
+        "definition_id": "uuid",
+        "label": "Beer garden",
+        "group": "spaces"
+      }
     ],
     "drink_types": [
       { "id": "uuid", "label": "Craft beer" }
@@ -175,6 +180,7 @@ Response shape
 Semantics
 
 - `venue_features[].key` — attribute `stable_key` accepted by `venue_features` on Search (boolean discovery-driving definitions).
+- `venue_features[].definition_id` — attribute definition UUID for structured correction submissions (`domain=attributes`).
 - `drink_types[].id` — `beverage_product.id` UUID accepted by `drink_types` on Search.
 - `meal_specials[].key` — structured special kind accepted by `meal_specials` on Search (MVP: `meal_special` only).
 - `event_filters` — intentionally empty until a published public events catalog exists. **Clients must not render event filter chips unless this array is non-empty.**

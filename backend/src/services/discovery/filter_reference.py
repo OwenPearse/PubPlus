@@ -34,7 +34,7 @@ def _load_venue_features() -> list[dict[str, Any]]:
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT stable_key, display_label
+            SELECT id::text, stable_key, display_label
             FROM public.venue_attribute_definition
             WHERE is_discovery_driving = true
               AND value_shape = 'boolean'
@@ -45,10 +45,11 @@ def _load_venue_features() -> list[dict[str, Any]]:
     return [
         {
             "key": stable_key,
+            "definition_id": definition_id,
             "label": display_label,
             "group": _VENUE_FEATURE_GROUPS.get(stable_key),
         }
-        for stable_key, display_label in rows
+        for definition_id, stable_key, display_label in rows
     ]
 
 

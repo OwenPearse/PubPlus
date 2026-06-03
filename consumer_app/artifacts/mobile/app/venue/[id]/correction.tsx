@@ -12,13 +12,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  AttributeFeatureCorrectionPicker,
+  type FeatureCorrectionChoice,
+} from "@/components/AttributeFeatureCorrectionPicker";
 import { useAuthSession } from "@/hooks/useAuthSession";
+import { useSearchFilters } from "@/hooks/useSearchFilters";
 import { CorrectionDomain, useSubmissions } from "@/hooks/useSubmissions";
 import { useColors } from "@/hooks/useColors";
 
 const DOMAIN_OPTIONS: Array<{ value: CorrectionDomain; label: string }> = [
   { value: "profile", label: "Basic venue info" },
   { value: "location", label: "Location/address" },
+  { value: "attributes", label: "Features & amenities" },
   { value: "hours", label: "Opening hours" },
 ];
 
@@ -29,8 +35,15 @@ export default function VenueCorrectionScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
   const { isAuthenticated, loading: authLoading } = useAuthSession();
   const { submitCorrection, submitting, error, fieldErrors, authRequired } = useSubmissions();
+  const {
+    filters,
+    loading: filtersLoading,
+    error: filtersError,
+    refresh: refreshFilters,
+  } = useSearchFilters();
 
   const [domain, setDomain] = useState<CorrectionDomain>("profile");
+  const [featureChoices, setFeatureChoices] = useState<Record<string, FeatureCorrectionChoice>>({});
   const [displayName, setDisplayName] = useState("");
   const [shortDescription, setShortDescription] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
@@ -48,8 +61,15 @@ export default function VenueCorrectionScreen() {
   const domainHelper = useMemo(() => {
     if (domain === "profile") return "Suggest corrected name or summary details.";
     if (domain === "location") return "Suggest corrected address information.";
+    if (domain === "attributes") {
+      return "Suggest whether features like beer garden, rooftop, pool table, sports screens or dog friendly access are available.";
+    }
     return "Add a contextual note about opening hours changes.";
   }, [domain]);
+
+  function handleFeatureChoiceChange(definitionId: string, choice: FeatureCorrectionChoice) {
+    setFeatureChoices((prev) => ({ ...prev, [definitionId]: choice }));
+  }
 
   async function handleSubmit() {
     setLocalValidationError(null);
@@ -72,17 +92,39 @@ export default function VenueCorrectionScreen() {
       return;
     }
 
-    const proposedValues: Record<string, unknown> = {};
-    if (domain === "profile") {
+    let proposedValues: Record<string, unknown> | { items: Array<{ attribute_definition_id: string; value_boolean: boolean }> };
+    let submitNote: string | undefined = note.trim() || undefined;
+
+    if (domain === "attributes") {
+      const items = filters.venue_features
+        .filter((feature) => {
+          const choice = featureChoices[feature.definition_id] ?? "unchanged";
+          return choice === "present" || choice === "absent";
+        })
+        .map((feature) => ({
+          attribute_definition_id: feature.definition_id,
+          value_boolean: (featureChoices[feature.definition_id] ?? "unchanged") === "present",
+        }));
+      if (items.length === 0) {
+        setLocalValidationError("Mark at least one feature as Present or Not present.");
+        return;
+      }
+      proposedValues = { items };
+    } else if (domain === "profile") {
+      proposedValues = {};
       if (displayName.trim()) proposedValues.display_name = displayName.trim();
       if (shortDescription.trim()) proposedValues.short_description = shortDescription.trim();
     } else if (domain === "location") {
+      proposedValues = {};
       if (addressLine1.trim()) proposedValues.address_line_1 = addressLine1.trim();
       if (postcode.trim()) proposedValues.postcode = postcode.trim();
       if (countryCode.trim()) proposedValues.country_code = countryCode.trim().toUpperCase();
     } else {
-      proposedValues.regular_hours_json = [];
-      proposedValues.exceptions_json = [];
+      proposedValues = {
+        regular_hours_json: [],
+        exceptions_json: [],
+      };
+      submitNote = `${hoursNote.trim()} ${note.trim()}`.trim() || undefined;
     }
 
     try {
@@ -90,7 +132,7 @@ export default function VenueCorrectionScreen() {
         venue_id: venueId,
         domain,
         proposed_values: proposedValues,
-        note: domain === "hours" ? `${hoursNote.trim()} ${note.trim()}`.trim() || undefined : note.trim() || undefined,
+        note: submitNote,
       });
       setSuccessMessage(response.message);
     } catch {
@@ -228,6 +270,17 @@ export default function VenueCorrectionScreen() {
             maxLength={2}
           />
         </>
+      ) : null}
+
+      {domain === "attributes" ? (
+        <AttributeFeatureCorrectionPicker
+          features={filters.venue_features}
+          choices={featureChoices}
+          onChoiceChange={handleFeatureChoiceChange}
+          loading={filtersLoading}
+          error={filtersError}
+          onRetry={refreshFilters}
+        />
       ) : null}
 
       {domain === "hours" ? (

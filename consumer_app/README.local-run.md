@@ -124,6 +124,24 @@ Workflow:
 
 Stage 11: Home, Search, Map, saved-list, and shared `PublicVenueCard` API inputs use generated OpenAPI schema types from `@workspace/api-client-react`; runtime still uses `publicApiRequest` / `privateApiRequest` (not generated React Query hooks). Profile types remain hand-written until optional-field normalization is defined.
 
+## Stage 12 Attribute correction UX
+
+1. Start backend and consumer app.
+2. Log in.
+3. Open a venue detail page.
+4. Open correction flow.
+5. Confirm **Features & amenities** is available.
+6. Select it.
+7. Confirm features load from `GET /api/v1/search/filters` (`venue_features[].definition_id` + labels).
+8. Mark **Beer garden** as **Present** (tri-state; leave others on **No change**).
+9. Optionally add a note.
+10. Submit.
+11. Confirm request uses `domain=attributes`.
+12. Confirm `proposed_values.items[]` contains `attribute_definition_id` and `value_boolean` (not stable_key).
+13. Confirm backend returns `201` / `status: received`.
+14. Confirm profile/location/hours correction flows still work.
+15. Confirm event correction is not shown.
+
 ## Stage 7 Search locality reference alignment manual verification
 
 1. Re-run dev DB seed.

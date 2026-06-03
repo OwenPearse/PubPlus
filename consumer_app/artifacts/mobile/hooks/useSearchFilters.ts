@@ -8,6 +8,7 @@ export type {
   SearchFilterKeyLabel as EventFilter,
   SearchFilterKeyLabel as MealSpecialFilter,
   SearchFiltersData,
+  SearchFilterVenueFeature,
   SearchFilterKeyLabel as VenueFeatureFilter,
 } from "@workspace/api-client-react";
 
