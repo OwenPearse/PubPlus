@@ -1,38 +1,15 @@
+import type { SearchFiltersData, SearchFiltersResponse } from "@workspace/api-client-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { publicApiRequest } from "@/lib/api";
 
-export type VenueFeatureFilter = {
-  key: string;
-  label: string;
-  group?: string | null;
-};
-
-export type DrinkTypeFilter = {
-  id: string;
-  label: string;
-};
-
-export type MealSpecialFilter = {
-  key: string;
-  label: string;
-};
-
-export type EventFilter = {
-  key: string;
-  label: string;
-};
-
-export type SearchFiltersData = {
-  venue_features: VenueFeatureFilter[];
-  drink_types: DrinkTypeFilter[];
-  meal_specials: MealSpecialFilter[];
-  event_filters: EventFilter[];
-};
-
-type SearchFiltersResponse = {
-  data: SearchFiltersData;
-};
+export type {
+  SearchFilterDrinkType as DrinkTypeFilter,
+  SearchFilterKeyLabel as EventFilter,
+  SearchFilterKeyLabel as MealSpecialFilter,
+  SearchFiltersData,
+  SearchFilterKeyLabel as VenueFeatureFilter,
+} from "@workspace/api-client-react";
 
 const EMPTY_FILTERS: SearchFiltersData = {
   venue_features: [],

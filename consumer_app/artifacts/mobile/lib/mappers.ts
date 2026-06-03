@@ -1,4 +1,7 @@
+import type { VenueDetailResponse } from "@workspace/api-client-react";
 import type { Event, OpeningHours, Special, Venue } from "@/data/mockData";
+
+export type { VenueDetailResponse };
 
 type PublicVenueCard = {
   id: string;
@@ -50,113 +53,10 @@ export type MapResponse = {
   };
 };
 
-/** Mirrors GET /api/v1/venues/{venue_id} (see openapi VenueDetail* schemas). */
-type VenueDetailResponse = {
-  data: {
-    identity: {
-      id: string;
-      name: string;
-      slug: string | null;
-      venue_type: string | null;
-      short_description: string | null;
-      long_description: string | null;
-      operational_status: string | null;
-    };
-    location: {
-      suburb: string;
-      address_line_1: string | null;
-      address_line_2: string | null;
-      postal_code: string | null;
-      country_code: string;
-      latitude: number;
-      longitude: number;
-    };
-    hours: {
-      open_now: boolean | null;
-      open_now_uncomputed: boolean;
-      regular: Array<{
-        day_of_week: number;
-        opens_at: string;
-        closes_at: string;
-        crosses_midnight: boolean;
-        sort_order: number;
-      }>;
-      exceptions: Array<{
-        start_date: string;
-        end_date: string;
-        exception_kind: string;
-        opens_at: string | null;
-        closes_at: string | null;
-        crosses_midnight: boolean;
-        note: string | null;
-      }>;
-    };
-    photos: {
-      hero_photo_url: string | null;
-      items: Array<{
-        id: string | null;
-        sort_order: number | null;
-        storage_object_path: string | null;
-        url: string | null;
-        is_hero: boolean;
-      }>;
-    };
-    features: {
-      items: Array<{
-        stable_key: string;
-        label: string;
-        value_code: string | null;
-        value_label: string | null;
-        value_boolean: boolean | null;
-      }>;
-    };
-    specials: {
-      items: Array<{
-        id: string;
-        structured_kind: string;
-        short_label: string;
-        headline: string | null;
-      }>;
-    };
-    events: {
-      items: Array<{
-        id: string;
-        title: string;
-        starts_at: string | null;
-        ends_at: string | null;
-        description: string | null;
-      }>;
-      not_implemented: boolean;
-    };
-    drinks: {
-      highlights: Array<{
-        id: string;
-        line_label: string;
-        product_name: string | null;
-        is_rotating: boolean;
-        is_guest_tap: boolean;
-      }>;
-    };
-    contact: {
-      items: Array<{
-        link_type: string;
-        value: string;
-        display_label: string | null;
-      }>;
-      not_implemented: boolean;
-    };
-    authenticated_actions: {
-      can_save: boolean;
-      is_saved: boolean | null;
-      save_requires_auth: boolean;
-    };
-  };
-};
-
 const DEFAULT_IMAGE_COLOR = "#2c3e50";
 const DAY_INDEX_TO_KEY: Array<keyof OpeningHours> = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function normalizeVenueType(value: string | null): Venue["type"] {
+function normalizeVenueType(value: string | null | undefined): Venue["type"] {
   const normalized = (value ?? "").toLowerCase();
   if (normalized.includes("rooftop")) return "rooftop";
   if (normalized.includes("sports")) return "sports bar";
@@ -165,7 +65,7 @@ function normalizeVenueType(value: string | null): Venue["type"] {
   return "pub";
 }
 
-function openNowToLabel(openNow: boolean | null): string {
+function openNowToLabel(openNow: boolean | null | undefined): string {
   if (openNow === true) return "Open now";
   if (openNow === false) return "Closed now";
   return "Hours listed";
@@ -226,7 +126,7 @@ export function mapCardToVenue(card: PublicVenueCard): Venue {
   };
 }
 
-function formatTime(isoLike: string | null): string {
+function formatTime(isoLike: string | null | undefined): string {
   if (!isoLike) return "TBC";
   const date = new Date(isoLike);
   if (Number.isNaN(date.getTime())) return isoLike;
@@ -308,5 +208,3 @@ export function mapVenueDetailResponse(response: VenueDetailResponse): Venue {
     openingHours: mapRegularHours(data.hours.regular),
   };
 }
-
-export type { VenueDetailResponse };

@@ -7,10 +7,14 @@
     "build": "corepack pnpm run typecheck && corepack pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "corepack pnpm run typecheck:libs && corepack pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "mobile": "pnpm run mobile:start",
+    "web": "pnpm run mobile:web",
     "mobile:start": "corepack pnpm --filter @workspace/mobile exec expo start --localhost",
     "mobile:web": "corepack pnpm --filter @workspace/mobile exec expo start --web --localhost",
     "mobile:android": "corepack pnpm --filter @workspace/mobile exec expo start --android --localhost",
-    "mobile:ios": "corepack pnpm --filter @workspace/mobile exec expo start --ios --localhost"
+    "mobile:ios": "corepack pnpm --filter @workspace/mobile exec expo start --ios --localhost",
+    "openapi:generate": "corepack pnpm --filter @workspace/api-spec run codegen",
+    "openapi:lint": "corepack pnpm --filter @workspace/api-spec run lint"
   },
   "private": true,
   "devDependencies": {

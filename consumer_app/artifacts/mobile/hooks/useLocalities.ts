@@ -1,23 +1,9 @@
+import type { LocalitiesReferenceResponse, LocalityReference } from "@workspace/api-client-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { publicApiRequest } from "@/lib/api";
 
-export type LocalityReference = {
-  id: string;
-  name: string;
-  state?: string;
-  country_code?: string;
-  geographic_region_id: string;
-  geographic_region_name: string;
-  latitude?: number;
-  longitude?: number;
-};
-
-type LocalitiesResponse = {
-  data: {
-    localities: LocalityReference[];
-  };
-};
+export type { LocalityReference };
 
 export function useLocalities() {
   const [localities, setLocalities] = useState<LocalityReference[]>([]);
@@ -28,7 +14,7 @@ export function useLocalities() {
     setLoading(true);
     setError(null);
     try {
-      const response = await publicApiRequest<LocalitiesResponse>(
+      const response = await publicApiRequest<LocalitiesReferenceResponse>(
         "/api/v1/reference/localities"
       );
       setLocalities(response.data?.localities ?? []);

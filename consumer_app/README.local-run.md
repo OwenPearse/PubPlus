@@ -100,6 +100,28 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 
 OpenAPI source: `consumer_app/lib/api-spec/openapi.yaml` (implemented consumer paths only).
 
+## OpenAPI codegen (Stage 10)
+
+Orval generates TypeScript types and React Query hooks from the spec. **Committed** outputs (do not hand-edit):
+
+- `consumer_app/lib/api-client-react/src/generated/` — schema types + React Query client
+- `consumer_app/lib/api-zod/src/generated/` — Zod schemas (`@workspace/api-zod`); TypeScript schema types via `@workspace/api-zod/types` if needed
+
+From `consumer_app/`:
+
+```bash
+corepack pnpm run openapi:lint
+corepack pnpm run openapi:generate
+corepack pnpm run typecheck
+```
+
+Workflow:
+
+1. Update `consumer_app/lib/api-spec/openapi.yaml` when the backend contract changes.
+2. Run `openapi:lint`, then `openapi:generate`.
+3. Import types from `@workspace/api-client-react` in mobile mappers/hooks (keep existing `publicApiRequest` / `privateApiRequest` fetch paths unless migrating to generated hooks intentionally).
+4. Never edit files under `*/generated/` manually.
+
 ## Stage 7 Search locality reference alignment manual verification
 
 1. Re-run dev DB seed.
