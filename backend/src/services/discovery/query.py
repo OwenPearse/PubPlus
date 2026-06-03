@@ -24,6 +24,7 @@ from services.discovery.filters import (
     MEAL_STRUCT_KINDS,
 )
 from services.discovery.open_now import OpenNowResult, compute_open_now
+from services.discovery.q_text import sql_ilike_pattern
 from services.discovery.ranking import apply_open_now_to_card, score_rank
 
 
@@ -97,6 +98,12 @@ SELECT
     """
 
     w: list[str] = []
+    if f.has_q():
+        pattern = sql_ilike_pattern(f.q)  # type: ignore[arg-type]
+        w.append(
+            "(vpp.display_name ILIKE %s ESCAPE '\\' OR l.name ILIKE %s ESCAPE '\\')"
+        )
+        p.extend([pattern, pattern])
     if f.suburb and str(f.suburb).strip():
         w.append("lower(l.name) = lower(%s)")
         p.append(f.suburb.strip())

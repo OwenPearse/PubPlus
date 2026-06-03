@@ -32,6 +32,7 @@ import {
   getSearchOriginFromSuburb,
   isValidSearchOrigin,
 } from "@/lib/searchOrigin";
+import { normalizeSearchQ } from "@/lib/searchQuery";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function SearchScreen() {
   const bottomInset = Platform.OS === "web" ? 34 : 0;
 
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedSuburb, setSelectedSuburb] = useState<string | null>(null);
   const [selectedDrinks, setSelectedDrinks] = useState<Set<string>>(new Set());
   const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
@@ -67,6 +69,11 @@ export default function SearchScreen() {
       setDistanceKm(null);
     }
   }, [canUseDistanceFilter, distanceKm]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(handle);
+  }, [query]);
 
   const featureLabelByKey = useMemo(() => {
     const map = new Map<string, string>();
@@ -195,13 +202,16 @@ export default function SearchScreen() {
     featureLabelByKey,
   ]);
 
+  const normalizedQ = useMemo(() => normalizeSearchQ(debouncedQuery), [debouncedQuery]);
+
   const searchQuery = useMemo(() => {
-    const query: {
+    const params: {
       suburb?: string;
       open_now?: boolean;
       lat?: number;
       lng?: number;
       radius_m?: number;
+      q?: string;
       meal_specials: string[];
       drink_types: string[];
       venue_features: string[];
@@ -212,20 +222,24 @@ export default function SearchScreen() {
       drink_types: Array.from(selectedDrinks),
       venue_features: Array.from(selectedFeatures),
     };
+    if (normalizedQ) {
+      params.q = normalizedQ;
+    }
     if (
       canUseDistanceFilter &&
       searchOrigin &&
       distanceKm !== null &&
       distanceKm > 0
     ) {
-      query.lat = searchOrigin.lat;
-      query.lng = searchOrigin.lng;
-      query.radius_m = distanceKm * 1000;
+      params.lat = searchOrigin.lat;
+      params.lng = searchOrigin.lng;
+      params.radius_m = distanceKm * 1000;
     }
-    return query;
+    return params;
   }, [
     canUseDistanceFilter,
     distanceKm,
+    normalizedQ,
     openNowOnly,
     searchOrigin,
     selectedDrinks,
@@ -568,10 +582,15 @@ export default function SearchScreen() {
         <SectionHeader
           title={loading ? "Loading venues" : results.length > 0 ? `${results.length} venues` : "No results"}
           subtitle={
-            activeFilterCount > 0
-              ? `${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`
-              : query
-              ? "Text search is deferred; filters are live"
+            activeFilterCount > 0 || normalizedQ
+              ? [
+                  normalizedQ ? `“${normalizedQ}”` : null,
+                  activeFilterCount > 0
+                    ? `${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
               : "All Melbourne"
           }
         />
@@ -595,12 +614,6 @@ export default function SearchScreen() {
             Can't find a venue? Suggest one
           </Text>
         </TouchableOpacity>
-
-        {query ? (
-          <Text style={[styles.queryDeferred, { color: colors.mutedForeground }]}>
-            Text search is not available on the backend yet. Filters are live.
-          </Text>
-        ) : null}
 
         {loading ? (
           <View style={styles.loadingWrap}>
@@ -630,7 +643,11 @@ export default function SearchScreen() {
           <EmptyState
             icon="search"
             title="No venues found"
-            subtitle="Try adjusting your filters or search term"
+            subtitle={
+              normalizedQ
+                ? `No venues match “${normalizedQ}”. Try another name or suburb.`
+                : "Try adjusting your filters or search term"
+            }
             actionLabel="Clear filters"
             onAction={clearFilters}
           />
@@ -846,12 +863,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
-  queryDeferred: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    fontSize: 12,
     fontFamily: "Inter_400Regular",
   },
   authRequiredCard: {

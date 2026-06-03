@@ -148,12 +148,11 @@ class DiscoveryPublicEndpointTests(SimpleTestCase):
             response.json()["error"]["code"], "open_now_false_unsupported"
         )
 
-    def test_validation_rejects_q_and_events_when_enabled(self):
+    def test_validation_accepts_q_and_rejects_events(self):
         q_response = self.client.get("/api/v1/search/venues", {"q": "beer"})
         events_response = self.client.get("/api/v1/search/venues", {"events": "true"})
 
-        self.assertEqual(q_response.status_code, 400)
-        self.assertEqual(q_response.json()["error"]["code"], "q_unsupported")
+        self.assertNotEqual(q_response.json().get("error", {}).get("code"), "q_unsupported")
         self.assertEqual(events_response.status_code, 400)
         self.assertEqual(events_response.json()["error"]["code"], "events_unavailable")
 

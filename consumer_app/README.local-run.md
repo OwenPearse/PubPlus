@@ -67,6 +67,17 @@ cd backend
 python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_saved_venues_endpoints tests.test_profile_endpoints tests.test_submission_endpoints tests.test_discovery_public_endpoints tests.test_home_and_venue_detail_endpoints
 ```
 
+## Stage 3 Search `q` manual verification
+
+1. Re-run dev DB seed.
+2. Open consumer Search.
+3. Search for a known venue name, e.g. `Penny` — confirm the request includes `q=Penny` and matching venues appear.
+4. Search for a suburb/locality, e.g. `Brunswick` — confirm matching venues appear.
+5. Combine `q` with **Beer garden** — confirm `q` and `venue_features=beer_garden` are both sent.
+6. Clear the search input — confirm `q` is no longer sent.
+7. Enter whitespace-only input — confirm `q` is not sent.
+8. Confirm event filters remain hidden.
+
 ## Stage 2 Search manual verification
 
 1. Re-apply database seeds (`database/supabase/seed.sql` or `supabase db reset`) so `dev_seed_mvp_feature_attribute_values.sql` is loaded.
@@ -77,7 +88,7 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 
 ## Known Deferred UI
 
-- Text search `q` and event-specific search filters are not exposed as live backend filters yet.
+- Event-specific search filters are not exposed as live backend filters yet.
 - Correction submission supports basic profile, location, and hours payloads; attribute-domain lookup UX is deferred.
 - Profile preference chips for drinks/features are preview-only and are not sent to the backend.
 - Google, Facebook, and Apple sign-in require Supabase provider configuration plus external provider dashboard setup.

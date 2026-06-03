@@ -186,7 +186,7 @@ Search venues filter parameters
 
 Dev/demo note: feature filter efficacy depends on seeded `venue_published_attribute_value` rows with `value_boolean = true` for the MVP boolean definitions (`dev_seed_mvp_feature_attribute_values.sql`).
 - `events` — deferred (`400 events_unavailable`).
-- `q` — deferred (`400 q_unsupported`).
+- `q` — MVP text search over published **venue display name** and **locality/suburb name** only (case-insensitive partial `ILIKE` match). Does not search events, specials, drinks, attributes, or internal/moderation content. Trimmed; whitespace-only is ignored; max 100 characters (`400 invalid_q` if longer). Combines with structured filters. No relevance ranking beyond existing discovery ordering.
 
 Notes
 

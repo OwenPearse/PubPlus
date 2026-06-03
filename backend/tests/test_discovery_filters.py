@@ -23,11 +23,10 @@ class TestFilters(SimpleTestCase):
             f.validate(DiscoveryMode.MAP)
         self.assertEqual(ctx.exception.code, "map_needs_viewport")
 
-    def test_list_rejects_q(self) -> None:
+    def test_list_accepts_q(self) -> None:
         f = DiscoveryMvpFilters(q="pizza")
-        with self.assertRaises(DiscoveryFilterError) as ctx:
-            f.validate(DiscoveryMode.LIST)
-        self.assertEqual(ctx.exception.code, "q_unsupported")
+        f.validate(DiscoveryMode.LIST)
+        self.assertTrue(f.has_q())
 
     def test_combined_viewport_and_radius_fails(self) -> None:
         f = DiscoveryMvpFilters(

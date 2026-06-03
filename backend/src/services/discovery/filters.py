@@ -5,6 +5,7 @@ from enum import Enum
 from uuid import UUID
 
 from services.discovery.errors import DiscoveryFilterError
+from services.discovery.q_text import MAX_Q_LENGTH
 
 
 class DiscoveryMode(str, Enum):
@@ -46,8 +47,7 @@ class DiscoveryMvpFilters:
     )  # `beverage_product_id` (uuid string)
     venue_features: list[str] = field(default_factory=list)  # attribute `stable_key`
     require_published_events: bool = False
-    q: str | None = None
-    # optional query hook — disabled until FTS exists (rejects if set)
+    q: str | None = None  # MVP: venue display_name + locality name (ILIKE)
     limit: int = 50
 
     def validate(self, mode: DiscoveryMode) -> None:
@@ -85,10 +85,10 @@ class DiscoveryMvpFilters:
                 "location_with_viewport",
                 "do not combine radius-based search with a viewport; choose one",
             )
-        if self.q is not None and self.q.strip() != "":
+        if self.q is not None and len(self.q) > MAX_Q_LENGTH:
             raise DiscoveryFilterError(
-                "q_unsupported",
-                "text query (q) is not wired to published content search in this tranche; omit q",
+                "invalid_q",
+                f"q must be at most {MAX_Q_LENGTH} characters.",
             )
         if self.require_published_events:
             raise DiscoveryFilterError(
@@ -131,3 +131,6 @@ class DiscoveryMvpFilters:
 
     def has_radius(self) -> bool:
         return all(x is not None for x in (self.lat, self.lng, self.radius_m))
+
+    def has_q(self) -> bool:
+        return self.q is not None and bool(self.q)

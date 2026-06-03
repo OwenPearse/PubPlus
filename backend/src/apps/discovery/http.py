@@ -12,6 +12,7 @@ from services.discovery import (
     DiscoveryMvpFilters,
     DiscoveryQueryError,
 )
+from services.discovery.q_text import normalize_discovery_q
 
 
 COMMON_DISCOVERY_QUERY_PARAMS = frozenset(
@@ -142,7 +143,7 @@ def parse_discovery_filters_from_request(
         require_published_events=bool(
             _get_optional_bool(request, "events") is True
         ),
-        q=request.GET.get("q"),
+        q=normalize_discovery_q(request.GET.get("q")),
         limit=_get_optional_int(request, "limit", default=50),
     )
 
