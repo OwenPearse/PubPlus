@@ -102,7 +102,10 @@ def require_internal_admin_auth(
 
         return view_func(request, *args, **kwargs)
 
-    return wrapped
+    # These endpoints use Authorization: Bearer <Supabase JWT> for auth, not
+    # cookie-backed browser sessions. Exempt CSRF so the portal can call them
+    # without needing a CSRF cookie.
+    return csrf_exempt(wrapped)
 
 
 def optional_consumer_auth(

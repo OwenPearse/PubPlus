@@ -105,6 +105,8 @@ MEDIA_URL = get_env("MEDIA_URL", default="/media/")
 INTERNAL_ADMIN_ENABLED = get_bool("INTERNAL_ADMIN_ENABLED", default=False)
 INTERNAL_ADMIN_TOKEN = get_env("INTERNAL_ADMIN_TOKEN", default="")
 INTERNAL_ADMIN_ALLOWED_IPS = get_list("INTERNAL_ADMIN_ALLOWED_IPS")
+# Supabase JWT `sub` values allowed for /api/v1/internal/* (comma-separated UUIDs)
+PUBPLUS_INTERNAL_ADMIN_SUBJECTS = get_list("PUBPLUS_INTERNAL_ADMIN_SUBJECTS")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = get_env("TIME_ZONE", default="UTC")
