@@ -21,7 +21,7 @@ import { useColors } from "@/hooks/useColors";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { mapViewportAroundOrigin } from "@/lib/discoveryOrigin";
 import { publicApiRequest } from "@/lib/api";
-import { mapCardToVenue, type MapResponse } from "@/lib/mappers";
+import { mapMapMarkerToVenue, type MapResponse } from "@/lib/mappers";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const POPUP_HEIGHT = Math.round(SCREEN_HEIGHT * 0.33);
@@ -78,18 +78,7 @@ export default function MapScreen() {
           query: mapBounds,
         });
         if (cancelled) return;
-        const mapped = (response.data.venues ?? []).map((venue) =>
-          mapCardToVenue({
-            ...venue,
-            venue_type: "pub",
-            address_short: venue.suburb,
-            distance_m: null,
-            feature_badges: [],
-            specials_summary: [],
-            events_summary: [],
-            drink_highlights: [],
-          })
-        );
+        const mapped = (response.data.venues ?? []).map(mapMapMarkerToVenue);
         setVenues(mapped);
       } catch {
         if (cancelled) return;
@@ -300,20 +289,7 @@ export default function MapScreen() {
                 setError(null);
                 publicApiRequest<MapResponse>("/api/v1/map/venues", { query: mapBounds })
                   .then((response) =>
-                    setVenues(
-                      (response.data.venues ?? []).map((venue) =>
-                        mapCardToVenue({
-                          ...venue,
-                          venue_type: "pub",
-                          address_short: venue.suburb,
-                          distance_m: null,
-                          feature_badges: [],
-                          specials_summary: [],
-                          events_summary: [],
-                          drink_highlights: [],
-                        })
-                      )
-                    )
+                    setVenues((response.data.venues ?? []).map(mapMapMarkerToVenue))
                   )
                   .catch(() => setError("Could not load map venues."))
                   .finally(() => setLoading(false));

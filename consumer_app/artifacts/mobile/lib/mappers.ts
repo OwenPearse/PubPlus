@@ -1,57 +1,32 @@
-import type { VenueDetailResponse } from "@workspace/api-client-react";
+import type {
+  HomeFeedResponse,
+  HomeFeedSection,
+  MapVenueMarker,
+  MapVenuesResponse,
+  PublicVenueCard,
+  SearchVenuesResponse,
+  VenueDetailResponse,
+} from "@workspace/api-client-react";
 import type { Event, OpeningHours, Special, Venue } from "@/data/mockData";
 
-export type { VenueDetailResponse };
-
-type PublicVenueCard = {
-  id: string;
-  name: string;
-  venue_type: string | null;
-  suburb: string;
-  address_short: string;
-  latitude: number;
-  longitude: number;
-  hero_photo_url: string | null;
-  open_now: boolean | null;
-  open_now_uncomputed: boolean;
-  distance_m: number | null;
-  feature_badges: string[];
-  specials_summary: string[];
-  events_summary: string[];
-  drink_highlights: string[];
-  is_saved: boolean | null;
+export type {
+  HomeFeedResponse,
+  HomeFeedSection,
+  MapVenueMarker,
+  MapVenuesResponse,
+  PublicVenueCard,
+  SearchVenuesResponse,
+  VenueDetailResponse,
 };
 
-export type HomeResponse = {
-  data: {
-    sections: Array<{
-      id: string;
-      title: string;
-      venues: PublicVenueCard[];
-    }>;
-  };
-};
+/** @deprecated Use `HomeFeedResponse` — alias kept for existing screen imports. */
+export type HomeResponse = HomeFeedResponse;
 
-export type SearchResponse = {
-  data: { venues: PublicVenueCard[] };
-  meta: { count: number; limit: number; mode: string };
-};
+/** @deprecated Use `SearchVenuesResponse` — alias kept for existing screen imports. */
+export type SearchResponse = SearchVenuesResponse;
 
-export type MapResponse = {
-  data: {
-    venues: Array<{
-      id: string;
-      name: string;
-      suburb: string;
-      latitude: number;
-      longitude: number;
-      hero_photo_url: string | null;
-      open_now: boolean | null;
-      open_now_uncomputed: boolean;
-      is_saved: boolean | null;
-    }>;
-  };
-};
+/** @deprecated Use `MapVenuesResponse` — alias kept for existing screen imports. */
+export type MapResponse = MapVenuesResponse;
 
 const DEFAULT_IMAGE_COLOR = "#2c3e50";
 const DAY_INDEX_TO_KEY: Array<keyof OpeningHours> = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -90,6 +65,20 @@ function toEvents(items: PublicVenueCard["events_summary"]): Event[] {
     time: "See details",
     description: "",
   }));
+}
+
+/** Map compact map marker payload into the shared venue card mapper. */
+export function mapMapMarkerToVenue(marker: MapVenueMarker): Venue {
+  return mapCardToVenue({
+    ...marker,
+    venue_type: "pub",
+    address_short: marker.suburb,
+    distance_m: null,
+    feature_badges: [],
+    specials_summary: [],
+    events_summary: [],
+    drink_highlights: [],
+  });
 }
 
 export function mapCardToVenue(card: PublicVenueCard): Venue {

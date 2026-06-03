@@ -1,32 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+import type { SavedVenuesResponse } from "@workspace/api-client-react";
 import type { Venue } from "@/data/mockData";
 import { privateApiRequest, type ApiRequestError } from "@/lib/api";
 import { mapCardToVenue } from "@/lib/mappers";
 import { useAuthSession } from "@/hooks/useAuthSession";
-
-type SavedVenuesResponse = {
-  data: {
-    venues: Array<{
-      id: string;
-      name: string;
-      venue_type: string | null;
-      suburb: string;
-      address_short: string;
-      latitude: number;
-      longitude: number;
-      hero_photo_url: string | null;
-      open_now: boolean | null;
-      open_now_uncomputed: boolean;
-      distance_m: number | null;
-      feature_badges: string[];
-      specials_summary: string[];
-      events_summary: string[];
-      drink_highlights: string[];
-      is_saved: boolean | null;
-    }>;
-  };
-};
 
 type SavedContextValue = {
   savedVenues: Venue[];

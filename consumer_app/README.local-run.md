@@ -122,6 +122,8 @@ Workflow:
 3. Import types from `@workspace/api-client-react` in mobile mappers/hooks (keep existing `publicApiRequest` / `privateApiRequest` fetch paths unless migrating to generated hooks intentionally).
 4. Never edit files under `*/generated/` manually.
 
+Stage 11: Home, Search, Map, saved-list, and shared `PublicVenueCard` API inputs use generated OpenAPI schema types from `@workspace/api-client-react`; runtime still uses `publicApiRequest` / `privateApiRequest` (not generated React Query hooks). Profile types remain hand-written until optional-field normalization is defined.
+
 ## Stage 7 Search locality reference alignment manual verification
 
 1. Re-run dev DB seed.
