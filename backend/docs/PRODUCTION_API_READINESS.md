@@ -359,7 +359,7 @@ EAS production profile injects mobile `EXPO_PUBLIC_*` at build time. Backend pro
 | **5** | Production API readiness documentation | Done |
 | **5A** | Railway + Gunicorn deploy config in repo | Done — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) |
 | **5B** | Owen: Railway project, env vars, first deploy, smoke | **In progress** — guided checklist in [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5B |
-| **5C** | Apply `database/supabase/migrations/`; load **real import** data | Pending |
+| **5C** | Apply `database/supabase/migrations/`; re-smoke DB routes; plan **real import** (import not run in 5C) | **Guided** — [database/docs/RAILWAY_STAGE_5C_DB_READINESS.md](../../database/docs/RAILWAY_STAGE_5C_DB_READINESS.md), [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5C |
 | **5D** | Run [§7 smoke checklist](#production-pre-testflight-smoke-checklist) against Railway URL | Pending |
 | **5E** | Create PubPlus Dev + Prod Supabase split (before external TestFlight) | Pending |
 | **5F** | Point TestFlight EAS at Railway URL + matching Supabase (native stages) | Pending |

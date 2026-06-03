@@ -52,3 +52,5 @@ Apply migrations in **lexical filename order** under `database/supabase/migratio
 2. On a full fresh apply of `0001`–`0033`, run `check_full_schema_readiness.sql` for a single cross-cutting pass.
 
 See `WAVE_12_FINAL_READINESS_REVIEW.md` and `SQL_DRAFTING_NOTES.md` for verification and seed ordering.
+
+**Railway production (Stage 5C):** apply via `supabase db push` on the Supabase project that matches Railway `DATABASE_URL`; operator checklist — [../RAILWAY_STAGE_5C_DB_READINESS.md](../RAILWAY_STAGE_5C_DB_READINESS.md).
