@@ -228,10 +228,14 @@ Railway injects **`PORT`** automatically — do not hardcode it in variables.
 After generating a public domain, set:
 
 ```text
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,.up.railway.app,<your-service>.up.railway.app
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,.up.railway.app
 ```
 
-Use the hostname from Railway networking (no `https://`, no trailing slash). Include **`localhost`** and **`127.0.0.1`** so internal health probes are accepted. The `.up.railway.app` prefix matches any Railway subdomain. If deploy fails with `DisallowedHost`, the host header is missing from this list.
+Optional: add your exact public hostname too. **Do not** include `https://`.
+
+Railway injects `RAILWAY_PUBLIC_DOMAIN` and `RAILWAY_PRIVATE_DOMAIN`; Django **automatically appends** these to `ALLOWED_HOSTS` at boot (so healthchecks work even before you know the public URL).
+
+If deploy fails with `DisallowedHost` in runtime logs, widen `DJANGO_ALLOWED_HOSTS` as above.
 
 ---
 
