@@ -475,12 +475,12 @@ Each updated lead gets `social_url_cleanup_applied` event, source row, and attri
 
 ## Stage 7 — Internal admin UI
 
-Web UI for operators (Vite + React). Lives in `portal_web/` (dedicated portal app, separate from the consumer mobile app).
+Web UI for operators (Vite + React). Lives in `web-portal/` (dedicated portal app, separate from the consumer mobile app).
 
 ### Run locally
 
 ```bash
-cd portal_web
+cd web-portal
 cp .env.example .env
 # VITE_API_BASE_URL=http://localhost:8000
 # VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY (internal-admin JWT)
@@ -492,7 +492,7 @@ Or from the repo root: `pnpm portal:dev` (requires root `package.json` scripts).
 
 Open `http://localhost:3010` → `/internal/founder-venues`.
 
-Full UI guide: `portal_web/README.md`.
+Full UI guide: `web-portal/README.md`.
 
 ### UI capabilities
 
@@ -508,7 +508,7 @@ Full UI guide: `portal_web/README.md`.
 
 Manual call-sheet mode, outreach quick actions (called/emailed/replied/rejected/signed up), DNC with confirmation, outreach notes, next-best-lead navigation, expanded quick filters, and optional batch status updates (queued/called/emailed/rejected only). State changes use existing `PATCH` and `POST .../mark-do-not-contact` — no messaging from the portal.
 
-See `portal_web/README.md` for operator workflows and status definitions.
+See `web-portal/README.md` for operator workflows and status definitions.
 
 ### Stage 7.3 — Outreach operations polish
 

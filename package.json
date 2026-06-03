@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "portal:dev": "corepack pnpm --dir portal_web dev",
-    "portal:build": "corepack pnpm --dir portal_web build",
-    "portal:test": "corepack pnpm --dir portal_web test",
-    "portal:typecheck": "corepack pnpm --dir portal_web typecheck"
+    "portal:dev": "corepack pnpm --dir web-portal dev",
+    "portal:build": "corepack pnpm --dir web-portal build",
+    "portal:test": "corepack pnpm --dir web-portal test",
+    "portal:typecheck": "corepack pnpm --dir web-portal typecheck"
   }
 }
