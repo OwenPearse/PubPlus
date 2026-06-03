@@ -4,7 +4,7 @@ Monorepo layout:
 
 | Path | Purpose |
 |------|---------|
-| `consumer_app/` | Consumer mobile app (Expo) |
+| `consumer_app/` | Consumer mobile app (Expo) — see [consumer_app/README.md](consumer_app/README.md) |
 | `web-portal/` | Web portal (internal admin, future owner tools) |
 | `backend/` | Django API |
 | `database/` | Supabase migrations |
