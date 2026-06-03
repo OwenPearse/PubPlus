@@ -50,6 +50,7 @@ Full prerequisites, env details, simulators, and troubleshooting: **[README.loca
 | [README.structure.md](./README.structure.md) | Current | Workspace packages and integration file map |
 | [docs/environment-strategy.md](./docs/environment-strategy.md) | Current | Local/device/TestFlight env matrix, dev/prod Supabase split, backend alignment |
 | [docs/native-testflight-readiness.md](./docs/native-testflight-readiness.md) | Current | EAS/TestFlight path, native config audit, iOS checklists (planning) |
+| [../backend/docs/PRODUCTION_API_READINESS.md](../backend/docs/PRODUCTION_API_READINESS.md) | Current | Production Django API deploy readiness for TestFlight |
 | [docs/auth-sso-runbook.md](./docs/auth-sso-runbook.md) | Current | Supabase Auth, Google/Facebook/Apple SSO, redirect URLs, testing matrix |
 | Release / TestFlight checklist | Planned (Stage 6) | Store submission and prod smoke tests |
 | [docs/integration-qa-checklists.md](./docs/integration-qa-checklists.md) | Reference | Historical stage manual verification checklists |

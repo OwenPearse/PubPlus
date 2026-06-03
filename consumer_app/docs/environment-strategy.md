@@ -2,7 +2,7 @@
 
 Source of truth for how PubPlus should configure mobile environment variables, Supabase projects, and backend alignment across local dev, physical-device testing, TestFlight, and production.
 
-**Guidance only** — this document does not implement EAS profiles, deploy backends, or configure provider dashboards. Auth/SSO provider setup: **[auth-sso-runbook.md](./auth-sso-runbook.md)**.
+**Guidance only** — this document does not implement EAS profiles, deploy backends, or configure provider dashboards. Auth/SSO provider setup: **[auth-sso-runbook.md](./auth-sso-runbook.md)**. Production Django API deployment readiness for TestFlight: **[backend/docs/PRODUCTION_API_READINESS.md](../../backend/docs/PRODUCTION_API_READINESS.md)**.
 
 Entry point: [README.md](../README.md). Local run commands: [README.local-run.md](../README.local-run.md).
 
@@ -251,4 +251,5 @@ For Owen (manual steps in Supabase and local machine):
 | ----- | ----- |
 | Auth / SSO / deep-link | [auth-sso-runbook.md](./auth-sso-runbook.md) (current) |
 | Native / EAS / TestFlight | [native-testflight-readiness.md](./native-testflight-readiness.md) (current planning) |
+| Production API deployment | [backend/docs/PRODUCTION_API_READINESS.md](../../backend/docs/PRODUCTION_API_READINESS.md) (current) |
 | Stage 6+ | Release and App Store checklist (future) |

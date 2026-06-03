@@ -12,4 +12,6 @@ COPY . /app
 
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Production (Railway): bind to $PORT from the platform. Local docker compose overrides
+# this command with `python manage.py runserver` — see docker-compose.yml.
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000}"]

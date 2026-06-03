@@ -27,6 +27,8 @@ Related docs:
 
 **Bottom line:** Expo Go proves JS bundle and integration; **TestFlight readiness is a separate track** requiring EAS, native identifiers, deployed production backend, and Prod Supabase.
 
+**Backend blocker:** TestFlight needs a **deployed** Railway Django API (config in repo: [backend/docs/RAILWAY_DEPLOYMENT.md](../../backend/docs/RAILWAY_DEPLOYMENT.md); readiness: [PRODUCTION_API_READINESS.md](../../backend/docs/PRODUCTION_API_READINESS.md)). Owen deploys; generated Railway domain is enough for initial smoke.
+
 ---
 
 ## 2. Target release path
