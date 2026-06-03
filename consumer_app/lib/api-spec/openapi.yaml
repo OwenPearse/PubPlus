@@ -89,6 +89,7 @@ components:
             $ref: "#/components/schemas/SearchFilterKeyLabel"
         event_filters:
           type: array
+          description: Empty until a published event catalog exists; clients must not render event filter chips when empty.
           items:
             $ref: "#/components/schemas/SearchFilterKeyLabel"
       required:

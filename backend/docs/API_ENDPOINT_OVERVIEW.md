@@ -92,11 +92,10 @@ Public, with optional authenticated enrichment
 
 Expected behaviour
 
-Returns an orchestrated home payload that may include sections such as:
+Returns an orchestrated home payload. **Current MVP sections:** nearby, open now, specials tonight. **`events_tonight` is not returned** until a published public event catalog exists (future read model).
 
-nearby venues
-open now
-specials tonight
+Future section concepts may also include:
+
 events tonight
 light preference-aware suggestions
 Query parameters
@@ -133,8 +132,8 @@ open_now
 meal_specials
 drink_types
 venue_features
-events
-q for text search if required by UI
+q (venue name + suburb/locality text search)
+events — **deferred** (`400 events_unavailable`; no published event catalog for Search filtering yet)
 Optional pagination parameters
 limit
 offset or cursor-based pagination later
@@ -175,7 +174,7 @@ Semantics
 - `venue_features[].key` — attribute `stable_key` accepted by `venue_features` on Search (boolean discovery-driving definitions).
 - `drink_types[].id` — `beverage_product.id` UUID accepted by `drink_types` on Search.
 - `meal_specials[].key` — structured special kind accepted by `meal_specials` on Search (MVP: `meal_special` only).
-- `event_filters` — intentionally empty until a published public events catalog exists.
+- `event_filters` — intentionally empty until a published public events catalog exists. **Clients must not render event filter chips unless this array is non-empty.**
 
 Search venues filter parameters
 
@@ -215,7 +214,7 @@ open_now
 meal_specials
 drink_types
 venue_features
-events
+events — deferred (same as Search)
 suburb or locality filters if supported in map mode
 Notes
 
@@ -475,7 +474,7 @@ open_now
 distance_m when applicable
 feature_badges
 specials_summary
-events_summary
+events_summary — empty in MVP (no published event catalog); reserved for future compact event labels
 drink_highlights
 is_saved when authenticated or consistently represented otherwise
 Venue detail shape
@@ -488,7 +487,7 @@ hours/open-now block
 photos block
 features block
 specials block
-events block
+events block — `items` empty and `not_implemented: true` until a published event catalog exists
 drinks/taps highlights block
 contact links block
 authenticated actions block

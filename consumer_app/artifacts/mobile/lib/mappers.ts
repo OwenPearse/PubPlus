@@ -149,7 +149,9 @@ function toSpecials(items: PublicVenueCard["specials_summary"]): Special[] {
   }));
 }
 
+/** Map API event summaries only when the backend sends non-empty published data. */
 function toEvents(items: PublicVenueCard["events_summary"]): Event[] {
+  if (!items.length) return [];
   return items.map((title, index) => ({
     id: `event-${index}-${title}`,
     title,
@@ -241,13 +243,15 @@ export function mapVenueDetailResponse(response: VenueDetailResponse): Venue {
     description: item.headline ?? item.short_label,
     validUntil: "Check venue for timing",
   }));
-  const events: Event[] = data.events.items.map((item) => ({
+  const events: Event[] = data.events.items.length
+    ? data.events.items.map((item) => ({
     id: item.id,
     title: item.title,
     date: "Upcoming",
     time: formatTime(item.starts_at),
     description: item.description ?? "",
-  }));
+      }))
+    : [];
   const contact = mapContact(data.contact.items);
   return {
     id: data.identity.id,

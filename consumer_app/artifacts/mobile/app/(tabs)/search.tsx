@@ -293,7 +293,7 @@ export default function SearchScreen() {
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Search pubs and bars..."
+            placeholder="Search by venue or suburb"
             placeholderTextColor={colors.mutedForeground}
             value={query}
             onChangeText={setQuery}

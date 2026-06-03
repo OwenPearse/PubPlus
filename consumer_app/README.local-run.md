@@ -67,6 +67,15 @@ cd backend
 python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_saved_venues_endpoints tests.test_profile_endpoints tests.test_submission_endpoints tests.test_discovery_public_endpoints tests.test_home_and_venue_detail_endpoints
 ```
 
+## Stage 4 Events honesty manual verification
+
+1. Re-run backend and consumer app.
+2. Open Search — confirm no event filter chips appear.
+3. Search for a venue using `q` — confirm copy does not promise event discovery.
+4. Open Home — confirm no **Events tonight** section; banner does not show event counts.
+5. Open a venue card/detail with empty `events_summary` / `events.items` — confirm no event rows or “0 events”.
+6. Open Map popup — confirm no event line unless real non-empty event data exists (MVP should show none).
+
 ## Stage 3 Search `q` manual verification
 
 1. Re-run dev DB seed.
@@ -88,7 +97,7 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 
 ## Known Deferred UI
 
-- Event-specific search filters are not exposed as live backend filters yet.
+- Event discovery is deferred: Search `event_filters` stays empty, Home has no `events_tonight` section, and venue event UI only renders when the API returns non-empty published event data.
 - Correction submission supports basic profile, location, and hours payloads; attribute-domain lookup UX is deferred.
 - Profile preference chips for drinks/features are preview-only and are not sent to the backend.
 - Google, Facebook, and Apple sign-in require Supabase provider configuration plus external provider dashboard setup.

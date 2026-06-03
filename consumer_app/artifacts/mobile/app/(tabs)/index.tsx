@@ -71,9 +71,19 @@ export default function HomeScreen() {
     [sections]
   );
 
-  const allVenues = useMemo(() => mappedSections.flatMap((section) => section.venues), [mappedSections]);
+  const visibleSections = useMemo(
+    () =>
+      mappedSections.filter(
+        (section) => !section.id.startsWith("events")
+      ),
+    [mappedSections]
+  );
+
+  const allVenues = useMemo(
+    () => visibleSections.flatMap((section) => section.venues),
+    [visibleSections]
+  );
   const openNowCount = allVenues.filter((venue) => venue.isOpen).length;
-  const eventsCount = allVenues.filter((venue) => venue.events.length > 0).length;
 
   return (
     <ScrollView
@@ -114,7 +124,7 @@ export default function HomeScreen() {
             Tonight near you
           </Text>
           <Text style={[styles.bannerTitle, { color: "#ffffff" }]}>
-            {openNowCount} pubs open · {eventsCount} events on
+            {openNowCount} {openNowCount === 1 ? "pub" : "pubs"} open nearby
           </Text>
         </View>
         <View style={styles.bannerRight}>
@@ -169,12 +179,12 @@ export default function HomeScreen() {
         <EmptyState
           icon="home"
           title="No home sections yet"
-          subtitle="Check back soon for nearby venues and tonight highlights."
+          subtitle="Check back soon for nearby venues, open-now, and meal specials."
         />
       ) : null}
 
       {!loading && !error
-        ? mappedSections.map((section) => (
+        ? visibleSections.map((section) => (
             <VenueRow
               key={section.id}
               title={section.title}

@@ -165,7 +165,7 @@ It should blend multiple discovery intents into a single curated payload such as
 - nearby venues
 - open now
 - specials tonight
-- events tonight
+- events tonight (**future** — not in current Home MVP payload)
 - light preference-aware suggestions
 
 ### Home payload requirements
@@ -191,7 +191,7 @@ Example section concepts:
 - `nearby`
 - `open_now`
 - `specials_tonight`
-- `events_tonight`
+- `events_tonight` (**deferred** until published event read model exists)
 - `for_you`
 
 These are product-facing section names and may later be refined.
@@ -224,8 +224,8 @@ Search should support:
 - specials filtering
 - drink-type filtering
 - venue-feature filtering
-- event filtering
-- eventual text query support if needed by UI
+- event filtering (**deferred** — `event_filters: []`, `events` query param rejected)
+- text query (`q`) over venue name and suburb/locality (MVP implemented)
 
 ### Search payload guidance
 
@@ -393,6 +393,8 @@ If richer public representation is later needed, it should be an additive contra
 ## Specials, events, and drink/tap highlight strategy
 
 Dynamic venue subdomains such as specials, events, and drink/tap highlights should be read-model aware.
+
+**Current MVP:** published specials and tap highlights may surface on cards/detail; **published events do not** — `events_summary` / detail `events.items` stay empty, Search `event_filters` is `[]`, and `events=true` is rejected until an event catalog ships.
 
 ### Rules
 

@@ -41,6 +41,10 @@ const EMPTY_FILTERS: SearchFiltersData = {
   event_filters: [],
 };
 
+/**
+ * Search filter reference from the backend. Render `event_filters` chips only when
+ * `event_filters.length > 0` (empty means event discovery is not available yet).
+ */
 export function useSearchFilters() {
   const [filters, setFilters] = useState<SearchFiltersData>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
