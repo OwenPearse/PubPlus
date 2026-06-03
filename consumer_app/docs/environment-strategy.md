@@ -14,12 +14,12 @@ Entry point: [README.md](../README.md). Local run commands: [README.local-run.md
 | ----------- | ------- | ---------------------------------------------- | --------------- |
 | **Local dev** | Cursor/local Expo on simulator or web | `http://localhost:8000` (local Django) or other reachable **dev** backend | **Supabase Dev** |
 | **Physical device / Expo Go** | Real phone smoke testing | LAN IP, ngrok, or **staging** URL — **not** `localhost` on the phone | **Supabase Dev** |
-| **TestFlight** | iOS pre-release testing (production-like) | **Deployed production API** (URL TBD; deploy before TestFlight) | **Supabase Prod** |
+| **TestFlight** | iOS pre-release testing (production-like) | **Deployed production API** (URL TBD; deploy before TestFlight) | **Supabase Prod** — see [native-testflight-readiness.md](./native-testflight-readiness.md) |
 | **Production** | App Store / Play Store users | **Unknown** — production API URL not finalised | **Supabase Prod** |
 
 ### Notes
 
-- **One mobile `.env` file per machine** is typical for local work (`artifacts/mobile/.env`). TestFlight/production values are usually injected at **EAS build time** (Stage 4) — not committed to git.
+- **One mobile `.env` file per machine** is typical for local work (`artifacts/mobile/.env`). TestFlight/production values are usually injected at **EAS build time** — see [native-testflight-readiness.md](./native-testflight-readiness.md); not committed to git.
 - **Supabase Dev** and **Supabase Prod** must never be mixed with the wrong backend JWT verification config (see [Backend alignment](#5-backend-alignment)).
 - **Replit** (`EXPO_PUBLIC_DOMAIN`, `build.js`, `serve.js`) is **legacy/unconfirmed** — not the documented local or release path unless Owen confirms otherwise.
 
@@ -137,7 +137,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=<pubplus-prod-anon-key>
 EXPO_PUBLIC_AUTH_REDIRECT_SCHEME=pubplus
 ```
 
-These values are typically set in **EAS build secrets / env** (Stage 4), not checked into the repo.
+These values are typically set in **EAS build secrets / env** ([native-testflight-readiness.md](./native-testflight-readiness.md)), not checked into the repo.
 
 ---
 
@@ -250,5 +250,5 @@ For Owen (manual steps in Supabase and local machine):
 | Stage | Topic |
 | ----- | ----- |
 | Auth / SSO / deep-link | [auth-sso-runbook.md](./auth-sso-runbook.md) (current) |
-| Stage 4 | EAS build profiles and env injection for TestFlight |
-| Stage 6 | Release and TestFlight checklist |
+| Native / EAS / TestFlight | [native-testflight-readiness.md](./native-testflight-readiness.md) (current planning) |
+| Stage 6+ | Release and App Store checklist (future) |

@@ -49,7 +49,7 @@ Full prerequisites, env details, simulators, and troubleshooting: **[README.loca
 | [README.local-run.md](./README.local-run.md) | Current | Install, env, run commands, validation, troubleshooting |
 | [README.structure.md](./README.structure.md) | Current | Workspace packages and integration file map |
 | [docs/environment-strategy.md](./docs/environment-strategy.md) | Current | Local/device/TestFlight env matrix, dev/prod Supabase split, backend alignment |
-| Native build / EAS guide | Planned (Stage 4) | Dev builds, bundle IDs, prebuild |
+| [docs/native-testflight-readiness.md](./docs/native-testflight-readiness.md) | Current | EAS/TestFlight path, native config audit, iOS checklists (planning) |
 | [docs/auth-sso-runbook.md](./docs/auth-sso-runbook.md) | Current | Supabase Auth, Google/Facebook/Apple SSO, redirect URLs, testing matrix |
 | Release / TestFlight checklist | Planned (Stage 6) | Store submission and prod smoke tests |
 | [docs/integration-qa-checklists.md](./docs/integration-qa-checklists.md) | Reference | Historical stage manual verification checklists |
@@ -88,11 +88,11 @@ Backend integration tests (from `backend/`): see [README.local-run.md](./README.
 
 Local setup, **dev/prod Supabase split** (PubPlus Dev / PubPlus Prod), physical-device API URLs, and backend JWT alignment are documented in **[docs/environment-strategy.md](./docs/environment-strategy.md)**.
 
-TestFlight and production API URLs are **not finalised**; native release env injection will build on this in Stage 4 (EAS).
+TestFlight and production API URLs are **not finalised**; native/EAS planning: **[docs/native-testflight-readiness.md](./docs/native-testflight-readiness.md)**.
 
 ## Current limitations
 
-- **Native release docs incomplete** — no EAS config, bundle IDs, or store checklist in repo yet (Stage 4–6).
+- **EAS/native config not implemented** — planning in [native TestFlight readiness](./docs/native-testflight-readiness.md); `eas.json` and bundle IDs still absent.
 - **SSO provider dashboards** — Google, Facebook, and Apple require manual setup (see [auth SSO runbook](./docs/auth-sso-runbook.md)); email/password works when Supabase env is set.
 - **No EAS config** — `eas.json` is not present; TestFlight/App Store path is unknown until configured.
 - **Replit scripts are legacy** — `artifacts/mobile` `dev` script, `scripts/build.js`, and `server/serve.js` target Replit deployment. Use `mobile:*` / `start` / `web` for local development unless Replit is explicitly confirmed still in use.

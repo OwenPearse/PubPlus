@@ -100,7 +100,7 @@ Profile sign-out: `app/(tabs)/profile.tsx` calls `signOut()` from `lib/supabase.
 | **No cold-start deep-link handler** | No `Linking.getInitialURL` / `useURL` listener for `pubplus://auth/callback` if OAuth returns while app was backgrounded or closed — flow assumes `openAuthSessionAsync` returns in-session |
 | **No `/auth/callback` route** | Direct navigation to `/auth/callback` on web may 404; normal OAuth path uses browser session return URL |
 | **Expo Go vs dev build** | Provider OAuth may behave differently; Apple especially needs native/TestFlight validation |
-| **iOS bundle ID not set** | `app.json` has no `ios.bundleIdentifier` yet — Apple Developer / Supabase Apple provider prod setup blocked until Stage 4 |
+| **iOS bundle ID not set** | `app.json` has no `ios.bundleIdentifier` yet — blocked until EAS/native implementation — [native-testflight-readiness.md](./native-testflight-readiness.md) |
 
 ### Proposed future work (not implemented in Stage 3)
 
@@ -209,7 +209,7 @@ High-level steps (manual, in Google Cloud + Supabase).
    https://<pubplus-prod-project-ref>.supabase.co/auth/v1/callback
    ```
 4. Configure **PubPlus Prod** Supabase Google provider with prod client credentials.
-5. Validate on **TestFlight build** (Stage 4+), not only Expo Go.
+5. Validate on **TestFlight build** ([native-testflight-readiness.md](./native-testflight-readiness.md)), not only Expo Go.
 
 ### Unresolved decisions
 
@@ -262,7 +262,7 @@ High-level steps (manual, in Google Cloud + Supabase).
 ### PubPlus Dev (limited until bundle ID exists)
 
 1. Apple Developer → **Identifiers** / **Services IDs** / **Keys** per Supabase Apple provider documentation.
-2. Configure **Sign in with Apple** for a Services ID; associate with app identifier when **bundle ID is chosen** (Stage 4).
+2. Configure **Sign in with Apple** for a Services ID; associate with app identifier when **bundle ID is chosen** ([native-testflight-readiness.md](./native-testflight-readiness.md)).
 3. In PubPlus Dev Supabase → Apple provider: enter Services ID, secret/key, team ID per Supabase UI.
 4. Test on **iOS simulator or Expo Go** only as a smoke test; **full validation requires dev build or TestFlight**.
 
@@ -333,7 +333,7 @@ Use **PubPlus Dev** + local dev backend unless noted. After OAuth success, confi
 | ---- | ------ |
 | Final app name / domain | Store and OAuth branding URLs undecided |
 | iOS bundle ID / Android package | Not in `app.json`; blocks production Apple and EAS |
-| No EAS / native build yet | TestFlight and reliable Apple OAuth blocked until Stage 4 |
+| No EAS / native build yet | TestFlight and reliable Apple OAuth blocked — [native-testflight-readiness.md](./native-testflight-readiness.md) |
 | No production API deployed yet | Must deploy before TestFlight; URL unknown |
 | Supabase Dev/Prod | May not exist yet — owner checklist below |
 | Provider dashboards | Google/Facebook/Apple not configured until manual setup |
@@ -356,7 +356,7 @@ Use **PubPlus Dev** + local dev backend unless noted. After OAuth success, confi
 - [ ] **Apple:** Developer account ready; defer production Services ID until **bundle ID** chosen.
 - [ ] Confirm TestFlight uses **Supabase Prod + production backend** (not Dev).
 - [ ] Do not put service role or provider secrets in mobile env.
-- [ ] Defer EAS/native identifiers to Stage 4; run SSO smoke tests on TestFlight (Stage 4/6).
+- [ ] Complete EAS/native setup per [native-testflight-readiness.md](./native-testflight-readiness.md); run SSO smoke on TestFlight after upload.
 
 ---
 
@@ -364,9 +364,9 @@ Use **PubPlus Dev** + local dev backend unless noted. After OAuth success, confi
 
 | Stage | Topic |
 | ----- | ----- |
-| **Stage 4** | EAS config, bundle IDs, iOS dev build, env injection for TestFlight |
-| **Stage 4/5** | Apple native validation; decide on `expo-apple-authentication` if needed |
-| **Stage 5/6** | SSO smoke test matrix on TestFlight; production API verification |
-| **Stage 6** | Release checklist (App Store Connect, Play Console, provider prod review) |
+| **Native/EAS** | [native-testflight-readiness.md](./native-testflight-readiness.md) — implementation stages 5–10 listed there |
+| **Post-native** | Apple validation; decide on `expo-apple-authentication` if TestFlight fails |
+| **TestFlight** | SSO smoke on Prod Supabase + production API |
+| **Launch** | App Store metadata, privacy, provider prod review |
 
 Do not implement these in the auth runbook stage.
