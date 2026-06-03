@@ -139,6 +139,16 @@ class HomeEndpointTests(SimpleTestCase):
         self.assertIsNone(venues[0]["is_saved"])
 
     @patch("api.v1.home.views.run_home_feed")
+    def test_home_default_limit_is_six_per_section(self, home_mock):
+        home_mock.return_value = _home_result()
+
+        response = self.client.get("/api/v1/home")
+
+        self.assertEqual(response.status_code, 200)
+        query_arg = home_mock.call_args[0][0]
+        self.assertEqual(query_arg.limit, 6)
+
+    @patch("api.v1.home.views.run_home_feed")
     def test_home_passes_query_params_to_service(self, home_mock):
         home_mock.return_value = _home_result()
 
@@ -152,6 +162,21 @@ class HomeEndpointTests(SimpleTestCase):
         self.assertIsInstance(query_arg, HomeFeedQuery)
         self.assertEqual(query_arg.limit, 8)
         self.assertEqual(query_arg.suburb, "Melbourne")
+
+    @patch("api.v1.home.views.run_home_feed")
+    def test_home_explicit_limit_twelve_allowed(self, home_mock):
+        home_mock.return_value = _home_result()
+
+        response = self.client.get("/api/v1/home", {"limit": "12"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(home_mock.call_args[0][0].limit, 12)
+
+    def test_home_limit_above_max_returns_400(self):
+        response = self.client.get("/api/v1/home", {"limit": "50"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "invalid_limit")
 
 
 class HomeFeedServiceTests(SimpleTestCase):

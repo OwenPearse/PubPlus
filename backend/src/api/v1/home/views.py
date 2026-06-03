@@ -8,6 +8,10 @@ from common.auth.request_context import get_auth_context
 from services.discovery import DiscoveryFilterError
 from services.home_feed.service import HomeFeedQuery, home_feed_to_dict, run_home_feed
 
+# Per-section venue cap (three discovery passes). Tuned for Railway latency; search keeps higher limits.
+HOME_FEED_DEFAULT_LIMIT = 6
+HOME_FEED_MAX_LIMIT = 12
+
 
 def _optional_float(request, key: str) -> float | None:
     raw = request.GET.get(key)
@@ -19,14 +23,20 @@ def _optional_float(request, key: str) -> float | None:
         raise DiscoveryFilterError("invalid_number", f"{key} must be numeric.") from exc
 
 
-def _optional_int(request, key: str, *, default: int) -> int:
+def _optional_home_limit(request, key: str) -> int:
     raw = request.GET.get(key)
     if raw is None or raw == "":
-        return default
+        return HOME_FEED_DEFAULT_LIMIT
     try:
-        return int(raw)
+        value = int(raw)
     except (TypeError, ValueError) as exc:
         raise DiscoveryFilterError("invalid_integer", f"{key} must be an integer.") from exc
+    if value < 1 or value > HOME_FEED_MAX_LIMIT:
+        raise DiscoveryFilterError(
+            "invalid_limit",
+            f"{key} must be between 1 and {HOME_FEED_MAX_LIMIT} for the home feed.",
+        )
+    return value
 
 
 @optional_consumer_auth
@@ -44,7 +54,7 @@ def home_feed(request):
             lng=_optional_float(request, "lng"),
             suburb=request.GET.get("suburb"),
             radius_m=float(request.GET.get("radius_m", 5000.0)),
-            limit=_optional_int(request, "limit", default=12),
+            limit=_optional_home_limit(request, "limit"),
         )
         auth_context = get_auth_context(request)
         result = run_home_feed(query, auth=auth_context)

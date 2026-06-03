@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass, field, replace
 
 from apps.venues.public_read.card import PublicVenueCard, public_venue_card_to_dict
@@ -11,6 +13,11 @@ from services.discovery import (
     run_discovery,
 )
 
+logger = logging.getLogger(__name__)
+
+# Default per section — see api.v1.home.views.HOME_FEED_DEFAULT_LIMIT (kept in sync).
+HOME_FEED_DEFAULT_LIMIT = 6
+
 
 @dataclass(frozen=True)
 class HomeFeedQuery:
@@ -18,7 +25,7 @@ class HomeFeedQuery:
     lng: float | None = None
     suburb: str | None = None
     radius_m: float = 5000.0
-    limit: int = 12
+    limit: int = HOME_FEED_DEFAULT_LIMIT
 
 
 @dataclass(frozen=True)
@@ -64,29 +71,42 @@ def _with_save_state(
 def run_home_feed(
     query: HomeFeedQuery, *, auth: AuthContext | None = None
 ) -> HomeFeedResult:
-    nearby_filters = _base_filters(query)
-    open_now_filters = replace(_base_filters(query), open_now=True)
-    specials_filters = replace(
-        _base_filters(query), meal_specials=sorted(MEAL_STRUCT_KINDS)
+    started = time.perf_counter()
+    logger.info(
+        "home_feed start limit=%s suburb=%s has_coords=%s",
+        query.limit,
+        query.suburb,
+        query.lat is not None and query.lng is not None,
     )
 
-    sections = [
-        HomeFeedSection(
-            id="nearby",
-            title="Nearby",
-            items=_with_save_state(_run_section(nearby_filters), auth=auth),
-        ),
-        HomeFeedSection(
-            id="open_now",
-            title="Open now",
-            items=_with_save_state(_run_section(open_now_filters), auth=auth),
-        ),
-        HomeFeedSection(
-            id="specials_tonight",
-            title="Specials tonight",
-            items=_with_save_state(_run_section(specials_filters), auth=auth),
+    section_specs: list[tuple[str, str, DiscoveryMvpFilters]] = [
+        ("nearby", "Nearby", _base_filters(query)),
+        ("open_now", "Open now", replace(_base_filters(query), open_now=True)),
+        (
+            "specials_tonight",
+            "Specials tonight",
+            replace(_base_filters(query), meal_specials=sorted(MEAL_STRUCT_KINDS)),
         ),
     ]
+
+    sections: list[HomeFeedSection] = []
+    for section_id, title, filters in section_specs:
+        section_started = time.perf_counter()
+        items = _with_save_state(_run_section(filters), auth=auth)
+        elapsed_ms = (time.perf_counter() - section_started) * 1000
+        logger.info(
+            "home_feed section=%s venues=%s elapsed_ms=%.0f",
+            section_id,
+            len(items),
+            elapsed_ms,
+        )
+        sections.append(HomeFeedSection(id=section_id, title=title, items=items))
+
+    logger.info(
+        "home_feed done sections=%s elapsed_ms=%.0f",
+        len(sections),
+        (time.perf_counter() - started) * 1000,
+    )
     return HomeFeedResult(sections=sections)
 
 
