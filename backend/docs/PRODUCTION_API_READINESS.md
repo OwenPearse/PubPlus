@@ -215,8 +215,8 @@ Production CORS list is **unknown** until final web domain is chosen. Native Tes
 | `GET /api/v1/health` | Public | `200` + `{"status": "healthy"}` | **Process liveness only** — no DB/Supabase |
 | `GET /api/v1/auth-probe/public` | Optional Bearer | `200` + `{"status": "ok", "authenticated": bool}` | Auth middleware smoke |
 | `GET /api/v1/auth-probe/private` | Required Bearer | `200` + subject, or `401` | JWT verification smoke |
-| `GET /api/v1/home` | Public | Home feed JSON | DB + published venue data |
-| `GET /api/v1/search/` | Public | Search results | DB + discovery layer |
+| `GET /api/v1/home` | Public | Home feed JSON (default **6** venues/section, max **12**; three sections) | DB + published venue data |
+| `GET /api/v1/search/venues` | Public | Search results (default limit 50, max 200) | DB + discovery layer |
 | `GET /api/v1/reference/localities` | Public | Locality reference | DB |
 
 There is **no** `/health/deep`, `/ready`, or dependency-check endpoint in code today.
@@ -233,8 +233,8 @@ Run against deployed production API base URL after env is configured.
 
 **Database / content**
 
-- [ ] `GET /api/v1/home` → `200` with non-empty sections **or** documented empty state if prod launch is intentionally sparse
-- [ ] `GET /api/v1/search/?q=...` or map/discovery endpoint returns expected shape
+- [ ] `GET /api/v1/home` → `200` (default limit 6/section after Stage 5D; optional `?limit=12`)
+- [ ] `GET /api/v1/search/venues` returns expected shape
 - [ ] Migrations applied to Prod DB (`database/supabase/migrations/`)
 
 **Auth boundary**
@@ -360,7 +360,7 @@ EAS production profile injects mobile `EXPO_PUBLIC_*` at build time. Backend pro
 | **5A** | Railway + Gunicorn deploy config in repo | Done — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) |
 | **5B** | Owen: Railway project, env vars, first deploy, smoke | **In progress** — guided checklist in [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5B |
 | **5C** | Apply `database/supabase/migrations/`; re-smoke DB routes; plan **real import** (import not run in 5C) | **Guided** — [database/docs/RAILWAY_STAGE_5C_DB_READINESS.md](../../database/docs/RAILWAY_STAGE_5C_DB_READINESS.md), [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5C |
-| **5D** | Run [§7 smoke checklist](#production-pre-testflight-smoke-checklist) against Railway URL | Pending |
+| **5D** | Home default `limit` tuned for Railway; re-smoke `/api/v1/home` | Done in code — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5D; Owen: deploy + curl |
 | **5E** | Create PubPlus Dev + Prod Supabase split (before external TestFlight) | Pending |
 | **5F** | Point TestFlight EAS at Railway URL + matching Supabase (native stages) | Pending |
 

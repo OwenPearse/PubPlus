@@ -293,6 +293,26 @@ Load **real import** venue data per owner direction — **after** migrations. Do
 
 ---
 
+## Stage 5D — Home feed performance (default limit)
+
+**Problem:** Default `GET /api/v1/home` ran three discovery passes at **12 venues per section**, each loading full published-venue bundles — often **>30s** on Railway (worker timeout → HTML 500). `GET /api/v1/home?limit=3` succeeded.
+
+**Fix (code):** Default home `limit` is **6** per section (max **12** via `?limit=`). Search/map keep their own defaults (up to 200). Railway logs emit `home_feed` timing per section (`home_feed start`, `home_feed section=…`, `home_feed done`).
+
+**Re-smoke after deploy:**
+
+```bash
+curl -i "https://<railway-domain>/api/v1/health"
+curl -i "https://<railway-domain>/api/v1/home"
+curl -i "https://<railway-domain>/api/v1/home?limit=12"
+```
+
+Expect **200** JSON on both home URLs. Fallback while investigating: `?limit=5`.
+
+**Note:** OpenAPI in `consumer_app/lib/api-spec/openapi.yaml` may still list home `default: 12` until regenerated — backend behavior is authoritative.
+
+---
+
 ## Database and Supabase
 
 ### Schema and data (before meaningful smoke)
@@ -379,6 +399,7 @@ Replace `<railway-generated-domain>` with your public hostname (e.g. `pubplus-pr
 | `db_error` on `/reference/localities` or `/search/filters` | Missing table/wrong DB | Apply `0001`–`0033` to the same project as `DATABASE_URL`; not caused by empty data alone |
 | `internal_error` on `/home` or `/search/venues` | Discovery SQL failure | Same as above; capture Railway traceback |
 | `404` on `/api/v1/search/` only | Wrong smoke path | Use `GET /api/v1/search/venues` |
+| `/home` **500** (~30s, HTML error) | Home feed too slow (3× discovery + enrichment) | Deploy Stage **5D** (default `limit=6`); check logs for `home_feed section=… elapsed_ms` |
 | `/home` **200** but empty | No real import data | Expected until data pipeline run |
 | **`401` on `/auth-probe/private` only** | JWT issuer/JWKS/audience mismatch | Match `SUPABASE_JWT_*` to same `<project-ref>` as token source |
 | **`401` on all private routes** | Same as above, or expired token | Refresh token; verify mobile/backend same Supabase project |
