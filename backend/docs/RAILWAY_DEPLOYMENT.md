@@ -228,10 +228,10 @@ Railway injects **`PORT`** automatically — do not hardcode it in variables.
 After generating a public domain, set:
 
 ```text
-DJANGO_ALLOWED_HOSTS=<your-service>.up.railway.app
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,.up.railway.app,<your-service>.up.railway.app
 ```
 
-Use the hostname from Railway networking (no `https://`, no trailing slash). If deploy fails with `DisallowedHost`, the host header is missing from this list.
+Use the hostname from Railway networking (no `https://`, no trailing slash). Include **`localhost`** and **`127.0.0.1`** so internal health probes are accepted. The `.up.railway.app` prefix matches any Railway subdomain. If deploy fails with `DisallowedHost`, the host header is missing from this list.
 
 ---
 
@@ -325,7 +325,8 @@ Replace `<railway-generated-domain>` with your public hostname.
 | `/home` **200** but empty | No real import data | Expected until data pipeline run |
 | **`401` on `/auth-probe/private` only** | JWT issuer/JWKS/audience mismatch | Match `SUPABASE_JWT_*` to same `<project-ref>` as token source |
 | **`401` on all private routes** | Same as above, or expired token | Refresh token; verify mobile/backend same Supabase project |
-| **`AttributeError: 'Settings' object has no attribute 'ROOT_URLCONF'`** | `config/settings/__init__.py` missing from deploy | Ensure `backend/config/settings/__init__.py` is committed (`from .base import *`); redeploy |
+| **`AttributeError: 'Settings' object has no attribute 'ROOT_URLCONF'`** | `config/settings/__init__.py` missing from deploy (old `main`) | Deploy branch with `config/settings/__init__.py` **or** `config/wsgi.py` using `config.settings.base`; merge `development` → `main` |
+| **Healthcheck "service unavailable"** (no ROOT_URLCONF in logs) | Wrong git branch, `ALLOWED_HOSTS`, or app not listening | Deploy latest `main`/`development`; set `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,.up.railway.app,<exact-host>` |
 
 **Do not paste** `DATABASE_URL`, `DJANGO_SECRET_KEY`, or Bearer tokens into issue chat — use redacted logs.
 
