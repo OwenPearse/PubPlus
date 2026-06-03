@@ -21,15 +21,11 @@ import { EmptyState } from "@/components/EmptyState";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SuburbSelector } from "@/components/SuburbSelector";
 import { VenueCard } from "@/components/VenueCard";
-import {
-  DISTANCE_OPTIONS,
-  DRINK_TYPES,
-  MEAL_SPECIALS,
-  VENUE_FEATURES,
-} from "@/data/mockData";
+import { DISTANCE_OPTIONS } from "@/data/mockData";
 import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type SearchResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
+import { useSearchFilters } from "@/hooks/useSearchFilters";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { useAuthSession } from "@/hooks/useAuthSession";
 
@@ -54,6 +50,31 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
   const { isAuthenticated, loading: authLoading } = useAuthSession();
+  const { filters: filterOptions, loading: filtersLoading, error: filtersError } = useSearchFilters();
+
+  const featureLabelByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const feature of filterOptions.venue_features) {
+      map.set(feature.key, feature.label);
+    }
+    return map;
+  }, [filterOptions.venue_features]);
+
+  const drinkLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const drink of filterOptions.drink_types) {
+      map.set(drink.id, drink.label);
+    }
+    return map;
+  }, [filterOptions.drink_types]);
+
+  const mealLabelByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const meal of filterOptions.meal_specials) {
+      map.set(meal.key, meal.label);
+    }
+    return map;
+  }, [filterOptions.meal_specials]);
 
   function toggleDrink(d: string) {
     Haptics.selectionAsync();
@@ -124,7 +145,7 @@ export default function SearchScreen() {
     for (const m of Array.from(selectedMealSpecials)) {
       pills.push({
         key: `meal:${m}`,
-        label: m,
+        label: mealLabelByKey.get(m) ?? m,
         category: "meal",
         onRemove: () => toggleMealSpecial(m),
       });
@@ -132,7 +153,7 @@ export default function SearchScreen() {
     for (const d of Array.from(selectedDrinks)) {
       pills.push({
         key: `drink:${d}`,
-        label: d,
+        label: drinkLabelById.get(d) ?? d,
         category: "preference",
         onRemove: () => toggleDrink(d),
       });
@@ -140,13 +161,23 @@ export default function SearchScreen() {
     for (const f of Array.from(selectedFeatures)) {
       pills.push({
         key: `feat:${f}`,
-        label: f,
+        label: featureLabelByKey.get(f) ?? f,
         category: "preference",
         onRemove: () => toggleFeature(f),
       });
     }
     return pills;
-  }, [selectedSuburb, distanceKm, openNowOnly, selectedMealSpecials, selectedDrinks, selectedFeatures]);
+  }, [
+    selectedSuburb,
+    distanceKm,
+    openNowOnly,
+    selectedMealSpecials,
+    selectedDrinks,
+    selectedFeatures,
+    mealLabelByKey,
+    drinkLabelById,
+    featureLabelByKey,
+  ]);
 
   const searchQuery = useMemo(
     () => ({
@@ -282,6 +313,21 @@ export default function SearchScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {filtersError ? (
+            <Text style={[styles.filtersMetaText, { color: colors.mutedForeground }]}>
+              {filtersError} Location and open-now filters are still available.
+            </Text>
+          ) : null}
+
+          {filtersLoading ? (
+            <View style={styles.filtersLoadingWrap}>
+              <ActivityIndicator color={colors.primary} size="small" />
+              <Text style={[styles.filtersMetaText, { color: colors.mutedForeground }]}>
+                Loading filter options...
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.filterGroup}>
             <View style={styles.filterGroupHeader}>
               <Feather name="navigation" size={13} color={colors.primary} />
@@ -368,86 +414,92 @@ export default function SearchScreen() {
             </View>
           </View>
 
-          <View style={styles.filterGroup}>
-            <View style={styles.filterGroupHeader}>
-              <Feather name="coffee" size={13} color={colors.accent} />
-              <Text style={[styles.filterGroupLabel, { color: colors.foreground }]}>
-                Meal specials
-              </Text>
-              <View style={[styles.mealBadge, { backgroundColor: colors.accent }]}>
-                <Text style={styles.mealBadgeText}>Tonight</Text>
+          {filterOptions.meal_specials.length > 0 ? (
+            <View style={styles.filterGroup}>
+              <View style={styles.filterGroupHeader}>
+                <Feather name="coffee" size={13} color={colors.accent} />
+                <Text style={[styles.filterGroupLabel, { color: colors.foreground }]}>
+                  Meal specials
+                </Text>
+                <View style={[styles.mealBadge, { backgroundColor: colors.accent }]}>
+                  <Text style={styles.mealBadgeText}>Tonight</Text>
+                </View>
+              </View>
+              <View
+                style={[
+                  styles.filterGroupBody,
+                  styles.filterGroupBodyWrap,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                {filterOptions.meal_specials.map((m) => (
+                  <Chip
+                    key={m.key}
+                    label={m.label}
+                    selected={selectedMealSpecials.has(m.key)}
+                    onPress={() => toggleMealSpecial(m.key)}
+                    size="sm"
+                  />
+                ))}
               </View>
             </View>
-            <View
-              style={[
-                styles.filterGroupBody,
-                styles.filterGroupBodyWrap,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              {MEAL_SPECIALS.map((m) => (
-                <Chip
-                  key={m}
-                  label={m}
-                  selected={selectedMealSpecials.has(m)}
-                  onPress={() => toggleMealSpecial(m)}
-                  size="sm"
-                />
-              ))}
-            </View>
-          </View>
+          ) : null}
 
-          <View style={styles.filterGroup}>
-            <View style={styles.filterGroupHeader}>
-              <Feather name="droplet" size={13} color={colors.primary} />
-              <Text style={[styles.filterGroupLabel, { color: colors.foreground }]}>
-                Drink type
-              </Text>
+          {filterOptions.drink_types.length > 0 ? (
+            <View style={styles.filterGroup}>
+              <View style={styles.filterGroupHeader}>
+                <Feather name="droplet" size={13} color={colors.primary} />
+                <Text style={[styles.filterGroupLabel, { color: colors.foreground }]}>
+                  Drink type
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.filterGroupBody,
+                  styles.filterGroupBodyWrap,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                {filterOptions.drink_types.map((d) => (
+                  <Chip
+                    key={d.id}
+                    label={d.label}
+                    selected={selectedDrinks.has(d.id)}
+                    onPress={() => toggleDrink(d.id)}
+                    size="sm"
+                  />
+                ))}
+              </View>
             </View>
-            <View
-              style={[
-                styles.filterGroupBody,
-                styles.filterGroupBodyWrap,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              {DRINK_TYPES.map((d) => (
-                <Chip
-                  key={d}
-                  label={d}
-                  selected={selectedDrinks.has(d)}
-                  onPress={() => toggleDrink(d)}
-                  size="sm"
-                />
-              ))}
-            </View>
-          </View>
+          ) : null}
 
-          <View style={[styles.filterGroup, styles.filterGroupLast]}>
-            <View style={styles.filterGroupHeader}>
-              <Feather name="star" size={13} color={colors.primary} />
-              <Text style={[styles.filterGroupLabel, { color: colors.foreground }]}>
-                Venue features
-              </Text>
+          {filterOptions.venue_features.length > 0 ? (
+            <View style={[styles.filterGroup, styles.filterGroupLast]}>
+              <View style={styles.filterGroupHeader}>
+                <Feather name="star" size={13} color={colors.primary} />
+                <Text style={[styles.filterGroupLabel, { color: colors.foreground }]}>
+                  Venue features
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.filterGroupBody,
+                  styles.filterGroupBodyWrap,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                {filterOptions.venue_features.map((f) => (
+                  <Chip
+                    key={f.key}
+                    label={f.label}
+                    selected={selectedFeatures.has(f.key)}
+                    onPress={() => toggleFeature(f.key)}
+                    size="sm"
+                  />
+                ))}
+              </View>
             </View>
-            <View
-              style={[
-                styles.filterGroupBody,
-                styles.filterGroupBodyWrap,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              {VENUE_FEATURES.map((f) => (
-                <Chip
-                  key={f}
-                  label={f}
-                  selected={selectedFeatures.has(f)}
-                  onPress={() => toggleFeature(f)}
-                  size="sm"
-                />
-              ))}
-            </View>
-          </View>
+          ) : null}
         </ScrollView>
       ) : null}
 
@@ -601,6 +653,20 @@ const styles = StyleSheet.create({
   filtersPanel: {
     maxHeight: 360,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  filtersMetaText: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  filtersLoadingWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   filterGroup: {
     paddingHorizontal: 16,

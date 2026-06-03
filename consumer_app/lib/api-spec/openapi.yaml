@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: search
+    description: Search and discovery operations
 paths:
   /v1/health:
     get:
@@ -24,6 +26,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /v1/search/filters:
+    get:
+      operationId: searchFilters
+      tags: [search]
+      summary: Search filter reference metadata
+      description: Public reference data for Search filter chips (canonical keys/ids with display labels).
+      responses:
+        "200":
+          description: Filter reference payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchFiltersResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +48,59 @@ components:
           type: string
       required:
         - status
+    SearchFilterKeyLabel:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        group:
+          type: string
+          nullable: true
+      required:
+        - key
+        - label
+    SearchFilterDrinkType:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+      required:
+        - id
+        - label
+    SearchFiltersData:
+      type: object
+      properties:
+        venue_features:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFilterKeyLabel"
+        drink_types:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFilterDrinkType"
+        meal_specials:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFilterKeyLabel"
+        event_filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFilterKeyLabel"
+      required:
+        - venue_features
+        - drink_types
+        - meal_specials
+        - event_filters
+    SearchFiltersResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/SearchFiltersData"
+      required:
+        - data
 

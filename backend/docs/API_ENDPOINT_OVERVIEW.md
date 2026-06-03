@@ -145,16 +145,49 @@ Search uses the shared discovery query core.
 GET /api/v1/search/filters
 Purpose
 
-Return filter metadata/options if needed by frontend.
+Return public reference metadata for Search filter chips so the consumer app can render labels while sending canonical filter values to `/api/v1/search/venues`.
 
 Auth
 
 Public
 
+Response shape
+
+```json
+{
+  "data": {
+    "venue_features": [
+      { "key": "beer_garden", "label": "Beer garden", "group": "spaces" }
+    ],
+    "drink_types": [
+      { "id": "uuid", "label": "Craft beer" }
+    ],
+    "meal_specials": [
+      { "key": "meal_special", "label": "Meal specials tonight" }
+    ],
+    "event_filters": []
+  }
+}
+```
+
+Semantics
+
+- `venue_features[].key` — attribute `stable_key` accepted by `venue_features` on Search (boolean discovery-driving definitions).
+- `drink_types[].id` — `beverage_product.id` UUID accepted by `drink_types` on Search.
+- `meal_specials[].key` — structured special kind accepted by `meal_specials` on Search (MVP: `meal_special` only).
+- `event_filters` — intentionally empty until a published public events catalog exists.
+
+Search venues filter parameters
+
+- `venue_features` — canonical `stable_key` values (not display labels).
+- `drink_types` — `beverage_product` UUIDs.
+- `meal_specials` — supported kind values (currently `meal_special`).
+- `events` — deferred (`400 events_unavailable`).
+- `q` — deferred (`400 q_unsupported`).
+
 Notes
 
-Can provide structured filter option lists, labels, or available categories.
-May be deferred if frontend can initially use static definitions.
+Values are schema-backed from reference tables where available. Response is cache-friendly and public.
 
 4. Map
 GET /api/v1/map/venues

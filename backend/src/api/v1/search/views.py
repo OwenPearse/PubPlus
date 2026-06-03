@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from django.db import DatabaseError
 from django.http import JsonResponse
+from django.views.decorators.http import require_GET
 
 from apps.discovery.http import (
     apply_optional_save_enrichment,
+    error_response,
     map_discovery_error,
     parse_discovery_filters_from_request,
 )
@@ -11,6 +14,20 @@ from apps.venues.public_read.card import public_venue_card_to_dict
 from common.auth.guards import optional_consumer_auth
 from common.auth.request_context import get_auth_context
 from services.discovery import DiscoveryMode, run_discovery
+from services.discovery.filter_reference import build_search_filter_reference
+
+
+@require_GET
+def search_filters(_request):
+    try:
+        payload = build_search_filter_reference()
+    except DatabaseError:
+        return error_response(
+            code="db_error",
+            message="Filter reference could not be loaded.",
+            status=500,
+        )
+    return JsonResponse({"data": payload})
 
 
 @optional_consumer_auth

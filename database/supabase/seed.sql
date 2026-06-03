@@ -26,6 +26,9 @@
 \echo 'PubPlus: loading dev_seed_reference_minimum.sql'
 \ir ../sql/seeds/dev_seed_reference_minimum.sql
 
+\echo 'PubPlus: loading dev_seed_mvp_filter_taxonomy.sql (Search filter reference rows)'
+\ir ../sql/seeds/dev_seed_mvp_filter_taxonomy.sql
+
 \echo 'PubPlus: loading dev_seed_reference_melbourne_localities.sql (VIC + inner suburbs)'
 \ir ../sql/seeds/dev_seed_reference_melbourne_localities.sql
 
