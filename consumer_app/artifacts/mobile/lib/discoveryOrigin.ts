@@ -1,9 +1,5 @@
 import type { LocalityReference } from "@/hooks/useLocalities";
-import {
-  getSearchOriginFromSuburb,
-  isValidSearchOrigin,
-  type SearchOriginCoordinates,
-} from "@/lib/searchOrigin";
+import { isValidSearchOrigin, type SearchOriginCoordinates } from "@/lib/searchOrigin";
 
 export type DiscoveryOriginSource = "device" | "suburb" | "profile" | null;
 
@@ -29,9 +25,7 @@ export function getSearchOriginFromLocalityName(
   if (!suburbName?.trim()) return null;
   const trimmed = suburbName.trim();
   const fromApi = localities.find((l) => l.name === trimmed);
-  const apiCoords = coordsFromLocality(fromApi);
-  if (apiCoords) return apiCoords;
-  return getSearchOriginFromSuburb(trimmed);
+  return coordsFromLocality(fromApi);
 }
 
 export function getProfileDefaultOrigin(

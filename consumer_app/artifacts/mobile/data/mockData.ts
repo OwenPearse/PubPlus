@@ -57,6 +57,7 @@ export type Venue = {
   menuItems?: MenuItem[];
 };
 
+/** Demo/legacy suburb labels only — not used for Search or Profile pickers (use reference localities). */
 export const SUBURBS = [
   "Fitzroy",
   "Carlton",

@@ -12,15 +12,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SUBURBS } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 
 type Props = {
   selected: string | null;
   onChange: (suburb: string | null) => void;
-  /** When set, only these suburb labels appear (e.g. seed-backed profile localities). */
-  suburbs?: string[];
+  /** Backend locality names from GET /api/v1/reference/localities. */
+  suburbs: string[];
   placeholder?: string;
+  disabled?: boolean;
 };
 
 export function SuburbSelector({
@@ -28,13 +28,14 @@ export function SuburbSelector({
   onChange,
   suburbs,
   placeholder = "Any suburb",
+  disabled = false,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [modalOpen, setModalOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const options = suburbs ?? SUBURBS;
+  const options = suburbs;
   const filtered = options.filter((s) =>
     s.toLowerCase().includes(query.toLowerCase())
   );
@@ -76,7 +77,15 @@ export function SuburbSelector({
     <>
       <TouchableOpacity
         onPress={() => setModalOpen(true)}
-        style={[styles.trigger, { backgroundColor: colors.muted, borderColor: colors.border }]}
+        disabled={disabled || options.length === 0}
+        style={[
+          styles.trigger,
+          {
+            backgroundColor: colors.muted,
+            borderColor: colors.border,
+            opacity: disabled || options.length === 0 ? 0.5 : 1,
+          },
+        ]}
         activeOpacity={0.75}
       >
         <Feather name="map-pin" size={14} color={colors.mutedForeground} />

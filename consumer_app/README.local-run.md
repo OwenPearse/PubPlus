@@ -78,6 +78,19 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 7. With location denied, set a Profile default suburb and reload — confirm distance search works using profile/reference coordinates when no suburb is selected in Search.
 8. With location denied and no profile suburb, confirm distance chips stay disabled until a Search suburb is selected (Stage 2 rule: no `radius_m` without `lat`/`lng`).
 
+## Stage 7 Search locality reference alignment manual verification
+
+1. Re-run dev DB seed.
+2. Start backend and consumer app.
+3. Open Search → Filters.
+4. Confirm suburb options match `GET /api/v1/reference/localities` (same list as Profile default suburb picker).
+5. Confirm unsupported static suburbs such as Northcote are not shown unless the backend has published eligible venues there.
+6. Select Brunswick — confirm search requests include `suburb=Brunswick`.
+7. Select a distance radius — confirm the request includes `lat`, `lng` from the locality row plus `radius_m` (device location takes priority when granted).
+8. Clear suburb — confirm Search still works with `q` and other filters.
+9. Stop backend briefly — confirm Search does not crash; suburb picker shows unavailable; `q` search still works.
+10. Confirm event filters remain hidden.
+
 ## Stage 6 Locality reference endpoint manual verification
 
 1. Re-run dev DB seed (Melbourne localities + published venues).
@@ -131,7 +144,7 @@ Requires published venues in seeded localities (see Stage 6 reference endpoint).
 1. Re-apply database seeds (`database/supabase/seed.sql` or `supabase db reset`) so `dev_seed_mvp_feature_attribute_values.sql` is loaded.
 2. Open Search → Filters → pick **Brunswick** suburb, then **Beer garden** under Venue features → expect at least one venue (e.g. Penny Black / Grand View).
 3. With **no suburb** selected, distance chips should appear disabled and the network request must **not** include `radius_m` (only `suburb`, feature, drink, meal, or open-now params).
-4. Select **CBD** suburb, choose **5 km** distance → request must include `lat`, `lng`, and `radius_m` together.
+4. Select **Melbourne** suburb (backend locality name; not `CBD`), choose **5 km** distance → request must include `lat`, `lng`, and `radius_m` together.
 5. `GET /api/v1/search/venues?radius_m=5000` alone should return `400` with `location_incomplete`.
 
 ## Known Deferred UI

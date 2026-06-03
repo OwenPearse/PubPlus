@@ -26,6 +26,7 @@ import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type SearchResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
 import { useDiscoveryOrigin } from "@/contexts/DiscoveryOriginContext";
+import { findLocalityByName, useLocalities } from "@/hooks/useLocalities";
 import { useSearchFilters } from "@/hooks/useSearchFilters";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { useAuthSession } from "@/hooks/useAuthSession";
@@ -55,7 +56,17 @@ export default function SearchScreen() {
   const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
   const { isAuthenticated, loading: authLoading } = useAuthSession();
   const { filters: filterOptions, loading: filtersLoading, error: filtersError } = useSearchFilters();
+  const {
+    localities,
+    loading: localitiesLoading,
+    error: localitiesError,
+  } = useLocalities();
   const { resolveSearchOrigin } = useDiscoveryOrigin();
+
+  const pickableSuburbNames = useMemo(
+    () => localities.map((l) => l.name).sort((a, b) => a.localeCompare(b)),
+    [localities]
+  );
 
   const { origin: searchOrigin, source: originSource } = useMemo(
     () => resolveSearchOrigin(selectedSuburb),
@@ -68,6 +79,13 @@ export default function SearchScreen() {
       setDistanceKm(null);
     }
   }, [canUseDistanceFilter, distanceKm]);
+
+  useEffect(() => {
+    if (!selectedSuburb || localitiesLoading) return;
+    if (localities.length > 0 && !findLocalityByName(localities, selectedSuburb)) {
+      setSelectedSuburb(null);
+    }
+  }, [localities, localitiesLoading, selectedSuburb]);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query), 300);
@@ -398,8 +416,28 @@ export default function SearchScreen() {
                   <Text style={[styles.filterInlineLabel, { color: colors.foreground }]}>
                     Suburb
                   </Text>
+                  {localitiesError ? (
+                    <Text
+                      style={[styles.distanceHint, { color: colors.mutedForeground }]}
+                      accessibilityRole="text"
+                    >
+                      {localitiesError} You can still search by venue or suburb name.
+                    </Text>
+                  ) : null}
                 </View>
-                <SuburbSelector selected={selectedSuburb} onChange={setSelectedSuburb} />
+                {localitiesLoading ? (
+                  <ActivityIndicator color={colors.primary} size="small" />
+                ) : (
+                  <SuburbSelector
+                    selected={selectedSuburb}
+                    onChange={setSelectedSuburb}
+                    suburbs={pickableSuburbNames}
+                    placeholder={
+                      localitiesError ? "Suburbs unavailable" : "Any suburb"
+                    }
+                    disabled={!!localitiesError}
+                  />
+                )}
               </View>
 
               <View style={[styles.filterRow, { borderBottomColor: colors.border }]}>

@@ -46,7 +46,7 @@ paths:
       operationId: referenceLocalities
       tags: [reference]
       summary: Supported locality reference
-      description: Public list of discovery localities with IDs for Profile default suburb and future location UX. Scoped to localities with published discovery-eligible venues.
+      description: Public list of discovery localities with IDs for Profile default suburb and Search suburb filter options. Search sends `suburb` as locality `name` (exact, case-insensitive). Scoped to localities with published discovery-eligible venues.
       responses:
         "200":
           description: Locality reference payload

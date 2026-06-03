@@ -124,7 +124,7 @@ Required MVP filters
 
 Support query parameters for:
 
-suburb
+suburb — exact match on published venue **locality name** (`lower(l.name) = lower(suburb)`); case-insensitive; no aliases (e.g. use `Melbourne`, not `CBD`); locality UUIDs are not accepted. Consumer Search suburb picker options should come from `GET /api/v1/reference/localities` (same supported discovery areas). Unsupported suburb text can still be tried via `q` (partial `ILIKE` on locality name) but may return no structured suburb-filtered results.
 lat
 lng
 radius_m (must be sent together with `lat` and `lng`; radius-only requests are invalid)
