@@ -86,9 +86,9 @@ Set in **Railway → service → Variables**. Use your existing **single Supabas
 
 | Railway variable name | Value to enter | Where Owen finds it |
 | --------------------- | -------------- | ------------------- |
-| `DATABASE_URL` | `postgresql://...` | Supabase → Project Settings → Database → connection string (URI). Prefer **pooler** if offered; ensure password is URL-encoded if it contains special characters. |
+| `DATABASE_URL` | `postgresql://...` | Supabase → Project Settings → Database → connection string (URI). Prefer **pooler** if offered. Passwords with `@` or `:` are parsed via the last `@` before the host (see `config/env.py`). If the URL is still malformed, set **`DB_HOST` / `DB_*`** as well — Django falls back to those when `DATABASE_URL` cannot be parsed. |
 
-Do **not** also set `DB_HOST` / `DB_*` if `DATABASE_URL` is set (settings prefer `DATABASE_URL`).
+You may set **both**: Django tries `DATABASE_URL` first and falls back to `DB_*` when the URL cannot be parsed.
 
 **Option B — discrete vars** (from `backend/.env.example` pattern)
 
@@ -233,7 +233,9 @@ DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,.up.railway.app
 
 Optional: add your exact public hostname too. **Do not** include `https://`.
 
-Railway injects `RAILWAY_PUBLIC_DOMAIN` and `RAILWAY_PRIVATE_DOMAIN`; Django **automatically appends** these to `ALLOWED_HOSTS` at boot (so healthchecks work even before you know the public URL).
+Railway injects `RAILWAY_PUBLIC_DOMAIN` and `RAILWAY_PRIVATE_DOMAIN`; Django **automatically appends** these to `ALLOWED_HOSTS` at boot.
+
+Django also always allows **`healthcheck.railway.app`** — Railway’s health probe uses that `Host` header. Without it, Django returns **400** (`DisallowedHost`) and Railway reports **service unavailable** even when Gunicorn is listening.
 
 If deploy fails with `DisallowedHost` in runtime logs, widen `DJANGO_ALLOWED_HOSTS` as above.
 
@@ -251,16 +253,56 @@ Configure Railway health check path to `/api/v1/health` (already in `railway.jso
 
 ---
 
+## Stage 5C — Database readiness (migrations + smoke)
+
+**Status:** Schema apply and re-smoke are **Owen-operated** unless explicitly delegated. Full checklist: [database/docs/RAILWAY_STAGE_5C_DB_READINESS.md](../../database/docs/RAILWAY_STAGE_5C_DB_READINESS.md).
+
+**Current production host:** `https://pubplus-production.up.railway.app` (Stage 5B: health/auth OK; DB-backed routes failing until schema is on the linked Supabase DB).
+
+### Align Supabase project with Railway
+
+1. Supabase dashboard → Project Settings → note **Project ID** (`<project-ref>`).
+2. Railway Variables → confirm `DATABASE_URL` and `SUPABASE_URL` refer to the **same** `<project-ref>` (do not paste secrets into chat).
+3. Apply migrations only to that database.
+
+### Apply schema (33 migrations)
+
+Source: `database/supabase/migrations/` (`0001` … `0033`), lexical order — see [database/docs/SQL_DRAFTING/MIGRATION_RUN_ORDER.md](../../database/docs/SQL_DRAFTING/MIGRATION_RUN_ORDER.md).
+
+```bash
+supabase link --project-ref <project-ref>
+supabase db push
+```
+
+Django does **not** run these. Do **not** use `scripts/apply_seeds_to_database_url.py` on production unless Owen explicitly wants **dev/demo seeds** loaded.
+
+### Post-migration API smoke (correct paths)
+
+```bash
+curl -i "https://<railway-domain>/api/v1/reference/localities"
+curl -i "https://<railway-domain>/api/v1/search/filters"
+curl -i "https://<railway-domain>/api/v1/search/venues"
+curl -i "https://<railway-domain>/api/v1/home"
+```
+
+Expect **HTTP 200** on all four after schema exists (payloads may be empty). **Not** a valid smoke path: `GET /api/v1/search/` (404 — no index route).
+
+### Real import (after schema)
+
+Load **real import** venue data per owner direction — **after** migrations. Do not run import in Stage 5C unless Owen explicitly asks. See Stage 5C doc §7 for seed vs import pointers.
+
+---
+
 ## Database and Supabase
 
 ### Schema and data (before meaningful smoke)
 
 Railway deploy does **not** run migrations or imports. The target Postgres must already have:
 
-1. **Schema** — apply `database/supabase/migrations/` to the Supabase project database (team workflow / Supabase CLI).
+1. **Schema** — apply `database/supabase/migrations/` to the Supabase project database (team workflow / Supabase CLI). See [Stage 5C](#stage-5c--database-readiness-migrations--smoke).
 2. **Venue data** — **real import data** per owner direction (not demo seed for production smoke).
 
-Empty DB → API may start but Home/Search return little or no content.
+Empty **published** data after schema → API returns **200** with empty arrays, not `db_error`. `db_error` / `internal_error` on localities, filters, home, or search usually means **missing schema or wrong database**, not “no venues yet”.
 
 ### Single Supabase project (immediate smoke)
 
@@ -287,7 +329,7 @@ See [consumer_app/docs/environment-strategy.md](../../consumer_app/docs/environm
 
 ## Smoke test checklist (after Owen deploys)
 
-Replace `<railway-generated-domain>` with your public hostname.
+Replace `<railway-generated-domain>` with your public hostname (e.g. `pubplus-production.up.railway.app`).
 
 **Infrastructure**
 
@@ -295,11 +337,19 @@ Replace `<railway-generated-domain>` with your public hostname.
 - [ ] Railway deploy logs show Gunicorn listening (no repeated crash loop)
 - [ ] `DJANGO_DEBUG` is `false` in variables
 
-**Database / content**
+**Database / schema (Stage 5C)**
 
-- [ ] Migrations already applied to target DB
-- [ ] Real import data present
-- [ ] `GET https://<railway-generated-domain>/api/v1/home` → `200` with useful payload (or documented empty state)
+- [ ] Railway `DATABASE_URL` and `SUPABASE_URL` share the same Supabase `<project-ref>`
+- [ ] Migrations `0001`–`0033` applied (`supabase db push` or team workflow)
+- [ ] `GET https://<railway-generated-domain>/api/v1/reference/localities` → `200` (not `db_error`)
+- [ ] `GET https://<railway-generated-domain>/api/v1/search/filters` → `200`
+- [ ] `GET https://<railway-generated-domain>/api/v1/search/venues` → `200` (not `/api/v1/search/`)
+- [ ] `GET https://<railway-generated-domain>/api/v1/home` → `200` (empty sections OK before import)
+
+**Database / content (after schema)**
+
+- [ ] Real import data present (separate step; not required for 200-with-empty)
+- [ ] Non-empty discovery: localities list and/or `/api/v1/search/venues` return venues
 
 **Auth (same Supabase project as backend env)**
 
@@ -326,6 +376,9 @@ Replace `<railway-generated-domain>` with your public hostname.
 | **`railpack` … `backend does not exist`** | Wrong builder and/or config not on deploy branch | See [Railpack / `backend does not exist`](#railpack-error-backend-does-not-exist) below |
 | **Gunicorn import error** | Wrong `WORKDIR` or missing `src` on path | Dockerfile copies full `backend/` tree — should not happen if root dir correct |
 | `/health` **200** but `/home` **500** | DB URL, schema, or query error | Migrations not applied; check logs for psycopg errors |
+| `db_error` on `/reference/localities` or `/search/filters` | Missing table/wrong DB | Apply `0001`–`0033` to the same project as `DATABASE_URL`; not caused by empty data alone |
+| `internal_error` on `/home` or `/search/venues` | Discovery SQL failure | Same as above; capture Railway traceback |
+| `404` on `/api/v1/search/` only | Wrong smoke path | Use `GET /api/v1/search/venues` |
 | `/home` **200** but empty | No real import data | Expected until data pipeline run |
 | **`401` on `/auth-probe/private` only** | JWT issuer/JWKS/audience mismatch | Match `SUPABASE_JWT_*` to same `<project-ref>` as token source |
 | **`401` on all private routes** | Same as above, or expired token | Refresh token; verify mobile/backend same Supabase project |

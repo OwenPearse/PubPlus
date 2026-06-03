@@ -20,6 +20,10 @@ DEBUG = get_bool("DJANGO_DEBUG", default=False)
 
 def _build_allowed_hosts() -> list[str]:
     hosts = get_list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+    # Railway platform health probes use this Host header (not the public service domain).
+    for required in ("healthcheck.railway.app",):
+        if required not in hosts:
+            hosts.append(required)
     for key in ("RAILWAY_PUBLIC_DOMAIN", "RAILWAY_PRIVATE_DOMAIN"):
         value = os.getenv(key, "").strip()
         if value and value not in hosts:
@@ -71,30 +75,41 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-# Database
+# Database — DATABASE_URL (if parseable) else discrete DB_* vars.
 DATABASE_URL = get_env("DATABASE_URL", default="")
-if DATABASE_URL:
-    DATABASES = {"default": parse_database_url(DATABASE_URL)}
-else:
-    DB_HOST = get_env("DB_HOST", required=True)
-    DB_PORT = int(get_env("DB_PORT", default="5432"))
-    DB_NAME = get_env("DB_NAME", required=True)
-    DB_USER = get_env("DB_USER", required=True)
-    DB_PASSWORD = get_env("DB_PASSWORD", required=True)
-    DB_SSLMODE = get_env("DB_SSLMODE", default="")
 
-    default_db = {
+
+def _databases_from_db_vars() -> dict:
+    db_host = get_env("DB_HOST", required=True)
+    db_port = int(get_env("DB_PORT", default="5432"))
+    db_name = get_env("DB_NAME", required=True)
+    db_user = get_env("DB_USER", required=True)
+    db_password = get_env("DB_PASSWORD", required=True)
+    db_sslmode = get_env("DB_SSLMODE", default="")
+
+    default_db: dict = {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": DB_NAME,
-        "USER": DB_USER,
-        "PASSWORD": DB_PASSWORD,
-        "HOST": DB_HOST,
-        "PORT": DB_PORT,
+        "NAME": db_name,
+        "USER": db_user,
+        "PASSWORD": db_password,
+        "HOST": db_host,
+        "PORT": db_port,
     }
-    if DB_SSLMODE:
-        default_db["OPTIONS"] = {"sslmode": DB_SSLMODE}
+    if db_sslmode:
+        default_db["OPTIONS"] = {"sslmode": db_sslmode}
+    return {"default": default_db}
 
-    DATABASES = {"default": default_db}
+
+if DATABASE_URL:
+    try:
+        DATABASES = {"default": parse_database_url(DATABASE_URL)}
+    except (RuntimeError, ValueError):
+        if get_env("DB_HOST"):
+            DATABASES = _databases_from_db_vars()
+        else:
+            raise
+else:
+    DATABASES = _databases_from_db_vars()
 
 # Supabase
 SUPABASE_URL = get_env("SUPABASE_URL", required=True)
