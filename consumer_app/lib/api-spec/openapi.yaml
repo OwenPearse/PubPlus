@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: search
     description: Search and discovery operations
+  - name: reference
+    description: Public reference metadata
 paths:
   /v1/health:
     get:
@@ -39,6 +41,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchFiltersResponse"
+  /v1/reference/localities:
+    get:
+      operationId: referenceLocalities
+      tags: [reference]
+      summary: Supported locality reference
+      description: Public list of discovery localities with IDs for Profile default suburb and future location UX. Scoped to localities with published discovery-eligible venues.
+      responses:
+        "200":
+          description: Locality reference payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalitiesReferenceResponse"
 components:
   schemas:
     HealthStatus:
@@ -102,6 +117,48 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/SearchFiltersData"
+      required:
+        - data
+    LocalityReference:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        state:
+          type: string
+        country_code:
+          type: string
+        geographic_region_id:
+          type: string
+          format: uuid
+        geographic_region_name:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+      required:
+        - id
+        - name
+        - geographic_region_id
+        - geographic_region_name
+    LocalitiesReferenceData:
+      type: object
+      properties:
+        localities:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocalityReference"
+      required:
+        - localities
+    LocalitiesReferenceResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/LocalitiesReferenceData"
       required:
         - data
 

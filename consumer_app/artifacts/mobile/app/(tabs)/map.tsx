@@ -16,20 +16,15 @@ import { useRouter } from "expo-router";
 
 import type { Venue } from "@/data/mockData";
 import { EmptyState } from "@/components/EmptyState";
+import { useDiscoveryOrigin } from "@/contexts/DiscoveryOriginContext";
 import { useColors } from "@/hooks/useColors";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
+import { mapViewportAroundOrigin } from "@/lib/discoveryOrigin";
 import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type MapResponse } from "@/lib/mappers";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const POPUP_HEIGHT = Math.round(SCREEN_HEIGHT * 0.33);
-const DEFAULT_MAP_BOUNDS = {
-  north: -37.74,
-  south: -37.86,
-  east: 145.03,
-  west: 144.90,
-};
-
 const SUBURB_LABELS = [
   { name: "Brunswick",   top: 0.10, left: 0.28 },
   { name: "Fitzroy",     top: 0.26, left: 0.50 },
@@ -57,6 +52,12 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isSaved, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
+  const { discoveryOrigin } = useDiscoveryOrigin();
+
+  const mapBounds = useMemo(
+    () => mapViewportAroundOrigin(discoveryOrigin.origin),
+    [discoveryOrigin.origin]
+  );
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -73,7 +74,7 @@ export default function MapScreen() {
       setError(null);
       try {
         const response = await publicApiRequest<MapResponse>("/api/v1/map/venues", {
-          query: DEFAULT_MAP_BOUNDS,
+          query: mapBounds,
         });
         if (cancelled) return;
         const mapped = (response.data.venues ?? []).map((venue) =>
@@ -101,7 +102,7 @@ export default function MapScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mapBounds.east, mapBounds.north, mapBounds.south, mapBounds.west]);
 
   const coordinateBounds = useMemo(() => {
     if (venues.length === 0) return null;
@@ -296,7 +297,7 @@ export default function MapScreen() {
               onAction={() => {
                 setLoading(true);
                 setError(null);
-                publicApiRequest<MapResponse>("/api/v1/map/venues", { query: DEFAULT_MAP_BOUNDS })
+                publicApiRequest<MapResponse>("/api/v1/map/venues", { query: mapBounds })
                   .then((response) =>
                     setVenues(
                       (response.data.venues ?? []).map((venue) =>

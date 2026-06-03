@@ -191,6 +191,46 @@ Notes
 
 Values are schema-backed from reference tables where available. Response is cache-friendly and public.
 
+GET /api/v1/reference/localities
+Purpose
+
+Return supported discovery localities/suburbs with stable IDs for Profile default locality and future location-aware UX.
+
+Auth
+
+Public (no JWT required)
+
+Response shape
+
+```json
+{
+  "data": {
+    "localities": [
+      {
+        "id": "uuid",
+        "name": "Brunswick",
+        "state": "VIC",
+        "country_code": "AU",
+        "geographic_region_id": "uuid",
+        "geographic_region_name": "Victoria",
+        "latitude": -37.766,
+        "longitude": 144.961
+      }
+    ]
+  }
+}
+```
+
+Semantics
+
+- `id` — `locality.id`; use as `default_locality_id` on `PATCH /api/v1/profile`.
+- `geographic_region_id` — required companion field for profile default location PATCH.
+- `latitude` / `longitude` — optional centroid (mean of published venue map points in that locality); for future Search-origin consolidation, not required by Profile MVP.
+- Scope: localities that have at least one discovery-eligible published venue (same published spine as Search). Not a national suburb directory.
+- Ordering: `state`, then `name`.
+- Empty DB → `200` with `"localities": []`.
+- Response includes `Cache-Control: public, max-age=300`.
+
 4. Map
 GET /api/v1/map/venues
 Purpose

@@ -25,13 +25,11 @@ import { DISTANCE_OPTIONS } from "@/data/mockData";
 import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type SearchResponse } from "@/lib/mappers";
 import { useColors } from "@/hooks/useColors";
+import { useDiscoveryOrigin } from "@/contexts/DiscoveryOriginContext";
 import { useSearchFilters } from "@/hooks/useSearchFilters";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { useAuthSession } from "@/hooks/useAuthSession";
-import {
-  getSearchOriginFromSuburb,
-  isValidSearchOrigin,
-} from "@/lib/searchOrigin";
+import { isValidSearchOrigin } from "@/lib/searchOrigin";
 import { normalizeSearchQ } from "@/lib/searchQuery";
 
 export default function SearchScreen() {
@@ -57,10 +55,11 @@ export default function SearchScreen() {
   const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
   const { isAuthenticated, loading: authLoading } = useAuthSession();
   const { filters: filterOptions, loading: filtersLoading, error: filtersError } = useSearchFilters();
+  const { resolveSearchOrigin } = useDiscoveryOrigin();
 
-  const searchOrigin = useMemo(
-    () => getSearchOriginFromSuburb(selectedSuburb),
-    [selectedSuburb]
+  const { origin: searchOrigin, source: originSource } = useMemo(
+    () => resolveSearchOrigin(selectedSuburb),
+    [resolveSearchOrigin, selectedSuburb]
   );
   const canUseDistanceFilter = isValidSearchOrigin(searchOrigin);
 
@@ -413,7 +412,14 @@ export default function SearchScreen() {
                       style={[styles.distanceHint, { color: colors.mutedForeground }]}
                       accessibilityRole="text"
                     >
-                      Select a suburb to enable distance
+                      Allow location access or select a suburb to enable distance
+                    </Text>
+                  ) : originSource === "device" ? (
+                    <Text
+                      style={[styles.distanceHint, { color: colors.mutedForeground }]}
+                      accessibilityRole="text"
+                    >
+                      Using your current location
                     </Text>
                   ) : null}
                 </View>

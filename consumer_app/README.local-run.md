@@ -64,8 +64,32 @@ Backend integration tests:
 
 ```bash
 cd backend
-python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_saved_venues_endpoints tests.test_profile_endpoints tests.test_submission_endpoints tests.test_discovery_public_endpoints tests.test_home_and_venue_detail_endpoints
+python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_saved_venues_endpoints tests.test_profile_endpoints tests.test_reference_localities tests.test_submission_endpoints tests.test_discovery_public_endpoints tests.test_home_and_venue_detail_endpoints
 ```
+
+## Stage 6 device location (current search origin) manual verification
+
+1. Open the app on a device or simulator with location services available.
+2. On first visit to the main tabs, confirm a foreground location permission prompt uses the PubPlus nearby-pubs copy (or browser location prompt on web).
+3. **Allow** location — open Search → Filters → confirm distance chips are enabled without selecting a suburb.
+4. Select a distance (e.g. 5 km) — confirm the search request includes `lat`, `lng`, and `radius_m` from device coordinates (not profile PATCH).
+5. Confirm Profile default suburb still saves via `PATCH /api/v1/profile/` only (GPS is not sent to profile).
+6. **Deny** location (or disable location services) — confirm the app still loads Home/Search/Map.
+7. With location denied, set a Profile default suburb and reload — confirm distance search works using profile/reference coordinates when no suburb is selected in Search.
+8. With location denied and no profile suburb, confirm distance chips stay disabled until a Search suburb is selected (Stage 2 rule: no `radius_m` without `lat`/`lng`).
+
+## Stage 6 Locality reference endpoint manual verification
+
+1. Re-run dev DB seed (Melbourne localities + published venues).
+2. Start backend and consumer app.
+3. Log in to the consumer app.
+4. Open Profile.
+5. Open default suburb picker — confirm options load from `GET /api/v1/reference/localities` (not hardcoded UUIDs).
+6. Select Brunswick (or another listed suburb).
+7. Confirm `PATCH /api/v1/profile/` sends `default_locality_id` and `default_geographic_region_id` from the endpoint row.
+8. Reload Profile — confirm selection persists.
+9. Clear suburb (X on chip) — confirm PATCH sends both locality fields as `null`.
+10. Stop backend briefly — confirm Profile still renders; suburb picker shows unavailable/retry, not a crash.
 
 ## Stage 5 Profile locality + preference cleanup manual verification
 
@@ -80,7 +104,7 @@ python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_sav
 9. Toggle push, marketing email, and SMS marketing — confirm each persists after reload.
 10. Clear default suburb (X on chip) — confirm both locality IDs clear if backend allows `null`.
 
-Requires Melbourne inner locality seeds (`dev_seed_reference_melbourne_localities.sql`) in the dev database.
+Requires published venues in seeded localities (see Stage 6 reference endpoint).
 
 ## Stage 4 Events honesty manual verification
 

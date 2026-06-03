@@ -8,6 +8,7 @@ urlpatterns = [
     path("auth-probe/public", public_probe, name="auth-probe-public"),
     path("auth-probe/private", private_consumer_probe, name="auth-probe-private"),
     path("home", include("api.v1.home.urls")),
+    path("reference/", include("api.v1.reference.urls")),
     path("search/", include("api.v1.search.urls")),
     path("map/", include("api.v1.map.urls")),
     path("venues/", include("api.v1.venues.urls")),

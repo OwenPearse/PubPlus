@@ -17,8 +17,10 @@ import { EmptyState } from "@/components/EmptyState";
 import { VenueRow } from "@/components/VenueRow";
 import { publicApiRequest } from "@/lib/api";
 import { mapCardToVenue, type HomeResponse } from "@/lib/mappers";
+import { useDiscoveryOrigin } from "@/contexts/DiscoveryOriginContext";
 import { useColors } from "@/hooks/useColors";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
+import { isValidSearchOrigin } from "@/lib/searchOrigin";
 
 const CURRENT_SUBURB = "Fitzroy";
 
@@ -30,6 +32,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
+  const { discoveryOrigin } = useDiscoveryOrigin();
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : 0;
@@ -45,7 +48,14 @@ export default function HomeScreen() {
       setLoading(true);
       setError(null);
       try {
-        const response = await publicApiRequest<HomeResponse>("/api/v1/home");
+        const query: Record<string, number> = {};
+        if (isValidSearchOrigin(discoveryOrigin.origin)) {
+          query.lat = discoveryOrigin.origin.lat;
+          query.lng = discoveryOrigin.origin.lng;
+        }
+        const response = await publicApiRequest<HomeResponse>("/api/v1/home", {
+          query: Object.keys(query).length > 0 ? query : undefined,
+        });
         if (cancelled) return;
         setSections(response.data.sections ?? []);
       } catch {
@@ -60,7 +70,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [discoveryOrigin.origin?.lat, discoveryOrigin.origin?.lng]);
 
   const mappedSections = useMemo(
     () =>

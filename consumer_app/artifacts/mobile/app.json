@@ -21,14 +21,15 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
+      "expo-router",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PubPlus uses your location to show nearby pubs and distance-based search results."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

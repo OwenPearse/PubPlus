@@ -17,13 +17,9 @@ import { EmptyState } from "@/components/EmptyState";
 import { ProfileRow } from "@/components/ProfileRow";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SuburbSelector } from "@/components/SuburbSelector";
+import { findLocalityById, findLocalityByName, useLocalities } from "@/hooks/useLocalities";
 import { useProfile } from "@/hooks/useProfile";
 import { useColors } from "@/hooks/useColors";
-import {
-  buildDefaultLocalityPatch,
-  getSuburbLabelForLocalityId,
-  PROFILE_PICKABLE_SUBURBS,
-} from "@/lib/localityReference";
 import { signOut } from "@/lib/supabase";
 
 export default function ProfileScreen() {
@@ -31,6 +27,12 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { session, isAuthenticated, profile, loading, saving, error, refreshProfile, patchProfile } = useProfile();
+  const {
+    localities,
+    loading: localitiesLoading,
+    error: localitiesError,
+    refresh: refreshLocalities,
+  } = useLocalities();
   const [signingOut, setSigningOut] = useState(false);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -45,24 +47,41 @@ export default function ProfileScreen() {
     return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   }, [session?.user?.created_at]);
 
-  const savedSuburbLabel = useMemo(
-    () => getSuburbLabelForLocalityId(profile?.default_locality_id),
-    [profile?.default_locality_id]
+  const pickableSuburbNames = useMemo(
+    () => localities.map((l) => l.name).sort((a, b) => a.localeCompare(b)),
+    [localities]
+  );
+
+  const savedLocality = useMemo(
+    () => findLocalityById(localities, profile?.default_locality_id),
+    [localities, profile?.default_locality_id]
   );
 
   const savedSuburbDisplay = useMemo(() => {
-    if (savedSuburbLabel) return savedSuburbLabel;
-    if (profile?.default_locality_id) return "Saved locality";
+    if (savedLocality) return savedLocality.name;
+    if (profile?.default_locality_id) return "Saved suburb unavailable";
     return null;
-  }, [savedSuburbLabel, profile?.default_locality_id]);
+  }, [savedLocality, profile?.default_locality_id]);
 
-  async function handleDefaultSuburbChange(suburb: string | null) {
+  async function handleDefaultSuburbChange(suburbName: string | null) {
     Haptics.selectionAsync();
-    const patch = buildDefaultLocalityPatch(suburb);
+    if (!suburbName) {
+      const currentId = profile?.default_locality_id ?? null;
+      if (currentId === null) return;
+      await patchProfile({
+        default_locality_id: null,
+        default_geographic_region_id: null,
+      });
+      return;
+    }
+    const locality = findLocalityByName(localities, suburbName);
+    if (!locality) return;
     const currentId = profile?.default_locality_id ?? null;
-    const nextId = patch.default_locality_id;
-    if (currentId === nextId) return;
-    await patchProfile(patch);
+    if (currentId === locality.id) return;
+    await patchProfile({
+      default_locality_id: locality.id,
+      default_geographic_region_id: locality.geographic_region_id,
+    });
   }
 
   async function togglePushNotifications() {
@@ -201,16 +220,31 @@ export default function ProfileScreen() {
         subtitle="Choose a default suburb to make local discovery easier."
       />
       <View style={styles.localityRow}>
-        <SuburbSelector
-          selected={savedSuburbDisplay}
-          onChange={handleDefaultSuburbChange}
-          suburbs={PROFILE_PICKABLE_SUBURBS}
-          placeholder="Choose default suburb"
-        />
+        {localitiesLoading ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <SuburbSelector
+            selected={savedSuburbDisplay}
+            onChange={handleDefaultSuburbChange}
+            suburbs={pickableSuburbNames}
+            placeholder={
+              localitiesError ? "Suburbs unavailable" : "Choose default suburb"
+            }
+          />
+        )}
       </View>
-      {profile?.default_locality_id && !savedSuburbLabel ? (
+      {localitiesError ? (
+        <EmptyState
+          icon="map-pin"
+          title="Suburbs unavailable"
+          subtitle={localitiesError}
+          actionLabel="Retry"
+          onAction={refreshLocalities}
+        />
+      ) : null}
+      {profile?.default_locality_id && !savedLocality ? (
         <Text style={[styles.helperCopy, { color: colors.mutedForeground }]}>
-          Your saved locality is not in the Melbourne inner seed list shown here.
+          Your saved suburb is not in the current supported suburb list.
         </Text>
       ) : null}
       <Text style={[styles.helperCopy, { color: colors.mutedForeground }]}>
