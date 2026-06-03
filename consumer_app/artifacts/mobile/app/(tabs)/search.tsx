@@ -28,6 +28,10 @@ import { useColors } from "@/hooks/useColors";
 import { useSearchFilters } from "@/hooks/useSearchFilters";
 import { useSavedVenues } from "@/hooks/useSavedVenues";
 import { useAuthSession } from "@/hooks/useAuthSession";
+import {
+  getSearchOriginFromSuburb,
+  isValidSearchOrigin,
+} from "@/lib/searchOrigin";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -51,6 +55,18 @@ export default function SearchScreen() {
   const { savedVenueIds, toggleSaved, authMessage, clearAuthMessage } = useSavedVenues();
   const { isAuthenticated, loading: authLoading } = useAuthSession();
   const { filters: filterOptions, loading: filtersLoading, error: filtersError } = useSearchFilters();
+
+  const searchOrigin = useMemo(
+    () => getSearchOriginFromSuburb(selectedSuburb),
+    [selectedSuburb]
+  );
+  const canUseDistanceFilter = isValidSearchOrigin(searchOrigin);
+
+  useEffect(() => {
+    if (!canUseDistanceFilter && distanceKm !== null) {
+      setDistanceKm(null);
+    }
+  }, [canUseDistanceFilter, distanceKm]);
 
   const featureLabelByKey = useMemo(() => {
     const map = new Map<string, string>();
@@ -179,17 +195,44 @@ export default function SearchScreen() {
     featureLabelByKey,
   ]);
 
-  const searchQuery = useMemo(
-    () => ({
+  const searchQuery = useMemo(() => {
+    const query: {
+      suburb?: string;
+      open_now?: boolean;
+      lat?: number;
+      lng?: number;
+      radius_m?: number;
+      meal_specials: string[];
+      drink_types: string[];
+      venue_features: string[];
+    } = {
       suburb: selectedSuburb ?? undefined,
       open_now: openNowOnly ? true : undefined,
-      radius_m: distanceKm ? distanceKm * 1000 : undefined,
       meal_specials: Array.from(selectedMealSpecials),
       drink_types: Array.from(selectedDrinks),
       venue_features: Array.from(selectedFeatures),
-    }),
-    [distanceKm, openNowOnly, selectedDrinks, selectedFeatures, selectedMealSpecials, selectedSuburb]
-  );
+    };
+    if (
+      canUseDistanceFilter &&
+      searchOrigin &&
+      distanceKm !== null &&
+      distanceKm > 0
+    ) {
+      query.lat = searchOrigin.lat;
+      query.lng = searchOrigin.lng;
+      query.radius_m = distanceKm * 1000;
+    }
+    return query;
+  }, [
+    canUseDistanceFilter,
+    distanceKm,
+    openNowOnly,
+    searchOrigin,
+    selectedDrinks,
+    selectedFeatures,
+    selectedMealSpecials,
+    selectedSuburb,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -347,14 +390,26 @@ export default function SearchScreen() {
               </View>
 
               <View style={[styles.filterRow, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.filterInlineLabel, { color: colors.foreground }]}>
-                  Distance
-                </Text>
+                <View style={styles.distanceLabelCol}>
+                  <Text style={[styles.filterInlineLabel, { color: colors.foreground }]}>
+                    Distance
+                  </Text>
+                  {!canUseDistanceFilter ? (
+                    <Text
+                      style={[styles.distanceHint, { color: colors.mutedForeground }]}
+                      accessibilityRole="text"
+                    >
+                      Select a suburb to enable distance
+                    </Text>
+                  ) : null}
+                </View>
                 <View style={styles.distanceRow}>
                   {DISTANCE_OPTIONS.map((km) => (
                     <TouchableOpacity
                       key={km}
+                      disabled={!canUseDistanceFilter}
                       onPress={() => {
+                        if (!canUseDistanceFilter) return;
                         Haptics.selectionAsync();
                         setDistanceKm(distanceKm === km ? null : km);
                       }}
@@ -365,6 +420,7 @@ export default function SearchScreen() {
                             distanceKm === km ? colors.primary : colors.muted,
                           borderColor:
                             distanceKm === km ? colors.primary : colors.border,
+                          opacity: canUseDistanceFilter ? 1 : 0.45,
                         },
                       ]}
                     >
@@ -731,9 +787,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
+  distanceLabelCol: {
+    flex: 1,
+    gap: 2,
+  },
+  distanceHint: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
   distanceRow: {
     flexDirection: "row",
     gap: 5,
+    flexShrink: 0,
   },
   distanceBtn: {
     paddingHorizontal: 8,

@@ -128,7 +128,7 @@ Support query parameters for:
 suburb
 lat
 lng
-radius_m
+radius_m (must be sent together with `lat` and `lng`; radius-only requests are invalid)
 open_now
 meal_specials
 drink_types
@@ -182,6 +182,9 @@ Search venues filter parameters
 - `venue_features` — canonical `stable_key` values (not display labels).
 - `drink_types` — `beverage_product` UUIDs.
 - `meal_specials` — supported kind values (currently `meal_special`).
+- `lat`, `lng`, `radius_m` — radius search requires all three parameters. Clients must not send `radius_m` without valid `lat` and `lng`.
+
+Dev/demo note: feature filter efficacy depends on seeded `venue_published_attribute_value` rows with `value_boolean = true` for the MVP boolean definitions (`dev_seed_mvp_feature_attribute_values.sql`).
 - `events` — deferred (`400 events_unavailable`).
 - `q` — deferred (`400 q_unsupported`).
 

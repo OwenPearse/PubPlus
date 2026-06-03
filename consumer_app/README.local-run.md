@@ -67,6 +67,14 @@ cd backend
 python manage.py test --keepdb --noinput tests.test_auth_boundary tests.test_saved_venues_endpoints tests.test_profile_endpoints tests.test_submission_endpoints tests.test_discovery_public_endpoints tests.test_home_and_venue_detail_endpoints
 ```
 
+## Stage 2 Search manual verification
+
+1. Re-apply database seeds (`database/supabase/seed.sql` or `supabase db reset`) so `dev_seed_mvp_feature_attribute_values.sql` is loaded.
+2. Open Search → Filters → pick **Brunswick** suburb, then **Beer garden** under Venue features → expect at least one venue (e.g. Penny Black / Grand View).
+3. With **no suburb** selected, distance chips should appear disabled and the network request must **not** include `radius_m` (only `suburb`, feature, drink, meal, or open-now params).
+4. Select **CBD** suburb, choose **5 km** distance → request must include `lat`, `lng`, and `radius_m` together.
+5. `GET /api/v1/search/venues?radius_m=5000` alone should return `400` with `location_incomplete`.
+
 ## Known Deferred UI
 
 - Text search `q` and event-specific search filters are not exposed as live backend filters yet.

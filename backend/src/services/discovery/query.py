@@ -122,6 +122,10 @@ SELECT
                 ON ad.id = pav.attribute_definition_id
               WHERE pav.venue_id = v.id
                 AND ad.stable_key = %s
+                AND (
+                  ad.value_shape <> 'boolean'
+                  OR pav.value_boolean IS TRUE
+                )
             )
             """
         )

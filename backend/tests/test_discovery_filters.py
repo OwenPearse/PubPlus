@@ -53,6 +53,18 @@ class TestFilters(SimpleTestCase):
         f = DiscoveryMvpFilters(suburb="Sydney")
         f.validate(DiscoveryMode.LIST)
 
+    def test_radius_only_rejects_location_incomplete(self) -> None:
+        f = DiscoveryMvpFilters(radius_m=5000.0)
+        with self.assertRaises(DiscoveryFilterError) as ctx:
+            f.validate(DiscoveryMode.LIST)
+        self.assertEqual(ctx.exception.code, "location_incomplete")
+
+    def test_lat_lng_without_radius_rejects_location_incomplete(self) -> None:
+        f = DiscoveryMvpFilters(lat=-37.81, lng=144.96)
+        with self.assertRaises(DiscoveryFilterError) as ctx:
+            f.validate(DiscoveryMode.LIST)
+        self.assertEqual(ctx.exception.code, "location_incomplete")
+
     def test_list_sql_mentions_haversine_in_radius_mode(self) -> None:
         f = DiscoveryMvpFilters(lat=-34.0, lng=151.0, radius_m=4000.0)
         f.validate(DiscoveryMode.LIST)

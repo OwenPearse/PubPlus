@@ -41,6 +41,9 @@
 \echo 'PubPlus: loading dev_seed_melbourne_inner_venues.sql'
 \ir ../sql/seeds/dev_seed_melbourne_inner_venues.sql
 
+\echo 'PubPlus: loading dev_seed_mvp_feature_attribute_values.sql (Search feature filter QA)'
+\ir ../sql/seeds/dev_seed_mvp_feature_attribute_values.sql
+
 \echo 'PubPlus: loading dev_seed_demo_specials.sql'
 \ir ../sql/seeds/dev_seed_demo_specials.sql
 

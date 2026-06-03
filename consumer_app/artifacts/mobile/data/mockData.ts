@@ -75,6 +75,28 @@ export const SUBURBS = [
   "Port Melbourne",
 ];
 
+/** Approximate suburb centroids for Search radius (WGS84). Aligns with Melbourne dev seed localities. */
+export const SUBURB_ORIGIN_COORDINATES: Record<
+  string,
+  { lat: number; lng: number }
+> = {
+  Abbotsford: { lat: -37.801, lng: 144.993 },
+  Brunswick: { lat: -37.77, lng: 144.96 },
+  Carlton: { lat: -37.8, lng: 144.967 },
+  CBD: { lat: -37.8136, lng: 144.9631 },
+  Collingwood: { lat: -37.802, lng: 144.984 },
+  Cremorne: { lat: -37.826, lng: 144.995 },
+  Fitzroy: { lat: -37.798, lng: 144.978 },
+  Hawthorn: { lat: -37.822, lng: 145.028 },
+  "Northcote": { lat: -37.769, lng: 144.999 },
+  "Port Melbourne": { lat: -37.84, lng: 144.942 },
+  Prahran: { lat: -37.851, lng: 144.993 },
+  Richmond: { lat: -37.818, lng: 145.001 },
+  "South Yarra": { lat: -37.838, lng: 144.992 },
+  "St Kilda": { lat: -37.868, lng: 144.981 },
+  Windsor: { lat: -37.856, lng: 144.992 },
+};
+
 export const MEAL_SPECIALS: MealDeal[] = [
   "Parma Night",
   "Burger Night",
