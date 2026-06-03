@@ -1,4 +1,5 @@
 import importlib
+import os
 import sys
 from pathlib import Path
 
@@ -15,7 +16,18 @@ load_dotenv(BASE_DIR / ".env")
 DJANGO_ENV = get_env("DJANGO_ENV", default="local")
 SECRET_KEY = get_env("DJANGO_SECRET_KEY", required=True)
 DEBUG = get_bool("DJANGO_DEBUG", default=False)
-ALLOWED_HOSTS = get_list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+
+
+def _build_allowed_hosts() -> list[str]:
+    hosts = get_list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+    for key in ("RAILWAY_PUBLIC_DOMAIN", "RAILWAY_PRIVATE_DOMAIN"):
+        value = os.getenv(key, "").strip()
+        if value and value not in hosts:
+            hosts.append(value)
+    return hosts
+
+
+ALLOWED_HOSTS = _build_allowed_hosts()
 CORS_ALLOWED_ORIGINS = get_list("DJANGO_CORS_ALLOWED_ORIGINS")
 CSRF_TRUSTED_ORIGINS = get_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
