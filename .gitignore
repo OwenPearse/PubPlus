@@ -26,6 +26,12 @@
 
 # Local debug scratch artifacts (repo root only — do not use _*; it ignores __init__.py)
 /_*
+# Never ignore Python package markers
+!**/__init__.py
+
+# Python bytecode
+__pycache__/
+*.py[cod]
 t[0-9].json
 cmd_out.json
 mcp_*.json
