@@ -1,0 +1,4 @@
+.env
+
+# Local one-off portal/live verification fixtures (not used in CI)
+tests/fixtures/zz_*.csv

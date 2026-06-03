@@ -1,0 +1,433 @@
+{
+  "source_csv": "dataCollection/Pub_Australia.csv",
+  "venue_count": 28,
+  "suburbs": [
+    "Abbotsford",
+    "Brunswick",
+    "Brunswick West",
+    "Carlton",
+    "Carlton North",
+    "Collingwood",
+    "Cremorne",
+    "Docklands",
+    "Fitzroy",
+    "Fitzroy North",
+    "Hawthorn",
+    "Melbourne",
+    "Port Melbourne",
+    "Prahran",
+    "Richmond",
+    "South Melbourne",
+    "South Yarra",
+    "St Kilda",
+    "West Melbourne",
+    "Windsor"
+  ],
+  "selection_note": "Deduplicated by google_id; two-pass city breadth then fill by fewest per city.",
+  "test_geography": {
+    "example_suburb_filter": "Richmond",
+    "example_map_viewport": {
+      "south": -37.87,
+      "north": -37.76,
+      "west": 144.92,
+      "east": 145.05
+    },
+    "example_radius_meters": 12000,
+    "example_point_lat": -37.81,
+    "example_point_lng": 144.98
+  },
+  "venues": [
+    {
+      "index": 1,
+      "venue_id": "f1111111-1111-4111-8111-000000000001",
+      "stage3_roles": [
+        "late_night_crosses_midnight"
+      ],
+      "business_name": "The Penny Black",
+      "city": "Brunswick",
+      "street": "420 Sydney Rd",
+      "postal_code": "3056",
+      "latitude": -37.768078,
+      "longitude": 144.962174,
+      "google_id": "0x6ad643399d60aabb:0xd3f2397a765caccb"
+    },
+    {
+      "index": 2,
+      "venue_id": "f1111111-1111-4111-8111-000000000002",
+      "stage3_roles": [
+        "late_night_crosses_midnight"
+      ],
+      "business_name": "Grand View Hotel",
+      "city": "Brunswick West",
+      "street": "47 Pearson St",
+      "postal_code": "3055",
+      "latitude": -37.766339,
+      "longitude": 144.948859,
+      "google_id": "0x6ad65cb9ed415531:0xd2d4d9c8da700a04"
+    },
+    {
+      "index": 3,
+      "venue_id": "f1111111-1111-4111-8111-000000000003",
+      "stage3_roles": [
+        "late_night_crosses_midnight"
+      ],
+      "business_name": "Prince Alfred Rooftop & Bar",
+      "city": "Carlton",
+      "street": "191 Grattan St",
+      "postal_code": "3053",
+      "latitude": -37.8004228,
+      "longitude": 144.9622287,
+      "google_id": "0x6ad642d321509437:0x96445202b36d58b3"
+    },
+    {
+      "index": 4,
+      "venue_id": "f1111111-1111-4111-8111-000000000004",
+      "stage3_roles": [
+        "hours_exception"
+      ],
+      "business_name": "Great Northern Hotel",
+      "city": "Carlton North",
+      "street": "644 Rathdowne St",
+      "postal_code": "3054",
+      "latitude": -37.7819954,
+      "longitude": 144.9734771,
+      "google_id": "0x6ad64339e4fa4411:0x74ee9d7939ba4b7d"
+    },
+    {
+      "index": 5,
+      "venue_id": "f1111111-1111-4111-8111-000000000005",
+      "stage3_roles": [
+        "hours_exception"
+      ],
+      "business_name": "The Gasometer Hotel",
+      "city": "Collingwood",
+      "street": "484 Smith St",
+      "postal_code": "3066",
+      "latitude": -37.7942407,
+      "longitude": 144.9853235,
+      "google_id": "0x6ad6431857723699:0x8bfceb18d9284bb4"
+    },
+    {
+      "index": 6,
+      "venue_id": "f1111111-1111-4111-8111-000000000006",
+      "stage3_roles": [
+        "hours_exception"
+      ],
+      "business_name": "The Workers Club",
+      "city": "Fitzroy",
+      "street": "51 Brunswick St",
+      "postal_code": "3065",
+      "latitude": -37.8055556,
+      "longitude": 144.9769444,
+      "google_id": "0x6ad642db826c8b45:0x852c2b9083fd3b11"
+    },
+    {
+      "index": 7,
+      "venue_id": "f1111111-1111-4111-8111-000000000007",
+      "stage3_roles": [
+        "sparse_hours_partial_uncertainty"
+      ],
+      "business_name": "Royal Oak Hotel",
+      "city": "Fitzroy North",
+      "street": "442 Nicholson St",
+      "postal_code": "3068",
+      "latitude": -37.789462,
+      "longitude": 144.9767245,
+      "google_id": "0x6ad6432fcc7e3ec5:0x68de8c45877a1a2c"
+    },
+    {
+      "index": 8,
+      "venue_id": "f1111111-1111-4111-8111-000000000008",
+      "stage3_roles": [
+        "sparse_hours_partial_uncertainty"
+      ],
+      "business_name": "Retreat Hotel",
+      "city": "Abbotsford",
+      "street": "226 Nicholson St",
+      "postal_code": "3067",
+      "latitude": -37.8010712,
+      "longitude": 144.997764,
+      "google_id": "0x6ad643d0073289f3:0x9f87dd7b9309fd10"
+    },
+    {
+      "index": 9,
+      "venue_id": "f1111111-1111-4111-8111-000000000009",
+      "stage3_roles": [
+        "sparse_hours_partial_uncertainty"
+      ],
+      "business_name": "The Grand Hotel Richmond",
+      "city": "Richmond",
+      "street": "333 Burnley St",
+      "postal_code": "3121",
+      "latitude": -37.8246628,
+      "longitude": 145.0075649,
+      "google_id": "0x6ad643f7842a0159:0x4b784d9eb3aa8d53"
+    },
+    {
+      "index": 10,
+      "venue_id": "f1111111-1111-4111-8111-00000000000a",
+      "stage3_roles": [
+        "meal_special"
+      ],
+      "business_name": "Bridie O'Reilly’s",
+      "city": "South Yarra",
+      "street": "462 Chapel St",
+      "postal_code": "3141",
+      "latitude": -37.843584,
+      "longitude": 144.995101,
+      "google_id": "0x6ad668286c2afe6b:0x24bc64a534e9e931"
+    },
+    {
+      "index": 11,
+      "venue_id": "f1111111-1111-4111-8111-00000000000b",
+      "stage3_roles": [
+        "meal_special"
+      ],
+      "business_name": "Glenferrie Hotel",
+      "city": "Hawthorn",
+      "street": "324 Burwood Rd",
+      "postal_code": "3122",
+      "latitude": -37.8227474,
+      "longitude": 145.0345455,
+      "google_id": "0x6ad64233decd78ab:0x5b4220f2fbd77eef"
+    },
+    {
+      "index": 12,
+      "venue_id": "f1111111-1111-4111-8111-00000000000c",
+      "stage3_roles": [
+        "meal_special"
+      ],
+      "business_name": "The Flying Duck Hotel",
+      "city": "Prahran",
+      "street": "67 Bendigo St",
+      "postal_code": "3181",
+      "latitude": -37.8497643,
+      "longitude": 144.9973785,
+      "google_id": "0x6ad6682eff336e89:0xf3a7dd3ddd5462c5"
+    },
+    {
+      "index": 13,
+      "venue_id": "f1111111-1111-4111-8111-00000000000d",
+      "stage3_roles": [
+        "happy_hour"
+      ],
+      "business_name": "The Wolf Windsor",
+      "city": "Windsor",
+      "street": "152 Chapel St",
+      "postal_code": "3181",
+      "latitude": -37.8528314,
+      "longitude": 144.993357,
+      "google_id": "0x6ad6683a8f73a841:0x9f9ba846542595dd"
+    },
+    {
+      "index": 14,
+      "venue_id": "f1111111-1111-4111-8111-00000000000e",
+      "stage3_roles": [
+        "happy_hour"
+      ],
+      "business_name": "The Lion & Wombat",
+      "city": "St Kilda",
+      "street": "107 Grey St",
+      "postal_code": "3182",
+      "latitude": -37.8638509,
+      "longitude": 144.9810967,
+      "google_id": "0x6ad669b5c2f4d85b:0xfbd38cab672daf87"
+    },
+    {
+      "index": 15,
+      "venue_id": "f1111111-1111-4111-8111-00000000000f",
+      "stage3_roles": [
+        "happy_hour"
+      ],
+      "business_name": "The Crafty Squire",
+      "city": "Melbourne",
+      "street": "127 Russell St",
+      "postal_code": "3000",
+      "latitude": -37.8137597,
+      "longitude": 144.9682772,
+      "google_id": "0x6ad642c9c2dd396b:0xe8d220ef3bdbf121"
+    },
+    {
+      "index": 16,
+      "venue_id": "f1111111-1111-4111-8111-000000000010",
+      "stage3_roles": [
+        "drink_special"
+      ],
+      "business_name": "McMahon's Hotel",
+      "city": "West Melbourne",
+      "street": "575 Spencer St",
+      "postal_code": "3003",
+      "latitude": -37.8073681,
+      "longitude": 144.9470219,
+      "google_id": "0x6ad65d477b869ae7:0x15464a3ceac4dac8"
+    },
+    {
+      "index": 17,
+      "venue_id": "f1111111-1111-4111-8111-000000000011",
+      "stage3_roles": [
+        "drink_special"
+      ],
+      "business_name": "The Palace Hotel (South Melbourne)",
+      "city": "South Melbourne",
+      "street": "505-507 City Rd",
+      "postal_code": "3205",
+      "latitude": -37.8339964,
+      "longitude": 144.9500626,
+      "google_id": "0x6ad667f07fa20b2d:0x9b28ecca1bfcf8fe"
+    },
+    {
+      "index": 18,
+      "venue_id": "f1111111-1111-4111-8111-000000000012",
+      "stage3_roles": [
+        "drink_special"
+      ],
+      "business_name": "Prince Alfred Hotel",
+      "city": "Port Melbourne",
+      "street": "355 Bay St",
+      "postal_code": "3207",
+      "latitude": -37.8353503,
+      "longitude": 144.9450198,
+      "google_id": "0x6ad667ee0c1a212f:0x10093a3f4e09ba2"
+    },
+    {
+      "index": 19,
+      "venue_id": "f1111111-1111-4111-8111-000000000013",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "Urban Alley Brewery",
+      "city": "Docklands",
+      "street": "12 Star Circus",
+      "postal_code": "3008",
+      "latitude": -37.812277,
+      "longitude": 144.936629,
+      "google_id": "0x6ad65db0441a5df3:0x4cec8db4a0d4b6c8"
+    },
+    {
+      "index": 20,
+      "venue_id": "f1111111-1111-4111-8111-000000000014",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "The Cherry Tree Hotel",
+      "city": "Cremorne",
+      "street": "53 Balmain St",
+      "postal_code": "3121",
+      "latitude": -37.829968,
+      "longitude": 144.993249,
+      "google_id": "0x6ad64290347e34ef:0x7ed2d0a8ca2d647"
+    },
+    {
+      "index": 21,
+      "venue_id": "f1111111-1111-4111-8111-000000000015",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "Edinburgh Castle Hotel",
+      "city": "Brunswick",
+      "street": "681 Sydney Rd",
+      "postal_code": "3056",
+      "latitude": -37.7609136,
+      "longitude": 144.9630165,
+      "google_id": "0x6ad643549db1580b:0xd3a782bbd012ba1c"
+    },
+    {
+      "index": 22,
+      "venue_id": "f1111111-1111-4111-8111-000000000016",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "Queensberry Hotel",
+      "city": "Carlton",
+      "street": "593 Swanston St",
+      "postal_code": "3053",
+      "latitude": -37.8047158,
+      "longitude": 144.9630204,
+      "google_id": "0x6ad642cd1197ecb3:0x9de796ef333daac5"
+    },
+    {
+      "index": 23,
+      "venue_id": "f1111111-1111-4111-8111-000000000017",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "The Fox Hotel",
+      "city": "Collingwood",
+      "street": "351 Wellington St",
+      "postal_code": "3066",
+      "latitude": -37.7945098,
+      "longitude": 144.9878839,
+      "google_id": "0x6ad6431991953cad:0x25229a847a6a82a7"
+    },
+    {
+      "index": 24,
+      "venue_id": "f1111111-1111-4111-8111-000000000018",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "Rochester Hotel",
+      "city": "Fitzroy",
+      "street": "202 Johnston St",
+      "postal_code": "3065",
+      "latitude": -37.7988868,
+      "longitude": 144.9816649,
+      "google_id": "0x6ad6432041b2a371:0x9b52e0c14ceec436"
+    },
+    {
+      "index": 25,
+      "venue_id": "f1111111-1111-4111-8111-000000000019",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "The Empress Hotel",
+      "city": "Fitzroy North",
+      "street": "714 Nicholson St",
+      "postal_code": "3068",
+      "latitude": -37.7828107,
+      "longitude": 144.9779182,
+      "google_id": "0x6ad6433ed473a38f:0x3e48bc7dd19a234"
+    },
+    {
+      "index": 26,
+      "venue_id": "f1111111-1111-4111-8111-00000000001a",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "Terminus Hotel",
+      "city": "Abbotsford",
+      "street": "605 Victoria St",
+      "postal_code": "3067",
+      "latitude": -37.8110948,
+      "longitude": 145.0072168,
+      "google_id": "0x6ad6425508697f5d:0x91f12890ac575081"
+    },
+    {
+      "index": 27,
+      "venue_id": "f1111111-1111-4111-8111-00000000001b",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "All Nations Hotel",
+      "city": "Richmond",
+      "street": "64 Lennox St",
+      "postal_code": "3121",
+      "latitude": -37.8132761,
+      "longitude": 144.995271,
+      "google_id": "0x6ad642fab9514eb7:0x25fba6f4c3e99375"
+    },
+    {
+      "index": 28,
+      "venue_id": "f1111111-1111-4111-8111-00000000001c",
+      "stage3_roles": [
+        "standard_hours"
+      ],
+      "business_name": "Temperance Hotel",
+      "city": "South Yarra",
+      "street": "426 Chapel St",
+      "postal_code": "3141",
+      "latitude": -37.8446159,
+      "longitude": 144.9947399,
+      "google_id": "0x6ad66828843809bb:0x2a997fc5a24d315f"
+    }
+  ]
+}

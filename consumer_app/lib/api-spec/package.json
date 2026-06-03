@@ -1,0 +1,13 @@
+{
+  "name": "@workspace/api-spec",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "codegen": "orval --config ./orval.config.ts",
+    "lint": "redocly lint openapi.yaml"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^1.34.3",
+    "orval": "^8.5.2"
+  }
+}

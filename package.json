@@ -1,0 +1,11 @@
+{
+  "name": "pubplus",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "portal:dev": "corepack pnpm --dir web-portal dev",
+    "portal:build": "corepack pnpm --dir web-portal build",
+    "portal:test": "corepack pnpm --dir web-portal test",
+    "portal:typecheck": "corepack pnpm --dir web-portal typecheck"
+  }
+}
