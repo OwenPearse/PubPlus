@@ -325,6 +325,7 @@ Replace `<railway-generated-domain>` with your public hostname.
 | `/home` **200** but empty | No real import data | Expected until data pipeline run |
 | **`401` on `/auth-probe/private` only** | JWT issuer/JWKS/audience mismatch | Match `SUPABASE_JWT_*` to same `<project-ref>` as token source |
 | **`401` on all private routes** | Same as above, or expired token | Refresh token; verify mobile/backend same Supabase project |
+| **`AttributeError: 'Settings' object has no attribute 'ROOT_URLCONF'`** | `config/settings/__init__.py` missing from deploy | Ensure `backend/config/settings/__init__.py` is committed (`from .base import *`); redeploy |
 
 **Do not paste** `DATABASE_URL`, `DJANGO_SECRET_KEY`, or Bearer tokens into issue chat — use redacted logs.
 
