@@ -24,8 +24,8 @@
 .cursor_mcp_args.json
 .q*.sql
 
-# Local debug scratch artifacts
-_*
+# Local debug scratch artifacts (repo root only — do not use _*; it ignores __init__.py)
+/_*
 t[0-9].json
 cmd_out.json
 mcp_*.json
