@@ -1,6 +1,6 @@
 # PubPlus portal web
 
-Web portal for PubPlus operator and (future) venue-owner experiences. Today it hosts the **internal founder venue lead admin** UI under `src/admin/`; shared utilities live in `src/shared/`; owner dashboards will go in `src/owner/`.
+Web portal for PubPlus **internal operator** and **venue owner** access. The internal founder-venue admin UI lives in `src/admin/`; owner signup, MFA, and placeholder portal shell live in `src/owner/`; shared auth/API utilities are in `src/shared/`.
 
 The consumer mobile app (`consumer_app/`) stays separate and does not include admin or owner portal code.
 
@@ -29,11 +29,46 @@ pnpm portal:dev
 
 Open [http://localhost:3010](http://localhost:3010).
 
+## Portal entry and routes
+
+| Path | Guard | Purpose |
+|------|-------|---------|
+| `/access` | Public | Sign-in, sign-up, Supabase TOTP MFA, role-based continue |
+| `/access/denied` | Public | Signed-in user without admin/owner portal access |
+| `/` | Session + role | Redirects to `/access`, `/owner`, or `/internal/founder-venues` |
+| `/owner` | Owner | Owner placeholder; membership/venue empty states from auth-probe |
+| `/internal/founder-venues` | Admin | Founder venue list (see below) |
+| `/internal/founder-venues/:leadId` | Admin | Lead detail |
+
+### Portal environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_PORTAL_PRODUCT_NAME` | Placeholder product name on `/access` and shells (default: `Venue Portal`) |
+| `VITE_PORTAL_PRODUCT_TAGLINE` | Optional tagline under product name |
+| `VITE_PORTAL_SUPPORT_URL` | Optional support link on `/access` |
+
+Owner provisioning and routing use:
+
+- `POST /api/v1/owner/provision`
+- `GET /api/v1/owner/auth-probe`
+
+Admin routes still use `GET /api/v1/internal/auth-probe`. See `backend/docs/OWNER_PORTAL_AUTH.md`.
+
+### Dev test accounts (manual QA)
+
+| Account | Password | Use |
+|---------|----------|-----|
+| `owner1@demo.pubplus.local` | `demo-password-123` | Pre-provisioned owner |
+| `owner2@demo.pubplus.local` | `demo-password-123` | Second owner |
+| Internal admin Supabase user | (your seed) | Founder venues admin |
+
+**Infra:** Supabase Auth MFA (TOTP) must be enabled on the PubApp project before MFA enroll/verify works in dev.
+
 ## Routes (internal admin)
 
 | Path | Purpose |
 |------|---------|
-| `/` | Redirect → founder venue list |
 | `/internal/founder-venues` | Filterable list, call-sheet mode, outreach quick actions, export |
 | `/internal/founder-venues/:leadId` | Detail, outreach panel, contact shortcuts, enrichment, edit |
 

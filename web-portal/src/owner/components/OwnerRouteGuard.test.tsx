@@ -106,6 +106,14 @@ describe("OwnerRouteGuard", () => {
     });
   });
 
+  it("redirects to /access when probe returns unauthorized", async () => {
+    ownerAuthProbe.mockRejectedValue({ code: "unauthorized", status: 401, message: "expired" });
+    renderGuard();
+    await waitFor(() => {
+      expect(screen.getByText("Access page")).toBeInTheDocument();
+    });
+  });
+
   it("redirects to /access when owner is not provisioned", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 403,

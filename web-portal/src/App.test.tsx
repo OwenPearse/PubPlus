@@ -13,6 +13,10 @@ vi.mock("@/owner/pages/AccessDeniedPage", () => ({
   AccessDeniedPage: () => <div data-testid="access-denied-page">Access denied</div>,
 }));
 
+vi.mock("@/shared/components/RootRedirect", () => ({
+  RootRedirect: () => <div data-testid="root-redirect">Root redirect</div>,
+}));
+
 vi.mock("@/admin/components/AdminRouteGuard", () => ({
   AdminRouteGuard: ({ children }: { children: ReactNode }) => (
     <div data-testid="admin-route-guard">
@@ -25,10 +29,6 @@ vi.mock("@/owner/components/OwnerRouteGuard", () => ({
   OwnerRouteGuard: ({ children }: { children: ReactNode }) => (
     <div data-testid="owner-route-guard">{children}</div>
   ),
-}));
-
-vi.mock("@/shared/components/RootRedirect", () => ({
-  RootRedirect: () => <div data-testid="root-redirect">Root redirect</div>,
 }));
 
 vi.mock("@/admin/pages/FounderVenuesListPage", () => ({
@@ -64,6 +64,17 @@ describe("App routing", () => {
     expect(screen.getByTestId("admin-route-guard")).toBeInTheDocument();
     expect(screen.getByTestId("admin-route-children")).toBeInTheDocument();
     expect(screen.getByText("Founder list")).toBeInTheDocument();
+  });
+
+  it("renders /access/denied without route guards", () => {
+    render(
+      <MemoryRouter initialEntries={["/access/denied"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("access-denied-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("admin-route-guard")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("owner-route-guard")).not.toBeInTheDocument();
   });
 
   it("wraps owner routes in OwnerRouteGuard", () => {

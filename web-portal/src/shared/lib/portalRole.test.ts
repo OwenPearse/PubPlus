@@ -19,7 +19,11 @@ vi.mock("@/shared/lib/supabase", () => ({
   getAccessToken: () => getAccessToken(),
 }));
 
-import { getDefaultPathForRole, resolvePortalRole } from "@/shared/lib/portalRole";
+import {
+  getDefaultPathForRole,
+  ownerProbeRequiresMfaOnAccess,
+  resolvePortalRole,
+} from "@/shared/lib/portalRole";
 
 const ownerProbeBody = {
   authenticated: true,
@@ -110,6 +114,23 @@ describe("resolvePortalRole", () => {
       role: "error",
       code: "dual_access",
     });
+  });
+});
+
+describe("ownerProbeRequiresMfaOnAccess", () => {
+  it("is true when next_step is enroll_mfa", () => {
+    expect(
+      ownerProbeRequiresMfaOnAccess({
+        ...ownerProbeBody,
+        next_step: "enroll_mfa",
+      }),
+    ).toBe(true);
+    expect(
+      ownerProbeRequiresMfaOnAccess({
+        ...ownerProbeBody,
+        next_step: "portal_home",
+      }),
+    ).toBe(false);
   });
 });
 
