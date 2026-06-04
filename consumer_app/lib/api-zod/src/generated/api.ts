@@ -219,8 +219,8 @@ Optional JWT enriches `is_saved`. Consumer app sends `lat`/`lng` when resolved d
  * @summary Home feed sections
  */
 export const homeFeedQueryRadiusMDefault = 5000;
-export const homeFeedQueryLimitDefault = 12;
-export const homeFeedQueryLimitMax = 200;
+export const homeFeedQueryLimitDefault = 6;
+export const homeFeedQueryLimitMax = 12;
 
 export const HomeFeedQueryParams = zod.object({
   lat: zod.coerce
@@ -245,7 +245,10 @@ export const HomeFeedQueryParams = zod.object({
     .number()
     .min(1)
     .max(homeFeedQueryLimitMax)
-    .default(homeFeedQueryLimitDefault),
+    .default(homeFeedQueryLimitDefault)
+    .describe(
+      "Maximum venues per section (`nearby`, `open_now`, `specials_tonight`). The backend runs three\ndiscovery passes — lower limits improve latency on constrained hosts. Search\/map use separate limits (up to 200).\n",
+    ),
 });
 
 export const HomeFeedResponse = zod.object({

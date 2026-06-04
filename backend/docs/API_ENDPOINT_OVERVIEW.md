@@ -102,15 +102,16 @@ events tonight
 light preference-aware suggestions
 Query parameters
 
-Possible initial parameters:
+| Parameter | Notes |
+| --------- | ----- |
+| `lat`, `lng` | Optional discovery origin (device or profile default) |
+| `suburb` | Optional suburb filter |
+| `radius_m` | Used only when `lat` and `lng` are both provided (default `5000`) |
+| `limit` | Venues **per section**; default **6**, max **12** (`400 invalid_limit` above max). Search uses its own limit (default 50, max 200). |
 
-lat
-lng
-suburb
-optional lightweight personalization context if authenticated
 Notes
 
-Home is not just generic search. It should return sectioned content.
+Home is not just generic search. It should return sectioned content (three discovery passes).
 
 Consumer app (Stage 6+): sends optional `lat`/`lng` from resolved discovery origin (device → profile default); does not persist GPS coordinates to profile.
 

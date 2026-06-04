@@ -307,9 +307,9 @@ curl -i "https://<railway-domain>/api/v1/home"
 curl -i "https://<railway-domain>/api/v1/home?limit=12"
 ```
 
-Expect **200** JSON on both home URLs. Fallback while investigating: `?limit=5`.
+Expect **200** JSON on both home URLs. Fallback while investigating: `?limit=3` or `?limit=5`.
 
-**Note:** OpenAPI in `consumer_app/lib/api-spec/openapi.yaml` may still list home `default: 12` until regenerated — backend behavior is authoritative.
+OpenAPI contract: home `limit` default **6**, max **12** (`consumer_app/lib/api-spec/openapi.yaml`).
 
 ---
 

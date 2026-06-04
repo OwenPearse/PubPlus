@@ -671,9 +671,12 @@ export type HomeFeedParams = {
    */
   radius_m?: number;
   /**
-   * @minimum 1
-   * @maximum 200
-   */
+ * Maximum venues per section (`nearby`, `open_now`, `specials_tonight`). The backend runs three
+discovery passes — lower limits improve latency on constrained hosts. Search/map use separate limits (up to 200).
+
+ * @minimum 1
+ * @maximum 12
+ */
   limit?: number;
 };
 
