@@ -31,4 +31,4 @@ Canonical file: `database/sql/dev/confirm_test_user_email.sql`
 
 - Never commit a real personal email in SQL files; use placeholders only.
 - If `confirmed_at` is not present in your Auth schema, remove that column from the `UPDATE` and keep `email_confirmed_at` only.
-- Password reset after email link lands at `/access?mode=reset`; a dedicated “set new password” UI is a follow-up.
+- Password reset after email link lands at `/access?mode=reset` to set a new password before signing in again.

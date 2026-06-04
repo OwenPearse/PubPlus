@@ -272,3 +272,24 @@ export async function sendPasswordResetEmail(email: string, redirectTo?: string)
   });
   if (error) throw error;
 }
+
+export function formatPasswordUpdateError(error: unknown, fallback: string): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message: unknown }).message)
+        : String(error);
+  if (/session missing|not authenticated|auth session|invalid token|expired|otp_expired/i.test(message)) {
+    return "This reset link is invalid or has expired. Request a new password reset email from the sign-in page.";
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
+export async function updatePassword(newPassword: string) {
+  const { data, error } = await getSupabaseClient().auth.updateUser({
+    password: newPassword,
+  });
+  if (error) throw error;
+  return data.user;
+}

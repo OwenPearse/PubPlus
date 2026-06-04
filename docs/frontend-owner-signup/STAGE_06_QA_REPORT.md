@@ -168,7 +168,7 @@ Record results in PR or below (`[ ]` pending, `[x]` pass, `[!]` fail + note).
 
 **QA helper:** `docs/frontend-owner-signup/sql/confirm-test-user-email.md` and `database/sql/dev/confirm_test_user_email.sql` bypass email confirmation in dev/staging only.
 
-**Follow-up:** `/access?mode=reset` receives Supabase redirect after password reset; implement “set new password” form when product prioritizes it.
+**Password reset completion:** `/access?mode=reset` shows set-new-password form via `updatePassword()`; manual smoke still pending with live reset email link.
 
 ## Manual QA execution log
 

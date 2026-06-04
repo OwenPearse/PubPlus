@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { MfaEnrollStep } from "@/owner/components/MfaEnrollStep";
 import { MfaVerifyStep } from "@/owner/components/MfaVerifyStep";
@@ -19,14 +19,25 @@ import { resolvePortalRole, type ResolvePortalRoleResult } from "@/shared/lib/po
 import {
   getVerifiedTotpFactorId,
   resolvePostAuthMfaStep,
+  formatPasswordUpdateError,
   sendPasswordResetEmail,
   signInWithPassword,
   signOut,
   signUpWithPassword,
+  updatePassword,
 } from "@/shared/lib/supabase";
 
 type EntryMode = "sign-in" | "sign-up";
-type CredentialView = "form" | "forgot-password" | "forgot-password-sent";
+type CredentialView =
+  | "form"
+  | "forgot-password"
+  | "forgot-password-sent"
+  | "reset-password"
+  | "reset-password-success";
+
+function initialCredentialView(searchParams: URLSearchParams): CredentialView {
+  return searchParams.get("mode") === "reset" ? "reset-password" : "form";
+}
 
 type PortalPhase =
   | { kind: "credentials" }
@@ -39,14 +50,19 @@ type PortalPhase =
 
 export function PortalEntryPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<EntryMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState<PortalPhase>({ kind: "credentials" });
-  const [credentialView, setCredentialView] = useState<CredentialView>("form");
+  const [credentialView, setCredentialView] = useState<CredentialView>(() =>
+    initialCredentialView(searchParams),
+  );
   const [resetEmail, setResetEmail] = useState("");
 
   const supportUrl = getPortalSupportUrl();
@@ -166,6 +182,41 @@ export function PortalEntryPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleResetPasswordSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await updatePassword(newPassword);
+      setNewPassword("");
+      setConfirmPassword("");
+      setCredentialView("reset-password-success");
+      navigate("/access", { replace: true });
+    } catch (err) {
+      setError(
+        formatPasswordUpdateError(
+          err,
+          "Could not update your password. Please try again or request a new reset link.",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function goToSignInAfterReset() {
+    setCredentialView("form");
+    setMode("sign-in");
+    setError("");
+    setNewPassword("");
+    setConfirmPassword("");
+    void signOut();
   }
 
   function handleContinueAfterAuth(roleResult: ResolvePortalRoleResult) {
@@ -380,6 +431,74 @@ export function PortalEntryPage() {
               }}
             >
               Back to sign in
+            </button>
+          </>
+        ) : credentialView === "reset-password" ? (
+          <>
+            <h2 className="mb-1 text-lg font-semibold text-slate-900">Set a new password</h2>
+            <p className="mb-4 text-sm text-slate-600">
+              Choose a new password for your portal account. You will sign in again after updating.
+            </p>
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+              <label className="block text-sm">
+                New password
+                <input
+                  type="password"
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  disabled={loading}
+                />
+              </label>
+              <label className="block text-sm">
+                Confirm password
+                <input
+                  type="password"
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  disabled={loading}
+                />
+              </label>
+              <ErrorBanner message={error} onDismiss={error ? () => setError("") : undefined} />
+              <button
+                type="submit"
+                className="w-full rounded bg-slate-900 py-2 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading}
+              >
+                {loading ? "Updating…" : "Update password"}
+              </button>
+            </form>
+            <button
+              type="button"
+              className="mt-4 text-sm text-slate-600 underline"
+              onClick={() => {
+                setCredentialView("form");
+                setError("");
+                navigate("/access", { replace: true });
+              }}
+            >
+              Back to sign in
+            </button>
+          </>
+        ) : credentialView === "reset-password-success" ? (
+          <>
+            <h2 className="mb-1 text-lg font-semibold text-slate-900">Password updated</h2>
+            <p className="text-sm text-slate-600">
+              Your password has been updated. You can now continue signing in to the portal.
+            </p>
+            <button
+              type="button"
+              className="mt-4 w-full rounded bg-slate-900 py-2 text-sm text-white hover:bg-slate-800"
+              onClick={() => goToSignInAfterReset()}
+            >
+              Continue to sign in
             </button>
           </>
         ) : (

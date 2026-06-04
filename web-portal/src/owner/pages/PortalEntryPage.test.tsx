@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PortalEntryPage } from "@/owner/pages/PortalEntryPage";
@@ -10,6 +10,7 @@ const signUpWithPassword = vi.fn();
 const resolvePostAuthMfaStep = vi.fn();
 const getVerifiedTotpFactorId = vi.fn();
 const sendPasswordResetEmail = vi.fn();
+const updatePassword = vi.fn();
 const signOut = vi.fn();
 const resolvePortalRole = vi.fn();
 const ownerProvision = vi.fn();
@@ -20,14 +21,19 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => navigate };
 });
 
-vi.mock("@/shared/lib/supabase", () => ({
-  signInWithPassword: (...args: unknown[]) => signInWithPassword(...args),
-  signUpWithPassword: (...args: unknown[]) => signUpWithPassword(...args),
-  resolvePostAuthMfaStep: (...args: unknown[]) => resolvePostAuthMfaStep(...args),
-  getVerifiedTotpFactorId: (...args: unknown[]) => getVerifiedTotpFactorId(...args),
-  sendPasswordResetEmail: (...args: unknown[]) => sendPasswordResetEmail(...args),
-  signOut: (...args: unknown[]) => signOut(...args),
-}));
+vi.mock("@/shared/lib/supabase", async () => {
+  const actual = await vi.importActual<typeof import("@/shared/lib/supabase")>("@/shared/lib/supabase");
+  return {
+    ...actual,
+    signInWithPassword: (...args: unknown[]) => signInWithPassword(...args),
+    signUpWithPassword: (...args: unknown[]) => signUpWithPassword(...args),
+    resolvePostAuthMfaStep: (...args: unknown[]) => resolvePostAuthMfaStep(...args),
+    getVerifiedTotpFactorId: (...args: unknown[]) => getVerifiedTotpFactorId(...args),
+    sendPasswordResetEmail: (...args: unknown[]) => sendPasswordResetEmail(...args),
+    updatePassword: (...args: unknown[]) => updatePassword(...args),
+    signOut: (...args: unknown[]) => signOut(...args),
+  };
+});
 
 vi.mock("@/shared/lib/api", () => ({
   ownerProvision: (...args: unknown[]) => ownerProvision(...args),
@@ -76,10 +82,12 @@ vi.mock("@/shared/lib/portalBrand", () => ({
   },
 }));
 
-function renderPage() {
+function renderPage(initialEntry = "/access") {
   return render(
-    <MemoryRouter>
-      <PortalEntryPage />
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/access" element={<PortalEntryPage />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -91,6 +99,7 @@ describe("PortalEntryPage", () => {
     resolvePostAuthMfaStep.mockReset();
     getVerifiedTotpFactorId.mockReset();
     sendPasswordResetEmail.mockReset();
+    updatePassword.mockReset();
     signOut.mockReset();
     resolvePortalRole.mockReset();
     ownerProvision.mockReset();
@@ -226,6 +235,61 @@ describe("PortalEntryPage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("Rate limit exceeded");
+    });
+  });
+
+  it("renders set-new-password form when mode=reset", () => {
+    renderPage("/access?mode=reset");
+    expect(screen.getByRole("heading", { name: "Set a new password" })).toBeInTheDocument();
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirm password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update password" })).toBeInTheDocument();
+  });
+
+  it("shows validation error when reset passwords do not match", async () => {
+    const user = userEvent.setup();
+    renderPage("/access?mode=reset");
+
+    await user.type(screen.getByLabelText("New password"), "secret12");
+    await user.type(screen.getByLabelText("Confirm password"), "different");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Passwords do not match.");
+    });
+    expect(updatePassword).not.toHaveBeenCalled();
+  });
+
+  it("calls updatePassword and shows success state on reset submit", async () => {
+    const user = userEvent.setup();
+    updatePassword.mockResolvedValue({ id: "user-1" });
+    renderPage("/access?mode=reset");
+
+    await user.type(screen.getByLabelText("New password"), "newpass12");
+    await user.type(screen.getByLabelText("Confirm password"), "newpass12");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => {
+      expect(updatePassword).toHaveBeenCalledWith("newpass12");
+      expect(
+        screen.getByText(/Your password has been updated. You can now continue signing in/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows friendly error when updatePassword fails", async () => {
+    const user = userEvent.setup();
+    updatePassword.mockRejectedValue(new Error("Auth session missing"));
+    renderPage("/access?mode=reset");
+
+    await user.type(screen.getByLabelText("New password"), "newpass12");
+    await user.type(screen.getByLabelText("Confirm password"), "newpass12");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /invalid or has expired|Could not update your password/i,
+      );
     });
   });
 

@@ -5,6 +5,7 @@ const listFactors = vi.fn();
 const enroll = vi.fn();
 const unenroll = vi.fn();
 const resetPasswordForEmail = vi.fn();
+const updateUser = vi.fn();
 
 vi.mock("@/shared/lib/env", () => ({
   hasSupabaseAuthConfig: () => true,
@@ -18,6 +19,7 @@ vi.mock("@supabase/supabase-js", () => ({
       getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
       onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
       resetPasswordForEmail,
+      updateUser,
       mfa: {
         getAuthenticatorAssuranceLevel,
         listFactors,
@@ -37,8 +39,10 @@ import {
   needsMfaVerification,
   resolvePostAuthMfaStep,
   restartUnverifiedTotpEnrollment,
+  formatPasswordUpdateError,
   sendPasswordResetEmail,
   startOrRecoverTotpEnrollment,
+  updatePassword,
 } from "@/shared/lib/supabase";
 
 describe("MFA helpers", () => {
@@ -48,7 +52,9 @@ describe("MFA helpers", () => {
     enroll.mockReset();
     unenroll.mockReset();
     resetPasswordForEmail.mockReset();
+    updateUser.mockReset();
     resetPasswordForEmail.mockResolvedValue({ error: null });
+    updateUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
   });
 
   it("isMfaSatisfied is true only at aal2/aal2", () => {
@@ -210,5 +216,16 @@ describe("MFA helpers", () => {
     expect(resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", {
       redirectTo: "https://portal.test/access?mode=reset",
     });
+  });
+
+  it("updatePassword calls Supabase updateUser", async () => {
+    await updatePassword("new-secret-12");
+    expect(updateUser).toHaveBeenCalledWith({ password: "new-secret-12" });
+  });
+
+  it("formatPasswordUpdateError maps expired session to friendly copy", () => {
+    expect(
+      formatPasswordUpdateError(new Error("Auth session missing"), "fallback"),
+    ).toContain("invalid or has expired");
   });
 });
