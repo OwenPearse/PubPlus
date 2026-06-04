@@ -8,6 +8,7 @@ separate enrichment step in `save_enrichment.py`.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, time
 from uuid import UUID
@@ -118,6 +119,23 @@ def _date_to_iso(value: date) -> str:
     return value.isoformat()
 
 
+def _dedupe_venue_ids(venue_ids: list[UUID | str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in venue_ids:
+        vid = str(raw)
+        if not vid or vid in seen:
+            continue
+        seen.add(vid)
+        out.append(vid)
+    return out
+
+
+def _in_clause(ids: list[str]) -> tuple[str, list[str]]:
+    placeholders = ",".join(["%s"] * len(ids))
+    return placeholders, ids
+
+
 def get_published_hours_uncertainty(venue_id: UUID | str) -> str | None:
     """
     `venue_hours_uncertainty` row, if any. Used by centralized open-now logic.
@@ -141,14 +159,14 @@ def map_published_hours_uncertainty(venue_ids: list[UUID | str]) -> dict[str, st
         return {}
     ids = [str(v) for v in venue_ids]
     with connection.cursor() as c:
-        placeholders = ",".join(["%s"] * len(ids))
+        placeholders, params = _in_clause(ids)
         c.execute(
             f"""
             SELECT venue_id::text, uncertainty_level
             FROM public.venue_hours_uncertainty
             WHERE venue_id IN ({placeholders})
             """,
-            ids,
+            params,
         )
         out: dict[str, str | None] = {i: None for i in ids}
         for row in c.fetchall():
@@ -156,11 +174,13 @@ def map_published_hours_uncertainty(venue_ids: list[UUID | str]) -> dict[str, st
     return out
 
 
-def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueReadBundle | None:
-    vid = str(venue_id)
+def _load_core_rows(venue_ids: list[str]) -> dict[str, PublishedCoreRow]:
+    if not venue_ids:
+        return {}
+    placeholders, params = _in_clause(venue_ids)
     with connection.cursor() as c:
         c.execute(
-            """
+            f"""
             SELECT
               v.id,
               vpp.display_name,
@@ -182,48 +202,60 @@ def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueRead
               ON l.id = vpl.locality_id
             INNER JOIN public.venue_published_map_point vpm
               ON vpm.venue_id = v.id
-            WHERE v.id = %s
+            WHERE v.id IN ({placeholders})
               AND vpp.discovery_eligibility_status IN ('eligible', 'limited')
             """,
-            [vid],
+            params,
         )
-        row = c.fetchone()
-        if not row:
-            return None
-        core = PublishedCoreRow(
-            venue_id=str(row[0]),
-            display_name=row[1],
-            slug=row[2],
-            operational_status=row[3],
-            suburb_name=row[4],
-            address_line_1=row[5],
-            address_line_2=row[6],
-            postal_code=row[7],
-            country_code=row[8],
-            latitude=float(row[9]),
-            longitude=float(row[10]),
-        )
-
-        c.execute(
-            """
-            SELECT short_description, long_description
-            FROM public.venue_published_descriptive_copy
-            WHERE venue_id = %s
-            """,
-            [vid],
-        )
-        dr = c.fetchone()
-        descriptive = (
-            PublishedDescriptiveRow(
-                short_description=dr[0], long_description=dr[1]
+        out: dict[str, PublishedCoreRow] = {}
+        for row in c.fetchall():
+            out[str(row[0])] = PublishedCoreRow(
+                venue_id=str(row[0]),
+                display_name=row[1],
+                slug=row[2],
+                operational_status=row[3],
+                suburb_name=row[4],
+                address_line_1=row[5],
+                address_line_2=row[6],
+                postal_code=row[7],
+                country_code=row[8],
+                latitude=float(row[9]),
+                longitude=float(row[10]),
             )
-            if dr
-            else None
-        )
+    return out
 
+
+def _load_descriptive_rows(venue_ids: list[str]) -> dict[str, PublishedDescriptiveRow]:
+    if not venue_ids:
+        return {}
+    placeholders, params = _in_clause(venue_ids)
+    with connection.cursor() as c:
         c.execute(
-            """
+            f"""
+            SELECT venue_id::text, short_description, long_description
+            FROM public.venue_published_descriptive_copy
+            WHERE venue_id IN ({placeholders})
+            """,
+            params,
+        )
+        return {
+            str(row[0]): PublishedDescriptiveRow(
+                short_description=row[1], long_description=row[2]
+            )
+            for row in c.fetchall()
+        }
+
+
+def _load_attribute_rows(venue_ids: list[str]) -> dict[str, list[PublishedAttributeRow]]:
+    if not venue_ids:
+        return {}
+    placeholders, params = _in_clause(venue_ids)
+    grouped: dict[str, list[PublishedAttributeRow]] = defaultdict(list)
+    with connection.cursor() as c:
+        c.execute(
+            f"""
             SELECT
+              pav.venue_id::text,
               ad.stable_key,
               ad.display_label,
               ad.is_discovery_driving,
@@ -235,52 +267,71 @@ def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueRead
               ON ad.id = pav.attribute_definition_id
             LEFT JOIN public.venue_attribute_allowed_value aav
               ON aav.id = pav.allowed_value_id
-            WHERE pav.venue_id = %s
+            WHERE pav.venue_id IN ({placeholders})
+            ORDER BY pav.venue_id, ad.stable_key
             """,
-            [vid],
+            params,
         )
-        attr_rows: list[PublishedAttributeRow] = []
-        for r in c.fetchall():
-            attr_rows.append(
+        for row in c.fetchall():
+            grouped[str(row[0])].append(
                 PublishedAttributeRow(
-                    stable_key=r[0],
-                    definition_label=r[1],
-                    is_discovery_driving=bool(r[2]),
-                    value_code=r[3],
-                    value_label=r[4],
-                    value_boolean=r[5],
+                    stable_key=row[1],
+                    definition_label=row[2],
+                    is_discovery_driving=bool(row[3]),
+                    value_code=row[4],
+                    value_label=row[5],
+                    value_boolean=row[6],
                 )
             )
+    return dict(grouped)
 
+
+def _load_regular_hours_rows(venue_ids: list[str]) -> dict[str, list[PublishedRegularHoursRow]]:
+    if not venue_ids:
+        return {}
+    placeholders, params = _in_clause(venue_ids)
+    grouped: dict[str, list[PublishedRegularHoursRow]] = defaultdict(list)
+    with connection.cursor() as c:
         c.execute(
-            """
+            f"""
             SELECT
+              venue_id::text,
               day_of_week,
               opens_at,
               closes_at,
               crosses_midnight,
               sort_order
             FROM public.venue_hours_regular
-            WHERE venue_id = %s
-            ORDER BY day_of_week, sort_order, opens_at
+            WHERE venue_id IN ({placeholders})
+            ORDER BY venue_id, day_of_week, sort_order, opens_at
             """,
-            [vid],
+            params,
         )
-        reg: list[PublishedRegularHoursRow] = []
-        for r in c.fetchall():
-            reg.append(
+        for row in c.fetchall():
+            grouped[str(row[0])].append(
                 PublishedRegularHoursRow(
-                    day_of_week=int(r[0]),
-                    opens_at=_time_to_hhmm(r[1]),
-                    closes_at=_time_to_hhmm(r[2]),
-                    crosses_midnight=bool(r[3]),
-                    sort_order=int(r[4]),
+                    day_of_week=int(row[1]),
+                    opens_at=_time_to_hhmm(row[2]),
+                    closes_at=_time_to_hhmm(row[3]),
+                    crosses_midnight=bool(row[4]),
+                    sort_order=int(row[5]),
                 )
             )
+    return dict(grouped)
 
+
+def _load_exception_hours_rows(
+    venue_ids: list[str],
+) -> dict[str, list[PublishedExceptionHoursRow]]:
+    if not venue_ids:
+        return {}
+    placeholders, params = _in_clause(venue_ids)
+    grouped: dict[str, list[PublishedExceptionHoursRow]] = defaultdict(list)
+    with connection.cursor() as c:
         c.execute(
-            """
+            f"""
             SELECT
+              venue_id::text,
               start_date,
               end_date,
               exception_kind,
@@ -289,32 +340,42 @@ def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueRead
               crosses_midnight,
               note
             FROM public.venue_hours_exception
-            WHERE venue_id = %s
-            ORDER BY start_date
+            WHERE venue_id IN ({placeholders})
+            ORDER BY venue_id, start_date
             """,
-            [vid],
+            params,
         )
-        ex: list[PublishedExceptionHoursRow] = []
-        for r in c.fetchall():
-            ex.append(
+        for row in c.fetchall():
+            grouped[str(row[0])].append(
                 PublishedExceptionHoursRow(
-                    start_date=_date_to_iso(r[0])
-                    if hasattr(r[0], "isoformat")
-                    else str(r[0]),
-                    end_date=_date_to_iso(r[1])
-                    if hasattr(r[1], "isoformat")
-                    else str(r[1]),
-                    exception_kind=r[2],
-                    opens_at=_time_to_hhmm(r[3]) if r[3] is not None else None,
-                    closes_at=_time_to_hhmm(r[4]) if r[4] is not None else None,
-                    crosses_midnight=bool(r[5]),
-                    note=r[6],
+                    start_date=_date_to_iso(row[1])
+                    if hasattr(row[1], "isoformat")
+                    else str(row[1]),
+                    end_date=_date_to_iso(row[2])
+                    if hasattr(row[2], "isoformat")
+                    else str(row[2]),
+                    exception_kind=row[3],
+                    opens_at=_time_to_hhmm(row[4]) if row[4] is not None else None,
+                    closes_at=_time_to_hhmm(row[5]) if row[5] is not None else None,
+                    crosses_midnight=bool(row[6]),
+                    note=row[7],
                 )
             )
+    return dict(grouped)
 
+
+def _load_special_rows(
+    venue_ids: list[str], *, limit_per_venue: int = 12
+) -> dict[str, list[PublishedSpecialRow]]:
+    if not venue_ids:
+        return {}
+    placeholders, params = _in_clause(venue_ids)
+    grouped: dict[str, list[PublishedSpecialRow]] = defaultdict(list)
+    with connection.cursor() as c:
         c.execute(
-            """
+            f"""
             SELECT
+              s.venue_id::text,
               s.id,
               s.structured_kind,
               s.short_label,
@@ -322,27 +383,39 @@ def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueRead
             FROM public.venue_published_structured_special s
             LEFT JOIN public.venue_published_structured_special_marketing_copy m
               ON m.structured_special_id = s.id
-            WHERE s.venue_id = %s
+            WHERE s.venue_id IN ({placeholders})
               AND s.catalog_record_status = 'active'
-            ORDER BY s.updated_at DESC
-            LIMIT 12
+            ORDER BY s.venue_id, s.updated_at DESC
             """,
-            [vid],
+            params,
         )
-        sp: list[PublishedSpecialRow] = []
-        for r in c.fetchall():
-            sp.append(
+        for row in c.fetchall():
+            vid = str(row[0])
+            if len(grouped[vid]) >= limit_per_venue:
+                continue
+            grouped[vid].append(
                 PublishedSpecialRow(
-                    id=str(r[0]),
-                    structured_kind=r[1],
-                    short_label=r[2],
-                    headline=r[3],
+                    id=str(row[1]),
+                    structured_kind=row[2],
+                    short_label=row[3],
+                    headline=row[4],
                 )
             )
+    return dict(grouped)
 
+
+def _load_tap_rows(
+    venue_ids: list[str], *, limit_per_venue: int = 24
+) -> dict[str, list[PublishedTapRow]]:
+    if not venue_ids:
+        return {}
+    placeholders, params = _in_clause(venue_ids)
+    grouped: dict[str, list[PublishedTapRow]] = defaultdict(list)
+    with connection.cursor() as c:
         c.execute(
-            """
+            f"""
             SELECT
+              t.venue_id::text,
               t.id,
               t.unstructured_line_label,
               p.display_name,
@@ -352,33 +425,89 @@ def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueRead
             FROM public.venue_published_tap_offering t
             LEFT JOIN public.beverage_product p
               ON p.id = t.beverage_product_id
-            WHERE t.venue_id = %s
+            WHERE t.venue_id IN ({placeholders})
               AND t.catalog_record_status = 'active'
-            ORDER BY t.sort_order NULLS LAST, t.created_at
-            LIMIT 24
+            ORDER BY t.venue_id, t.sort_order NULLS LAST, t.created_at
             """,
-            [vid],
+            params,
         )
-        taps: list[PublishedTapRow] = []
-        for r in c.fetchall():
-            taps.append(
+        for row in c.fetchall():
+            vid = str(row[0])
+            if len(grouped[vid]) >= limit_per_venue:
+                continue
+            grouped[vid].append(
                 PublishedTapRow(
-                    id=str(r[0]),
-                    unstructured_line_label=r[1],
-                    product_name=r[2],
-                    is_rotating=bool(r[3]),
-                    is_guest_tap=bool(r[4]),
-                    sort_order=int(r[5]) if r[5] is not None else None,
+                    id=str(row[1]),
+                    unstructured_line_label=row[2],
+                    product_name=row[3],
+                    is_rotating=bool(row[4]),
+                    is_guest_tap=bool(row[5]),
+                    sort_order=int(row[6]) if row[6] is not None else None,
                 )
             )
+    return dict(grouped)
 
+
+def _assemble_bundle(
+    core: PublishedCoreRow,
+    *,
+    descriptive: PublishedDescriptiveRow | None,
+    attributes: list[PublishedAttributeRow],
+    hours_regular: list[PublishedRegularHoursRow],
+    hours_exceptions: list[PublishedExceptionHoursRow],
+    specials: list[PublishedSpecialRow],
+    taps: list[PublishedTapRow],
+) -> PublishedVenueReadBundle:
     return PublishedVenueReadBundle(
         core=core,
         descriptive=descriptive,
-        attributes=attr_rows,
-        hours_regular=reg,
-        hours_exceptions=ex,
-        specials=sp,
+        attributes=attributes,
+        hours_regular=hours_regular,
+        hours_exceptions=hours_exceptions,
+        specials=specials,
         taps=taps,
         media_refs=[],
     )
+
+
+def load_published_venue_read_bundles(
+    venue_ids: list[UUID | str],
+) -> dict[str, PublishedVenueReadBundle]:
+    """
+    Batch-load published venue bundles for card/detail shaping.
+
+    Uses a fixed small number of SQL queries (one per published table) instead of
+    ~8 round-trips per venue. Missing or ineligible venues are omitted.
+    """
+    ids = _dedupe_venue_ids(venue_ids)
+    if not ids:
+        return {}
+
+    cores = _load_core_rows(ids)
+    if not cores:
+        return {}
+
+    valid_ids = list(cores.keys())
+    descriptive = _load_descriptive_rows(valid_ids)
+    attributes = _load_attribute_rows(valid_ids)
+    hours_regular = _load_regular_hours_rows(valid_ids)
+    hours_exceptions = _load_exception_hours_rows(valid_ids)
+    specials = _load_special_rows(valid_ids)
+    taps = _load_tap_rows(valid_ids)
+
+    out: dict[str, PublishedVenueReadBundle] = {}
+    for vid, core in cores.items():
+        out[vid] = _assemble_bundle(
+            core,
+            descriptive=descriptive.get(vid),
+            attributes=attributes.get(vid, []),
+            hours_regular=hours_regular.get(vid, []),
+            hours_exceptions=hours_exceptions.get(vid, []),
+            specials=specials.get(vid, []),
+            taps=taps.get(vid, []),
+        )
+    return out
+
+
+def load_published_venue_read_bundle(venue_id: UUID | str) -> PublishedVenueReadBundle | None:
+    return load_published_venue_read_bundles([venue_id]).get(str(venue_id))

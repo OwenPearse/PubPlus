@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from apps.discovery.http import (
-    apply_optional_save_enrichment,
+    apply_optional_save_enrichment_batch,
     error_response,
     map_discovery_error,
     parse_discovery_filters_from_request,
@@ -41,10 +41,9 @@ def search_venues(request):
         return map_discovery_error(exc)
 
     auth_context = get_auth_context(request)
-    venues = []
-    for hit in result.hits:
-        enriched = apply_optional_save_enrichment(hit.card, auth=auth_context)
-        venues.append(public_venue_card_to_dict(enriched))
+    cards = [hit.card for hit in result.hits]
+    enriched = apply_optional_save_enrichment_batch(cards, auth=auth_context)
+    venues = [public_venue_card_to_dict(card) for card in enriched]
 
     return JsonResponse(
         {

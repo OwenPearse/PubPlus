@@ -313,6 +313,72 @@ OpenAPI contract: home `limit` default **6**, max **12** (`consumer_app/lib/api-
 
 ---
 
+## Stage 5E — Home feed MVP reliability (default limit 3)
+
+**Problem:** Stage **5D** lowered home default to **6** per section, but production still timed out (~31s → HTML **500**). `GET /api/v1/home?limit=3` returned **200** (~23s).
+
+**Fix (code):** Default home `limit` is **3** per section (max **6** via `?limit=`). Intentionally conservative for MVP/TestFlight on Railway — reliability over venue count. Search/map keep their own defaults (up to 200). No Gunicorn/Railway timeout increase in this stage; deeper home-feed optimisation is future work.
+
+**Re-smoke after deploy:**
+
+```bash
+curl -i "https://<railway-domain>/api/v1/health"
+curl -i "https://<railway-domain>/api/v1/home"
+curl -i "https://<railway-domain>/api/v1/home?limit=3"
+curl -i "https://<railway-domain>/api/v1/home?limit=6"
+curl -i "https://<railway-domain>/api/v1/home?limit=7"
+```
+
+Expect **200** on health, default home, `limit=3`, and usually `limit=6` (may be slow). Expect **400** `invalid_limit` on `limit=7`.
+
+OpenAPI contract: home `limit` default **3**, max **6** (`consumer_app/lib/api-spec/openapi.yaml`).
+
+---
+
+## Stage 5F — Home/search card loading performance
+
+**Problem:** Home and search were slow on Railway because discovery called `load_published_venue_read_bundle()` **once per candidate venue** (~8 SQL round-trips each). Home runs **three** discovery passes; the same venue could be loaded multiple times across sections. Authenticated requests also ran one save lookup per card.
+
+**Findings:**
+
+| Path | Bottleneck |
+| ---- | ---------- |
+| `run_discovery` | N× single-venue bundle loads after one discovery SQL query |
+| `run_home_feed` | 3× sequential discovery; no cross-section bundle reuse |
+| Save enrichment | N× `venue_id_in_any_user_list` when JWT present |
+
+Card responses use `PublicVenueCard` fields only (identity, location, badges, summaries, open-now). Full detail bundles (`PublicVenueDetail`) are **not** needed for home/search — detail endpoint unchanged.
+
+**Fix (code):**
+
+1. **`load_published_venue_read_bundles(venue_ids)`** — batch-load published tables with `IN (...)` queries (~7 SQL round-trips per batch, regardless of venue count).
+2. **`run_discovery`** uses batch loader + optional **`bundle_cache`**; logs `discovery done … sql_ms bundle_ms enrich_ms`.
+3. **`run_home_feed`** shares one `bundle_cache` across all three sections; one batched save lookup per authenticated request.
+4. **Search/map** use batch save enrichment for all hits in one query.
+
+No Gunicorn timeout increase. No schema migrations in this stage.
+
+**Re-smoke after deploy:**
+
+```bash
+curl -o /dev/null -s -w "home default: %{http_code} %{time_total}s\n" \
+  "https://<railway-domain>/api/v1/home"
+curl -o /dev/null -s -w "home limit=3: %{http_code} %{time_total}s\n" \
+  "https://<railway-domain>/api/v1/home?limit=3"
+curl -o /dev/null -s -w "search limit=5: %{http_code} %{time_total}s\n" \
+  "https://<railway-domain>/api/v1/search/venues?limit=5"
+curl -o /dev/null -s -w "search default: %{http_code} %{time_total}s\n" \
+  "https://<railway-domain>/api/v1/search/venues"
+```
+
+**Targets (initial):** home default **200** ideally **<8s**; search `limit=5` **<5s**. Default search (`limit=50`) may still be slow — consider lowering client default in a future mobile stage.
+
+**Remaining work:** SQL/index tuning on discovery candidate query; reduce open-now prelimit over-fetch; optional card-only SQL view; client search default limit review.
+
+Railway logs: `discovery done …`, `home_feed section=… bundle_cache=…`, `home_feed done unique_bundles=…`.
+
+---
+
 ## Database and Supabase
 
 ### Schema and data (before meaningful smoke)
@@ -399,7 +465,7 @@ Replace `<railway-generated-domain>` with your public hostname (e.g. `pubplus-pr
 | `db_error` on `/reference/localities` or `/search/filters` | Missing table/wrong DB | Apply `0001`–`0033` to the same project as `DATABASE_URL`; not caused by empty data alone |
 | `internal_error` on `/home` or `/search/venues` | Discovery SQL failure | Same as above; capture Railway traceback |
 | `404` on `/api/v1/search/` only | Wrong smoke path | Use `GET /api/v1/search/venues` |
-| `/home` **500** (~30s, HTML error) | Home feed too slow (3× discovery + enrichment) | Deploy Stage **5D** (default `limit=6`); check logs for `home_feed section=… elapsed_ms` |
+| `/home` **500** (~30s, HTML error) | Home feed too slow (3× discovery + enrichment) | Deploy Stage **5E** (default `limit=3`) + **5F** (batch bundles); check logs for `discovery done` / `home_feed done` |
 | `/home` **200** but empty | No real import data | Expected until data pipeline run |
 | **`401` on `/auth-probe/private` only** | JWT issuer/JWKS/audience mismatch | Match `SUPABASE_JWT_*` to same `<project-ref>` as token source |
 | **`401` on all private routes** | Same as above, or expired token | Refresh token; verify mobile/backend same Supabase project |

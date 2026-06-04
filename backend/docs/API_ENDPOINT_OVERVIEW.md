@@ -107,11 +107,13 @@ Query parameters
 | `lat`, `lng` | Optional discovery origin (device or profile default) |
 | `suburb` | Optional suburb filter |
 | `radius_m` | Used only when `lat` and `lng` are both provided (default `5000`) |
-| `limit` | Venues **per section**; default **6**, max **12** (`400 invalid_limit` above max). Search uses its own limit (default 50, max 200). |
+| `limit` | Venues **per section**; default **3**, max **6** (`400 invalid_limit` above max). Conservative for MVP/TestFlight reliability on Railway. Search uses its own limit (default 50, max 200). |
 
 Notes
 
 Home is not just generic search. It should return sectioned content (three discovery passes).
+
+**Performance (Stage 5F):** Each section runs discovery with card-level published reads only (not full venue detail). Bundles are batch-loaded (~7 SQL queries per discovery pass, not ~8 per venue). Home reuses a shared bundle cache across sections so duplicate venues are not re-fetched. Authenticated save-state uses one batched lookup per request. Target startup latency: default home ideally **<8s** on Railway; deeper SQL/index tuning is future work.
 
 Consumer app (Stage 6+): sends optional `lat`/`lng` from resolved discovery origin (device → profile default); does not persist GPS coordinates to profile.
 
@@ -144,6 +146,8 @@ limit (1–200, default 50). Offset/cursor pagination is **not implemented** in 
 Notes
 
 Search uses the shared discovery query core.
+
+**Performance (Stage 5F):** Discovery batch-loads published card bundles for all candidate venues in ~7 SQL queries per request (replacing prior N×8 per-venue round-trips). Default `limit=50` can still be slow on Railway; prefer explicit low limits for smoke tests. Full venue detail is only loaded on `GET /api/v1/venues/{id}`.
 
 GET /api/v1/search/filters
 Purpose

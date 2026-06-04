@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.http import JsonResponse
 
 from apps.discovery.http import (
-    apply_optional_save_enrichment,
+    apply_optional_save_enrichment_batch,
     map_discovery_error,
     parse_discovery_filters_from_request,
 )
@@ -37,10 +37,9 @@ def map_venues(request):
         return map_discovery_error(exc)
 
     auth_context = get_auth_context(request)
-    markers = []
-    for hit in result.hits:
-        enriched = apply_optional_save_enrichment(hit.card, auth=auth_context)
-        markers.append(_map_marker_payload(enriched))
+    cards = [hit.card for hit in result.hits]
+    enriched = apply_optional_save_enrichment_batch(cards, auth=auth_context)
+    markers = [_map_marker_payload(card) for card in enriched]
 
     return JsonResponse(
         {

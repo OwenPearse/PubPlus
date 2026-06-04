@@ -167,7 +167,7 @@ class DiscoveryPublicEndpointTests(SimpleTestCase):
             claims={"sub": "consumer-123"},
         ),
     )
-    @patch("apps.venues.services.save_enrichment.apply_save_to_card")
+    @patch("apps.venues.services.save_enrichment.apply_save_to_cards")
     @patch("api.v1.search.views.run_discovery")
     def test_authenticated_enrichment_is_optional(
         self,
@@ -179,7 +179,7 @@ class DiscoveryPublicEndpointTests(SimpleTestCase):
         run_discovery_mock.return_value = base
         saved_card = base.hits[0].card
         saved_card.is_saved = True
-        apply_save_mock.return_value = saved_card
+        apply_save_mock.return_value = [saved_card]
 
         response = self.client.get(
             "/api/v1/search/venues",

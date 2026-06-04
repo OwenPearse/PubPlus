@@ -155,3 +155,11 @@ def apply_optional_save_enrichment(card: Any, *, auth: AuthContext | None) -> An
     from apps.venues.services.save_enrichment import apply_save_to_card
 
     return apply_save_to_card(card, auth=auth, venue_id=card.id)
+
+
+def apply_optional_save_enrichment_batch(
+    cards: list[Any], *, auth: AuthContext | None
+) -> list[Any]:
+    from apps.venues.services.save_enrichment import apply_save_to_cards
+
+    return apply_save_to_cards(cards, auth=auth)
