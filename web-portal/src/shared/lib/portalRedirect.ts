@@ -4,7 +4,6 @@ import { getDefaultPathForRole } from "@/shared/lib/portalRole";
 export function getPostAuthContinuePath(result: ResolvePortalRoleResult): string | null {
   if (result.role === "admin") return "/internal/founder-venues";
   if (result.role === "owner") {
-    if (result.probe.next_step === "enroll_mfa") return null;
     return "/owner";
   }
   return null;

@@ -9,7 +9,7 @@ const ownerProbe = {
   authenticated: true,
   owner_account_exists: true,
   owner_account_active: true,
-  mfa_required: true,
+  mfa_required: false,
   aal: "aal2",
   has_active_business_membership: true,
   has_approved_managed_venue_relationship: true,
@@ -28,13 +28,18 @@ describe("portalRedirect helpers", () => {
     expect(getPostAuthContinuePath({ role: "owner", probe: ownerProbe })).toBe("/owner");
   });
 
-  it("getPostAuthContinuePath returns null when owner still needs MFA", () => {
+  it("getPostAuthContinuePath returns owner path at AAL1 without blocking on MFA", () => {
     expect(
       getPostAuthContinuePath({
         role: "owner",
-        probe: { ...ownerProbe, next_step: "enroll_mfa", aal: "aal1" },
+        probe: {
+          ...ownerProbe,
+          next_step: "owner_waiting_for_membership",
+          aal: "aal1",
+          mfa_required: false,
+        },
       }),
-    ).toBeNull();
+    ).toBe("/owner");
   });
 
   it("shouldShowAccessDenied for no_access and dual_access", () => {

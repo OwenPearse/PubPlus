@@ -19,7 +19,6 @@ After creating a test account through Supabase sign-up on `/access`, mark the us
 update auth.users
 set
   email_confirmed_at = coalesce(email_confirmed_at, now()),
-  confirmed_at = coalesce(confirmed_at, now()),
   updated_at = now()
 where lower(email) = lower('replace-with-test-email@example.com')
 returning id, email, email_confirmed_at, confirmed_at;
@@ -29,6 +28,8 @@ Canonical file: `database/sql/dev/confirm_test_user_email.sql`
 
 ## Notes
 
+- On current PubApp Auth schema, `confirmed_at` is a **generated** column — do not set it in `UPDATE`; only set `email_confirmed_at`.
 - Never commit a real personal email in SQL files; use placeholders only.
-- If `confirmed_at` is not present in your Auth schema, remove that column from the `UPDATE` and keep `email_confirmed_at` only.
+- Supabase may reject `@test.com` and `@demo.pubplus.local` for sign-up; prefer disposable domains such as `@sharklasers.com` for E2E QA.
 - Password reset after email link lands at `/access?mode=reset` to set a new password before signing in again.
+- **Seeded demo users** (`*@demo.pubplus.local`): if sign-in shows `Database error querying schema`, run `repair-seeded-auth-users.md` / `database/sql/dev/repair_auth_users_null_tokens.sql` first.

@@ -141,10 +141,13 @@ describe("PortalEntryPage", () => {
     });
   });
 
-  it("transitions to MFA enroll step after sign-in when enrollment is required", async () => {
+  it("does not force MFA enroll after owner sign-in at AAL1", async () => {
     const user = userEvent.setup();
     signInWithPassword.mockResolvedValue({ user: { id: "u1" } });
-    resolvePostAuthMfaStep.mockResolvedValue("enroll");
+    resolvePortalRole.mockResolvedValue({
+      role: "owner",
+      probe: { next_step: "owner_waiting_for_membership", aal: "aal1" },
+    });
     renderPage();
 
     await user.type(screen.getByLabelText("Email"), "owner@example.com");
@@ -152,20 +155,33 @@ describe("PortalEntryPage", () => {
     await user.click(screen.getByRole("button", { name: "Submit sign in" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("mfa-enroll-step")).toBeInTheDocument();
+      expect(resolvePortalRole).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Continue to owner portal" })).toBeInTheDocument();
+      expect(screen.queryByTestId("mfa-enroll-step")).not.toBeInTheDocument();
     });
+    expect(resolvePostAuthMfaStep).not.toHaveBeenCalled();
   });
 
-  it("transitions to MFA verify step when verification is required", async () => {
+  it("opens optional MFA verify when user chooses setup after owner sign-in", async () => {
     const user = userEvent.setup();
     signInWithPassword.mockResolvedValue({ user: { id: "u1" } });
+    resolvePortalRole.mockResolvedValue({
+      role: "owner",
+      probe: { next_step: "owner_waiting_for_membership", aal: "aal1" },
+    });
     resolvePostAuthMfaStep.mockResolvedValue("verify");
     getVerifiedTotpFactorId.mockResolvedValue("factor-verify");
     renderPage();
 
-    await user.type(screen.getByLabelText("Email"), "new@example.com");
+    await user.type(screen.getByLabelText("Email"), "owner@example.com");
     await user.type(screen.getByLabelText("Password"), "secret12");
     await user.click(screen.getByRole("button", { name: "Submit sign in" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Set up two-step verification" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Set up two-step verification" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("mfa-verify-step")).toBeInTheDocument();

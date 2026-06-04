@@ -20,7 +20,7 @@ const baseProbe = {
   authenticated: true,
   owner_account_exists: true,
   owner_account_active: true,
-  mfa_required: true,
+  mfa_required: false,
   aal: "aal2",
   has_active_business_membership: false,
   has_approved_managed_venue_relationship: false,
@@ -91,10 +91,16 @@ describe("OwnerHomePlaceholder", () => {
     });
   });
 
-  it("links to /access when MFA is required", async () => {
+  it("shows optional MFA prompt at AAL1 on membership empty state", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
-      body: { ...baseProbe, next_step: "enroll_mfa", aal: "aal1" },
+      body: {
+        ...baseProbe,
+        next_step: "owner_waiting_for_membership",
+        aal: "aal1",
+        mfa_required: false,
+        mfa_enabled: false,
+      },
     });
     render(
       <MemoryRouter>
@@ -102,10 +108,8 @@ describe("OwnerHomePlaceholder", () => {
       </MemoryRouter>,
     );
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Continue at sign-in" })).toHaveAttribute(
-        "href",
-        "/access",
-      );
+      expect(screen.getByText(/Protect your account with two-step verification/i)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Set up 2FA" })).toHaveAttribute("href", "/access");
     });
   });
 });

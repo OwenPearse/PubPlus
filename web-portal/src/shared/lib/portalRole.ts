@@ -5,7 +5,7 @@ import {
   ownerAuthProbe,
   type OwnerAuthProbeBody,
 } from "@/shared/lib/api";
-import { getAccessToken } from "@/shared/lib/supabase";
+import { waitForAccessToken } from "@/shared/lib/supabase";
 
 export type PortalRole = "admin" | "owner" | "none" | "expired" | "error";
 
@@ -20,6 +20,16 @@ function isUnauthorized(error: unknown): boolean {
   return isApiRequestError(error) && error.code === "unauthorized";
 }
 
+async function withUnauthorizedRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (!isUnauthorized(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return await fn();
+  }
+}
+
 async function ownerProbeIndicatesProvisionedAccount(): Promise<boolean> {
   try {
     const result = await ownerAuthProbe();
@@ -30,13 +40,13 @@ async function ownerProbeIndicatesProvisionedAccount(): Promise<boolean> {
 }
 
 export async function resolvePortalRole(): Promise<ResolvePortalRoleResult> {
-  const token = await getAccessToken();
+  const token = await waitForAccessToken();
   if (!token) {
     return { role: "expired" };
   }
 
   try {
-    await internalAuthProbe();
+    await withUnauthorizedRetry(() => internalAuthProbe());
     if (await ownerProbeIndicatesProvisionedAccount()) {
       return {
         role: "error",
@@ -53,7 +63,7 @@ export async function resolvePortalRole(): Promise<ResolvePortalRoleResult> {
   }
 
   try {
-    const ownerResult = await ownerAuthProbe();
+    const ownerResult = await withUnauthorizedRetry(() => ownerAuthProbe());
     if (ownerResult.status === 200) {
       return { role: "owner", probe: ownerResult.body };
     }
@@ -76,7 +86,6 @@ export async function resolvePortalRole(): Promise<ResolvePortalRoleResult> {
 export function getDefaultPathForRole(result: ResolvePortalRoleResult): string {
   if (result.role === "admin") return "/internal/founder-venues";
   if (result.role === "owner") {
-    if (result.probe.next_step === "enroll_mfa") return "/access";
     return "/owner";
   }
   if (result.role === "none" && result.reason === "owner_not_provisioned") {
@@ -87,6 +96,7 @@ export function getDefaultPathForRole(result: ResolvePortalRoleResult): string {
   return "/access/denied";
 }
 
-export function ownerProbeRequiresMfaOnAccess(probe: OwnerAuthProbeBody): boolean {
-  return probe.next_step === "enroll_mfa";
+/** MFA is optional; never block owner routes on AAL1 or legacy enroll_mfa next_step. */
+export function ownerProbeRequiresMfaOnAccess(_probe: OwnerAuthProbeBody): boolean {
+  return false;
 }

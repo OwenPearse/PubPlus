@@ -4,9 +4,11 @@ import { ErrorBanner } from "@/shared/components/ErrorBanner";
 import {
   challengeMfaFactor,
   formatMfaError,
+  isDuplicateMfaFactorError,
   restartUnverifiedTotpEnrollment,
   startOrRecoverTotpEnrollment,
   type MfaTotpEnrollment,
+  type TotpEnrollmentStart,
   verifyMfaChallenge,
 } from "@/shared/lib/supabase";
 
@@ -30,6 +32,24 @@ export function MfaEnrollStep({ onComplete, onSignOut, onNeedVerify }: Props) {
   const onNeedVerifyRef = useRef(onNeedVerify);
   onNeedVerifyRef.current = onNeedVerify;
 
+  function applyEnrollmentStart(result: TotpEnrollmentStart) {
+    if (result.kind === "existing-verified") {
+      onNeedVerifyRef.current(result.factorId);
+      return;
+    }
+    if (result.kind === "resume-unverified") {
+      setResumeFactorId(result.factorId);
+      setEnrollment(null);
+      setError("");
+      setMode("resume-unverified");
+      return;
+    }
+    setEnrollment(result.enrollment);
+    setResumeFactorId(null);
+    setError("");
+    setMode("new");
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -41,17 +61,7 @@ export function MfaEnrollStep({ onComplete, onSignOut, onNeedVerify }: Props) {
       try {
         const result = await startOrRecoverTotpEnrollment();
         if (cancelled) return;
-        if (result.kind === "existing-verified") {
-          onNeedVerifyRef.current(result.factorId);
-          return;
-        }
-        if (result.kind === "resume-unverified") {
-          setResumeFactorId(result.factorId);
-          setMode("resume-unverified");
-          return;
-        }
-        setEnrollment(result.enrollment);
-        setMode("new");
+        applyEnrollmentStart(result);
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -219,22 +229,14 @@ export function MfaEnrollStep({ onComplete, onSignOut, onNeedVerify }: Props) {
           type="button"
           className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
           onClick={() => {
+            if (isDuplicateMfaFactorError(error)) {
+              void handleRestartSetup();
+              return;
+            }
             setError("");
             setMode("loading");
             void startOrRecoverTotpEnrollment()
-              .then((result) => {
-                if (result.kind === "existing-verified") {
-                  onNeedVerifyRef.current(result.factorId);
-                  return;
-                }
-                if (result.kind === "resume-unverified") {
-                  setResumeFactorId(result.factorId);
-                  setMode("resume-unverified");
-                  return;
-                }
-                setEnrollment(result.enrollment);
-                setMode("new");
-              })
+              .then(applyEnrollmentStart)
               .catch((err) => {
                 setError(
                   formatMfaError(
@@ -242,11 +244,12 @@ export function MfaEnrollStep({ onComplete, onSignOut, onNeedVerify }: Props) {
                     "Could not start two-step verification setup. Please try again.",
                   ),
                 );
+                setMode("new");
               });
           }}
           disabled={busy}
         >
-          Retry setup
+          {isDuplicateMfaFactorError(error) ? "Restart setup" : "Retry setup"}
         </button>
       ) : null}
 

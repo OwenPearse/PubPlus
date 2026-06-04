@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { MfaEnrollStep } from "@/owner/components/MfaEnrollStep";
 import { MfaVerifyStep } from "@/owner/components/MfaVerifyStep";
@@ -50,6 +50,7 @@ type PortalPhase =
 
 export function PortalEntryPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<EntryMode>("sign-in");
   const [email, setEmail] = useState("");
@@ -66,6 +67,63 @@ export function PortalEntryPage() {
   const [resetEmail, setResetEmail] = useState("");
 
   const supportUrl = getPortalSupportUrl();
+
+  useEffect(() => {
+    const state = location.state as { setupMfa?: boolean } | null;
+    if (state?.setupMfa) {
+      void beginOptionalMfaSetup();
+      navigate(location.pathname + location.search, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.search, location.state, navigate]);
+
+  async function beginOptionalMfaSetup() {
+    setPhase({ kind: "mfa-loading" });
+    setError("");
+    try {
+      const step = await resolvePostAuthMfaStep();
+      if (step === "complete") {
+        setPhase({ kind: "credentials" });
+        setError("Two-step verification is already enabled for this account.");
+        return;
+      }
+      if (step === "verify") {
+        const factorId = await getVerifiedTotpFactorId();
+        if (factorId) {
+          setPhase({ kind: "mfa-verify", factorId });
+          return;
+        }
+      }
+      setPhase({ kind: "mfa-enroll" });
+    } catch (err) {
+      setPhase({ kind: "credentials" });
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not start two-step verification setup. Please try again.",
+      );
+    }
+  }
+
+  async function routeAfterSignIn() {
+    setPhase({ kind: "routing-loading" });
+    setError("");
+    try {
+      if (mode === "sign-up") {
+        try {
+          await ownerProvision();
+        } catch (provisionErr) {
+          if (!isApiRequestError(provisionErr) || provisionErr.code !== "forbidden") {
+            throw provisionErr;
+          }
+        }
+      }
+      const roleResult = await resolvePortalRole();
+      setPhase({ kind: "post-auth", roleResult });
+    } catch (err) {
+      setPhase({ kind: "credentials" });
+      setError(formatApiError(err));
+    }
+  }
 
   async function beginMfaFlow() {
     setPhase({ kind: "mfa-loading" });
@@ -136,11 +194,11 @@ export function PortalEntryPage() {
     try {
       if (mode === "sign-in") {
         await signInWithPassword(email.trim(), password);
-        await beginMfaFlow();
+        await routeAfterSignIn();
       } else {
         const data = await signUpWithPassword(email.trim(), password);
         if (data.session) {
-          await beginMfaFlow();
+          await routeAfterSignIn();
         } else {
           setPhase({ kind: "sign-up-confirm" });
         }
@@ -291,6 +349,7 @@ export function PortalEntryPage() {
               onContinue={() => handleContinueAfterAuth(phase.roleResult)}
               onProvision={() => void handleRetryOwnerProvision()}
               onDismissError={() => setError("")}
+              onSetupMfa={() => void beginOptionalMfaSetup()}
             />
           ) : null}
         </div>
@@ -546,6 +605,7 @@ function PostAuthPanel({
   onContinue,
   onProvision,
   onDismissError,
+  onSetupMfa,
 }: {
   roleResult: ResolvePortalRoleResult;
   provisioning: boolean;
@@ -553,6 +613,7 @@ function PostAuthPanel({
   onContinue: () => void;
   onProvision: () => void;
   onDismissError: () => void;
+  onSetupMfa: () => void;
 }) {
   if (roleResult.role === "admin") {
     return (
@@ -575,7 +636,7 @@ function PostAuthPanel({
   if (roleResult.role === "owner") {
     return (
       <>
-        <h2 className="text-lg font-semibold text-slate-900">Two-step verification complete</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Signed in</h2>
         <p className="mt-2 text-sm text-slate-600">
           Your owner account is recognized. You can open the owner portal area; some features may
           still be pending depending on business or venue access.
@@ -586,6 +647,13 @@ function PostAuthPanel({
           onClick={onContinue}
         >
           Continue to owner portal
+        </button>
+        <button
+          type="button"
+          className="mt-3 w-full text-sm font-medium text-slate-700 underline"
+          onClick={onSetupMfa}
+        >
+          Set up two-step verification
         </button>
       </>
     );

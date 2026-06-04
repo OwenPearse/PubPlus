@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const getAccessToken = vi.fn();
+const waitForAccessToken = vi.fn();
 
 vi.mock("@/shared/lib/supabase", () => ({
-  getAccessToken: () => getAccessToken(),
+  waitForAccessToken: () => waitForAccessToken(),
 }));
 
 vi.mock("@/shared/lib/env", () => ({
@@ -14,8 +14,8 @@ import { ownerAuthProbe, ownerProvision } from "@/shared/lib/api";
 
 describe("owner API wrappers", () => {
   beforeEach(() => {
-    getAccessToken.mockReset();
-    getAccessToken.mockResolvedValue("token-abc");
+    waitForAccessToken.mockReset();
+    waitForAccessToken.mockResolvedValue("token-abc");
     vi.stubGlobal("fetch", vi.fn());
   });
 
@@ -29,7 +29,7 @@ describe("owner API wrappers", () => {
           owner_account_id: "oa-1",
           provisioned: true,
           created: true,
-          next_step: "enroll_mfa",
+          next_step: "owner_waiting_for_membership",
         }),
         { status: 201, headers: { "content-type": "application/json" } },
       ),
@@ -51,7 +51,8 @@ describe("owner API wrappers", () => {
           authenticated: true,
           owner_account_exists: true,
           owner_account_active: true,
-          mfa_required: true,
+          mfa_required: false,
+          mfa_enabled: true,
           aal: "aal2",
           has_active_business_membership: true,
           has_approved_managed_venue_relationship: true,
@@ -81,7 +82,8 @@ describe("owner API wrappers", () => {
           authenticated: true,
           owner_account_exists: false,
           owner_account_active: false,
-          mfa_required: true,
+          mfa_required: false,
+          mfa_enabled: false,
           aal: null,
           has_active_business_membership: false,
           has_approved_managed_venue_relationship: false,

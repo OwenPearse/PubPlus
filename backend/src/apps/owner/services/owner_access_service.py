@@ -18,8 +18,7 @@ from common.owner_account import (
 )
 from common.owner_mfa import (
     OWNER_MFA_REQUIRED,
-    is_owner_mfa_satisfied,
-    mfa_next_step,
+    is_owner_mfa_enabled,
     resolve_aal,
 )
 
@@ -109,8 +108,6 @@ def resolve_owner_next_step(
     claims: dict,
     counts: OwnerAccessCounts,
 ) -> str:
-    if not is_owner_mfa_satisfied(claims):
-        return mfa_next_step(claims)
     if counts.business_count == 0:
         return "owner_waiting_for_membership"
     if counts.venue_count == 0:
@@ -122,14 +119,19 @@ def build_provision_payload(
     *,
     owner_account_id: UUID,
     created: bool,
+    claims: dict,
 ) -> dict:
+    counts = load_owner_access_counts(owner_account_id)
     return {
         "authenticated": True,
         "owner_account_exists": True,
         "owner_account_id": str(owner_account_id),
         "provisioned": True,
         "created": created,
-        "next_step": "enroll_mfa",
+        "mfa_required": OWNER_MFA_REQUIRED,
+        "mfa_enabled": is_owner_mfa_enabled(claims),
+        "aal": resolve_aal(claims),
+        "next_step": resolve_owner_next_step(claims=claims, counts=counts),
     }
 
 
@@ -146,6 +148,7 @@ def build_auth_probe_payload(
         "owner_account_exists": True,
         "owner_account_active": True,
         "mfa_required": OWNER_MFA_REQUIRED,
+        "mfa_enabled": is_owner_mfa_enabled(claims),
         "aal": aal,
         "has_active_business_membership": counts.has_active_business_membership,
         "has_approved_managed_venue_relationship": counts.has_approved_managed_venue_relationship,
@@ -162,6 +165,7 @@ def build_auth_probe_no_owner_payload() -> dict:
         "owner_account_exists": False,
         "owner_account_active": False,
         "mfa_required": OWNER_MFA_REQUIRED,
+        "mfa_enabled": False,
         "aal": None,
         "has_active_business_membership": False,
         "has_approved_managed_venue_relationship": False,

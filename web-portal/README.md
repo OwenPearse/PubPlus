@@ -33,7 +33,7 @@ Open [http://localhost:3010](http://localhost:3010).
 
 | Path | Guard | Purpose |
 |------|-------|---------|
-| `/access` | Public | Sign-in, sign-up, Supabase TOTP MFA, role-based continue |
+| `/access` | Public | Sign-in, sign-up, optional Supabase TOTP MFA, role-based continue |
 | `/access/denied` | Public | Signed-in user without admin/owner portal access |
 | `/` | Session + role | Redirects to `/access`, `/owner`, or `/internal/founder-venues` |
 | `/owner` | Owner | Owner placeholder; membership/venue empty states from auth-probe |
@@ -63,7 +63,7 @@ Admin routes still use `GET /api/v1/internal/auth-probe`. See `backend/docs/OWNE
 | `owner2@demo.pubplus.local` | `demo-password-123` | Second owner |
 | Internal admin Supabase user | (your seed) | Founder venues admin |
 
-**Infra:** Supabase Auth MFA (TOTP) must be enabled on the PubApp project before MFA enroll/verify works in dev.
+**Infra:** Supabase Auth MFA (TOTP) should be enabled on the PubApp project for optional 2FA setup; normal owner portal access works at AAL1 without MFA.
 
 ## Routes (internal admin)
 

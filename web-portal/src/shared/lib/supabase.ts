@@ -27,6 +27,23 @@ export async function getAccessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+/** Poll until Supabase persists a session token (post sign-in race). */
+export async function waitForAccessToken(options?: {
+  maxAttempts?: number;
+  delayMs?: number;
+}): Promise<string | null> {
+  const maxAttempts = options?.maxAttempts ?? 6;
+  const delayMs = options?.delayMs ?? 100;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const token = await getAccessToken();
+    if (token) return token;
+    if (attempt + 1 < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return null;
+}
+
 export async function getCurrentSession(): Promise<Session | null> {
   if (!hasSupabaseAuthConfig()) return null;
   const { data } = await getSupabaseClient().auth.getSession();
@@ -177,8 +194,7 @@ export type TotpEnrollmentStart =
   | { kind: "resume-unverified"; factorId: string }
   | { kind: "existing-verified"; factorId: string };
 
-export async function startOrRecoverTotpEnrollment(): Promise<TotpEnrollmentStart> {
-  const factors = await getExistingTotpFactors();
+function classifyTotpEnrollmentStart(factors: MfaTotpFactor[]): TotpEnrollmentStart | null {
   const verified = factors.find((f) => f.status === "verified");
   if (verified) {
     return { kind: "existing-verified", factorId: verified.id };
@@ -187,20 +203,35 @@ export async function startOrRecoverTotpEnrollment(): Promise<TotpEnrollmentStar
   if (unverified) {
     return { kind: "resume-unverified", factorId: unverified.id };
   }
+  return null;
+}
+
+/** GoTrue factor list can lag briefly right after sign-in; retry before enrolling. */
+export async function listTotpFactorsWithRetry(
+  attempts = 4,
+  delayMs = 300,
+): Promise<MfaTotpFactor[]> {
+  let factors: MfaTotpFactor[] = [];
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    factors = await getExistingTotpFactors();
+    if (factors.length > 0) return factors;
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return factors;
+}
+
+export async function startOrRecoverTotpEnrollment(): Promise<TotpEnrollmentStart> {
+  const existing = classifyTotpEnrollmentStart(await listTotpFactorsWithRetry());
+  if (existing) return existing;
   try {
     const enrollment = await enrollTotpFactor(TOTP_FRIENDLY_NAME);
     return { kind: "new", enrollment };
   } catch (err) {
     if (!isDuplicateMfaFactorError(err)) throw err;
-    const recovered = await getExistingTotpFactors();
-    const recoveredVerified = recovered.find((f) => f.status === "verified");
-    if (recoveredVerified) {
-      return { kind: "existing-verified", factorId: recoveredVerified.id };
-    }
-    const recoveredUnverified = recovered.find((f) => f.status === "unverified");
-    if (recoveredUnverified) {
-      return { kind: "resume-unverified", factorId: recoveredUnverified.id };
-    }
+    const recovered = classifyTotpEnrollmentStart(await listTotpFactorsWithRetry(6, 400));
+    if (recovered) return recovered;
     throw err;
   }
 }

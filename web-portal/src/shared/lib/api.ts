@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/shared/lib/supabase";
+import { waitForAccessToken } from "@/shared/lib/supabase";
 import { getApiBaseUrl } from "@/shared/lib/env";
 import type {
   EnrichmentResult,
@@ -79,7 +79,7 @@ async function apiRequest<T>(
   if (options.headers) {
     new Headers(options.headers).forEach((v, k) => headers.set(k, v));
   }
-  const token = await getAccessToken();
+  const token = await waitForAccessToken();
   if (!token) {
     throw toApiError({ status: 401, data: { message: "Sign in required." } });
   }
@@ -180,6 +180,7 @@ export type OwnerAuthProbeBody = {
   owner_account_exists: boolean;
   owner_account_active: boolean;
   mfa_required: boolean;
+  mfa_enabled?: boolean;
   aal: string | null;
   has_active_business_membership: boolean;
   has_approved_managed_venue_relationship: boolean;

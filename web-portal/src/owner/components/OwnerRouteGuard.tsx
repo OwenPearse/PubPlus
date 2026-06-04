@@ -10,7 +10,6 @@ import {
   type OwnerAuthProbeBody,
 } from "@/shared/lib/api";
 import { hasSupabaseAuthConfig } from "@/shared/lib/env";
-import { ownerProbeRequiresMfaOnAccess } from "@/shared/lib/portalRole";
 import { getCurrentSession, onAuthStateChange, signOut } from "@/shared/lib/supabase";
 
 type Props = {
@@ -122,10 +121,6 @@ export function OwnerRouteGuard({ children }: Props) {
 
   if (probeStatus === 403 || !probe?.owner_account_exists) {
     return <Navigate to="/access" replace state={{ reason: "owner_not_provisioned" }} />;
-  }
-
-  if (ownerProbeRequiresMfaOnAccess(probe)) {
-    return <Navigate to="/access" replace state={{ reason: "enroll_mfa" }} />;
   }
 
   return (

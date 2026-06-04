@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const internalAuthProbe = vi.fn();
 const ownerAuthProbe = vi.fn();
-const getAccessToken = vi.fn();
+const waitForAccessToken = vi.fn();
 
 vi.mock("@/shared/lib/api", () => ({
   internalAuthProbe: () => internalAuthProbe(),
@@ -16,7 +16,7 @@ vi.mock("@/shared/lib/api", () => ({
 }));
 
 vi.mock("@/shared/lib/supabase", () => ({
-  getAccessToken: () => getAccessToken(),
+  waitForAccessToken: () => waitForAccessToken(),
 }));
 
 import {
@@ -29,7 +29,7 @@ const ownerProbeBody = {
   authenticated: true,
   owner_account_exists: true,
   owner_account_active: true,
-  mfa_required: true,
+  mfa_required: false,
   aal: "aal2",
   has_active_business_membership: true,
   has_approved_managed_venue_relationship: true,
@@ -43,12 +43,12 @@ describe("resolvePortalRole", () => {
   beforeEach(() => {
     internalAuthProbe.mockReset();
     ownerAuthProbe.mockReset();
-    getAccessToken.mockReset();
-    getAccessToken.mockResolvedValue("token");
+    waitForAccessToken.mockReset();
+    waitForAccessToken.mockResolvedValue("token");
   });
 
-  it("returns expired when no access token", async () => {
-    getAccessToken.mockResolvedValue(null);
+  it("returns expired when session token never appears", async () => {
+    waitForAccessToken.mockResolvedValue(null);
     await expect(resolvePortalRole()).resolves.toEqual({ role: "expired" });
   });
 
@@ -118,13 +118,14 @@ describe("resolvePortalRole", () => {
 });
 
 describe("ownerProbeRequiresMfaOnAccess", () => {
-  it("is true when next_step is enroll_mfa", () => {
+  it("never blocks owner routes (MFA optional)", () => {
     expect(
       ownerProbeRequiresMfaOnAccess({
         ...ownerProbeBody,
         next_step: "enroll_mfa",
+        aal: "aal1",
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       ownerProbeRequiresMfaOnAccess({
         ...ownerProbeBody,
@@ -146,8 +147,8 @@ describe("getDefaultPathForRole", () => {
     expect(
       getDefaultPathForRole({
         role: "owner",
-        probe: { ...ownerProbeBody, next_step: "enroll_mfa" },
+        probe: { ...ownerProbeBody, next_step: "enroll_mfa", aal: "aal1" },
       }),
-    ).toBe("/access");
+    ).toBe("/owner");
   });
 });

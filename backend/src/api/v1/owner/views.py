@@ -27,7 +27,11 @@ def owner_provision(request: HttpRequest) -> JsonResponse:
             message=str(exc),
             status=403,
         )
-    payload = build_provision_payload(owner_account_id=owner_id, created=created)
+    payload = build_provision_payload(
+        owner_account_id=owner_id,
+        created=created,
+        claims=auth.claims or {},
+    )
     return JsonResponse(payload, status=201 if created else 200)
 
 

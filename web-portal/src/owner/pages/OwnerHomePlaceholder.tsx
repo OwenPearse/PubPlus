@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-
 import { NoVenueAccessState } from "@/owner/components/NoVenueAccessState";
+import { OptionalMfaSecurityPrompt } from "@/owner/components/OptionalMfaSecurityPrompt";
 import { ErrorBanner } from "@/shared/components/ErrorBanner";
 import {
   formatApiError,
@@ -16,6 +15,7 @@ export function OwnerHomePlaceholder() {
   const [loading, setLoading] = useState(true);
   const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState("");
+  const [mfaPromptDismissed, setMfaPromptDismissed] = useState(false);
 
   async function loadProbe() {
     setLoading(true);
@@ -87,24 +87,16 @@ export function OwnerHomePlaceholder() {
     );
   }
 
-  if (probe.next_step === "enroll_mfa") {
-    return (
-      <div className="max-w-lg space-y-4">
-        <h1 className="text-2xl font-bold text-slate-900">Two-step verification required</h1>
-        <p className="text-sm text-slate-600">
-          Finish setting up your authenticator before using the owner portal.
-        </p>
-        <Link to="/access" className="text-sm font-medium text-slate-900 underline">
-          Continue at sign-in
-        </Link>
-      </div>
-    );
-  }
+  const showOptionalMfaPrompt =
+    !mfaPromptDismissed && probe.aal === "aal1" && !probe.mfa_enabled;
 
   if (probe.next_step === "owner_waiting_for_membership") {
     return (
       <div className="max-w-2xl space-y-4">
         <h1 className="text-2xl font-bold text-slate-900">Owner portal</h1>
+        {showOptionalMfaPrompt ? (
+          <OptionalMfaSecurityPrompt onDismiss={() => setMfaPromptDismissed(true)} />
+        ) : null}
         <NoVenueAccessState variant="membership" businessCount={probe.business_count} />
       </div>
     );
@@ -114,6 +106,9 @@ export function OwnerHomePlaceholder() {
     return (
       <div className="max-w-2xl space-y-4">
         <h1 className="text-2xl font-bold text-slate-900">Owner portal</h1>
+        {showOptionalMfaPrompt ? (
+          <OptionalMfaSecurityPrompt onDismiss={() => setMfaPromptDismissed(true)} />
+        ) : null}
         <NoVenueAccessState
           variant="venue"
           businessCount={probe.business_count}
@@ -126,6 +121,9 @@ export function OwnerHomePlaceholder() {
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-2xl font-bold text-slate-900">Owner portal</h1>
+      {showOptionalMfaPrompt ? (
+        <OptionalMfaSecurityPrompt onDismiss={() => setMfaPromptDismissed(true)} />
+      ) : null}
       <p className="text-sm text-slate-600">
         Welcome to {portalBrand.productName}. Your account is ready; venue management features will
         appear here in a future release.

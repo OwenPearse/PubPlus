@@ -134,13 +134,11 @@ def _owner_not_provisioned_response() -> JsonResponse:
     )
 
 
-def require_owner_portal_auth(
+def _require_owner_portal_auth_core(
     view_func: Callable[..., HttpResponse],
+    *,
+    require_aal2: bool,
 ) -> Callable[..., HttpResponse]:
-    """
-    Bearer JWT + provisioned owner_account + AAL2 for future owner-protected routes.
-    """
-
     @wraps(view_func)
     def wrapped(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         try:
@@ -154,12 +152,29 @@ def require_owner_portal_auth(
         if get_owner_account_id(auth_context) is None:
             return _owner_not_provisioned_response()
 
-        if not is_owner_mfa_satisfied(auth_context.claims or {}):
+        if require_aal2 and not is_owner_mfa_satisfied(auth_context.claims or {}):
             return _owner_mfa_forbidden_response()
 
         return view_func(request, *args, **kwargs)
 
     return csrf_exempt(wrapped)
+
+
+def require_owner_portal_auth(
+    view_func: Callable[..., HttpResponse],
+) -> Callable[..., HttpResponse]:
+    """Bearer JWT + provisioned owner_account (AAL1 allowed)."""
+    return _require_owner_portal_auth_core(view_func, require_aal2=False)
+
+
+def require_owner_portal_auth_aal2(
+    view_func: Callable[..., HttpResponse],
+) -> Callable[..., HttpResponse]:
+    """Bearer JWT + owner_account + AAL2 for sensitive owner actions (billing, payouts, etc.)."""
+    return _require_owner_portal_auth_core(view_func, require_aal2=True)
+
+
+require_owner_sensitive_action_auth = require_owner_portal_auth_aal2
 
 
 def optional_consumer_auth(

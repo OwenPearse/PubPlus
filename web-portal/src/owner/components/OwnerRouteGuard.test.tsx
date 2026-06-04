@@ -42,7 +42,7 @@ const portalHomeProbe = {
   authenticated: true,
   owner_account_exists: true,
   owner_account_active: true,
-  mfa_required: true,
+  mfa_required: false,
   aal: "aal2",
   has_active_business_membership: true,
   has_approved_managed_venue_relationship: true,
@@ -95,14 +95,21 @@ describe("OwnerRouteGuard", () => {
     });
   });
 
-  it("redirects to /access when MFA enrollment is required", async () => {
+  it("allows owner shell when probe is AAL1 with legacy enroll_mfa next_step", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
-      body: { ...portalHomeProbe, next_step: "enroll_mfa", aal: "aal1" },
+      body: {
+        ...portalHomeProbe,
+        next_step: "enroll_mfa",
+        aal: "aal1",
+        mfa_required: false,
+        mfa_enabled: false,
+      },
     });
     renderGuard();
     await waitFor(() => {
-      expect(screen.getByText("Access page")).toBeInTheDocument();
+      expect(screen.getByTestId("owner-shell")).toBeInTheDocument();
+      expect(screen.getByText("Owner content")).toBeInTheDocument();
     });
   });
 

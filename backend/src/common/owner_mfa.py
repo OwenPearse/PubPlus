@@ -1,15 +1,15 @@
 """
-Supabase MFA / authenticator assurance helpers for owner portal enforcement.
+Supabase MFA / authenticator assurance helpers for owner portal.
 
-Owner protected API routes require AAL2 (`aal` JWT claim). Auth-probe returns routing
-state in the response body; protected routes return 403 when AAL2 is not satisfied.
+Normal owner portal access allows AAL1. Optional MFA raises the session to AAL2.
+Stricter guards (e.g. require_owner_portal_auth_aal2) apply AAL2 for sensitive actions.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-OWNER_MFA_REQUIRED = True
+OWNER_MFA_REQUIRED = False
 OWNER_REQUIRED_AAL = "aal2"
 
 
@@ -22,14 +22,17 @@ def resolve_aal(claims: dict[str, Any]) -> str:
 
 
 def is_owner_mfa_satisfied(claims: dict[str, Any]) -> bool:
-    if not OWNER_MFA_REQUIRED:
-        return True
+    """True when JWT is at AAL2 (MFA challenge completed for this session)."""
     return resolve_aal(claims) == OWNER_REQUIRED_AAL
 
 
+def is_owner_mfa_enabled(claims: dict[str, Any]) -> bool:
+    """Posture hint: session has completed MFA (AAL2)."""
+    return is_owner_mfa_satisfied(claims)
+
+
 def mfa_next_step(claims: dict[str, Any]) -> str:
-    """Routing hint when owner exists but MFA is not yet at AAL2."""
+    """Legacy routing hint; MFA is optional — prefer membership/venue next_step."""
     if is_owner_mfa_satisfied(claims):
         return "portal_home"
-    # Supabase uses aal1 until the user completes an MFA challenge after enrollment.
     return "enroll_mfa"
