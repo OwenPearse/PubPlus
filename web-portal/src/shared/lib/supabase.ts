@@ -60,3 +60,120 @@ export function onAuthStateChange(
   });
   return () => data.subscription.unsubscribe();
 }
+
+// --- MFA (TOTP via Supabase Auth) ---
+
+export type AuthenticatorAssuranceLevel = {
+  currentLevel: "aal1" | "aal2" | null;
+  nextLevel: "aal1" | "aal2" | null;
+};
+
+export type MfaTotpFactor = {
+  id: string;
+  friendlyName?: string;
+  status: "verified" | "unverified";
+};
+
+export type MfaTotpEnrollment = {
+  factorId: string;
+  qrCode: string;
+  secret: string;
+};
+
+export type PostAuthMfaStep = "complete" | "enroll" | "verify";
+
+export function isMfaSatisfied(aal: AuthenticatorAssuranceLevel): boolean {
+  return aal.currentLevel === "aal2" && aal.nextLevel === "aal2";
+}
+
+export function needsMfaVerification(aal: AuthenticatorAssuranceLevel): boolean {
+  return aal.currentLevel === "aal1" && aal.nextLevel === "aal2";
+}
+
+function toAssuranceLevel(
+  level: string | null | undefined,
+): AuthenticatorAssuranceLevel["currentLevel"] {
+  if (level === "aal1" || level === "aal2") return level;
+  return null;
+}
+
+export async function getAuthenticatorAssuranceLevel(): Promise<AuthenticatorAssuranceLevel> {
+  const { data, error } = await getSupabaseClient().auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error) throw error;
+  return {
+    currentLevel: toAssuranceLevel(data.currentLevel),
+    nextLevel: toAssuranceLevel(data.nextLevel),
+  };
+}
+
+export async function listMfaFactors(): Promise<MfaTotpFactor[]> {
+  const { data, error } = await getSupabaseClient().auth.mfa.listFactors();
+  if (error) throw error;
+  const totp = data.totp ?? [];
+  return totp.map((factor) => ({
+    id: factor.id,
+    friendlyName: factor.friendly_name ?? undefined,
+    status: factor.status as "verified" | "unverified",
+  }));
+}
+
+export async function getVerifiedTotpFactorId(): Promise<string | null> {
+  const factors = await listMfaFactors();
+  const verified = factors.find((f) => f.status === "verified");
+  return verified?.id ?? null;
+}
+
+export async function resolvePostAuthMfaStep(): Promise<PostAuthMfaStep> {
+  const aal = await getAuthenticatorAssuranceLevel();
+  if (isMfaSatisfied(aal)) return "complete";
+  if (needsMfaVerification(aal)) {
+    const factorId = await getVerifiedTotpFactorId();
+    return factorId ? "verify" : "enroll";
+  }
+  return "enroll";
+}
+
+export async function enrollTotpFactor(friendlyName = "Authenticator app"): Promise<MfaTotpEnrollment> {
+  const { data, error } = await getSupabaseClient().auth.mfa.enroll({
+    factorType: "totp",
+    friendlyName,
+  });
+  if (error) throw error;
+  if (!data?.id || !data.totp) {
+    throw new Error("Could not start authenticator enrollment. Please try again.");
+  }
+  return {
+    factorId: data.id,
+    qrCode: data.totp.qr_code,
+    secret: data.totp.secret,
+  };
+}
+
+export async function challengeMfaFactor(factorId: string): Promise<string> {
+  const { data, error } = await getSupabaseClient().auth.mfa.challenge({ factorId });
+  if (error) throw error;
+  if (!data?.id) {
+    throw new Error("Could not start verification challenge. Please try again.");
+  }
+  return data.id;
+}
+
+export async function verifyMfaChallenge(params: {
+  factorId: string;
+  challengeId: string;
+  code: string;
+}) {
+  const { data, error } = await getSupabaseClient().auth.mfa.verify({
+    factorId: params.factorId,
+    challengeId: params.challengeId,
+    code: params.code.trim(),
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function unenrollMfaFactor(factorId: string) {
+  const { data, error } = await getSupabaseClient().auth.mfa.unenroll({ factorId });
+  if (error) throw error;
+  return data;
+}

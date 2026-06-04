@@ -1,14 +1,29 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
+import { MfaEnrollStep } from "@/owner/components/MfaEnrollStep";
+import { MfaVerifyStep } from "@/owner/components/MfaVerifyStep";
 import { ErrorBanner } from "@/shared/components/ErrorBanner";
 import { getPortalSupportUrl, hasSupabaseAuthConfig } from "@/shared/lib/env";
 import { portalBrand } from "@/shared/lib/portalBrand";
-import { signInWithPassword, signUpWithPassword } from "@/shared/lib/supabase";
+import {
+  getVerifiedTotpFactorId,
+  resolvePostAuthMfaStep,
+  signInWithPassword,
+  signOut,
+  signUpWithPassword,
+} from "@/shared/lib/supabase";
 
 type EntryMode = "sign-in" | "sign-up";
 
-type SuccessKind = "signed-in" | "sign-up-confirm" | "sign-up-pending";
+type PortalPhase =
+  | { kind: "credentials" }
+  | { kind: "mfa-loading" }
+  | { kind: "mfa-enroll" }
+  | { kind: "mfa-verify"; factorId: string }
+  | { kind: "mfa-complete" }
+  | { kind: "sign-up-confirm" }
+  | { kind: "sign-up-pending" };
 
 export function PortalEntryPage() {
   const [mode, setMode] = useState<EntryMode>("sign-in");
@@ -16,25 +31,51 @@ export function PortalEntryPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<SuccessKind | null>(null);
+  const [phase, setPhase] = useState<PortalPhase>({ kind: "credentials" });
 
   const supportUrl = getPortalSupportUrl();
+
+  async function beginMfaFlow() {
+    setPhase({ kind: "mfa-loading" });
+    setError("");
+    try {
+      const step = await resolvePostAuthMfaStep();
+      if (step === "complete") {
+        setPhase({ kind: "mfa-complete" });
+        return;
+      }
+      if (step === "verify") {
+        const factorId = await getVerifiedTotpFactorId();
+        if (factorId) {
+          setPhase({ kind: "mfa-verify", factorId });
+          return;
+        }
+      }
+      setPhase({ kind: "mfa-enroll" });
+    } catch (err) {
+      setPhase({ kind: "credentials" });
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not check two-step verification status. Please try again.",
+      );
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    setSuccess(null);
     setLoading(true);
     try {
       if (mode === "sign-in") {
         await signInWithPassword(email.trim(), password);
-        setSuccess("signed-in");
+        await beginMfaFlow();
       } else {
         const data = await signUpWithPassword(email.trim(), password);
         if (data.session) {
-          setSuccess("sign-up-pending");
+          await beginMfaFlow();
         } else {
-          setSuccess("sign-up-confirm");
+          setPhase({ kind: "sign-up-confirm" });
         }
       }
     } catch (err) {
@@ -42,6 +83,19 @@ export function PortalEntryPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSignOutFromMfa() {
+    await signOut();
+    setPhase({ kind: "credentials" });
+    setPassword("");
+    setError("");
+  }
+
+  function resetToCredentials() {
+    setPhase({ kind: "credentials" });
+    setPassword("");
+    setError("");
   }
 
   if (!hasSupabaseAuthConfig()) {
@@ -55,62 +109,84 @@ export function PortalEntryPage() {
     );
   }
 
-  if (success) {
+  if (phase.kind !== "credentials") {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
         <PortalEntryHeader />
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-          {success === "sign-up-confirm" ? (
+          {phase.kind === "sign-up-confirm" ? (
             <>
               <h2 className="text-lg font-semibold text-slate-900">Check your email</h2>
               <p className="mt-2 text-sm text-slate-600">
                 We sent a confirmation link to <strong>{email}</strong>. After you confirm, sign in
                 here. Venue portal access may require account approval before you can manage a venue.
               </p>
+              <button
+                type="button"
+                className="mt-4 text-sm text-slate-600 underline"
+                onClick={resetToCredentials}
+              >
+                Back to sign in
+              </button>
             </>
-          ) : success === "sign-up-pending" ? (
+          ) : phase.kind === "mfa-loading" ? (
+            <p className="text-sm text-slate-600" role="status">
+              Checking two-step verification…
+            </p>
+          ) : phase.kind === "mfa-enroll" ? (
+            <MfaEnrollStep
+              onComplete={() => setPhase({ kind: "mfa-complete" })}
+              onSignOut={handleSignOutFromMfa}
+            />
+          ) : phase.kind === "mfa-verify" ? (
+            <MfaVerifyStep
+              factorId={phase.factorId}
+              onComplete={() => setPhase({ kind: "mfa-complete" })}
+              onSignOut={handleSignOutFromMfa}
+            />
+          ) : phase.kind === "mfa-complete" ? (
             <>
-              <h2 className="text-lg font-semibold text-slate-900">Account created</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Two-step verification complete</h2>
               <p className="mt-2 text-sm text-slate-600">
-                Your sign-in details were accepted. Venue portal access may require approval or
-                provisioning before you can enter the owner area. Sign in again once access has been
-                granted.
+                Your sign-in passed two-step verification. Venue portal access may still require
+                account approval or provisioning before you can enter the owner area.
+              </p>
+              <p className="mt-3 text-sm text-slate-600">
+                If you have internal operator access, you can open the admin workspace below once your
+                role has been confirmed.
+              </p>
+              <button
+                type="button"
+                className="mt-4 text-sm text-slate-600 underline"
+                onClick={resetToCredentials}
+              >
+                Back to sign in
+              </button>
+              <p className="mt-4">
+                <Link
+                  to="/internal/founder-venues"
+                  className="text-sm font-medium text-slate-900 underline"
+                >
+                  Continue to operator workspace
+                </Link>
               </p>
             </>
           ) : (
             <>
-              <h2 className="text-lg font-semibold text-slate-900">Signed in</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Account created</h2>
               <p className="mt-2 text-sm text-slate-600">
-                You are signed in. Role-based routing and two-factor verification will be enabled in
-                a later release. If you have internal operator access, you can open the admin
-                workspace below.
+                Your sign-in details were accepted. Venue portal access may require approval or
+                provisioning before you can enter the owner area.
               </p>
-              <p className="mt-3 text-sm text-slate-600">
-                Venue owners: your account may still need approval before the owner portal is
-                available.
-              </p>
+              <button
+                type="button"
+                className="mt-4 text-sm text-slate-600 underline"
+                onClick={resetToCredentials}
+              >
+                Back to sign in
+              </button>
             </>
           )}
-          <button
-            type="button"
-            className="mt-4 text-sm text-slate-600 underline"
-            onClick={() => {
-              setSuccess(null);
-              setPassword("");
-            }}
-          >
-            Back to sign in
-          </button>
-          {success === "signed-in" ? (
-            <p className="mt-4">
-              <Link
-                to="/internal/founder-venues"
-                className="text-sm font-medium text-slate-900 underline"
-              >
-                Continue to operator workspace
-              </Link>
-            </p>
-          ) : null}
         </div>
       </div>
     );
