@@ -672,10 +672,11 @@ export type HomeFeedParams = {
   radius_m?: number;
   /**
  * Maximum venues per section (`nearby`, `open_now`, `specials_tonight`). The backend runs three
-discovery passes — lower limits improve latency on constrained hosts. Search/map use separate limits (up to 200).
+discovery passes — lower limits improve latency on constrained hosts (MVP/TestFlight default is 3).
+Search/map use separate limits (up to 200). Deeper home-feed optimisation is future work.
 
  * @minimum 1
- * @maximum 12
+ * @maximum 6
  */
   limit?: number;
 };

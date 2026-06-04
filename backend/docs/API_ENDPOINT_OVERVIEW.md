@@ -107,7 +107,7 @@ Query parameters
 | `lat`, `lng` | Optional discovery origin (device or profile default) |
 | `suburb` | Optional suburb filter |
 | `radius_m` | Used only when `lat` and `lng` are both provided (default `5000`) |
-| `limit` | Venues **per section**; default **6**, max **12** (`400 invalid_limit` above max). Search uses its own limit (default 50, max 200). |
+| `limit` | Venues **per section**; default **3**, max **6** (`400 invalid_limit` above max). Conservative for MVP/TestFlight reliability on Railway. Search uses its own limit (default 50, max 200). |
 
 Notes
 

@@ -313,6 +313,28 @@ OpenAPI contract: home `limit` default **6**, max **12** (`consumer_app/lib/api-
 
 ---
 
+## Stage 5E — Home feed MVP reliability (default limit 3)
+
+**Problem:** Stage **5D** lowered home default to **6** per section, but production still timed out (~31s → HTML **500**). `GET /api/v1/home?limit=3` returned **200** (~23s).
+
+**Fix (code):** Default home `limit` is **3** per section (max **6** via `?limit=`). Intentionally conservative for MVP/TestFlight on Railway — reliability over venue count. Search/map keep their own defaults (up to 200). No Gunicorn/Railway timeout increase in this stage; deeper home-feed optimisation is future work.
+
+**Re-smoke after deploy:**
+
+```bash
+curl -i "https://<railway-domain>/api/v1/health"
+curl -i "https://<railway-domain>/api/v1/home"
+curl -i "https://<railway-domain>/api/v1/home?limit=3"
+curl -i "https://<railway-domain>/api/v1/home?limit=6"
+curl -i "https://<railway-domain>/api/v1/home?limit=7"
+```
+
+Expect **200** on health, default home, `limit=3`, and usually `limit=6` (may be slow). Expect **400** `invalid_limit` on `limit=7`.
+
+OpenAPI contract: home `limit` default **3**, max **6** (`consumer_app/lib/api-spec/openapi.yaml`).
+
+---
+
 ## Database and Supabase
 
 ### Schema and data (before meaningful smoke)
@@ -399,7 +421,7 @@ Replace `<railway-generated-domain>` with your public hostname (e.g. `pubplus-pr
 | `db_error` on `/reference/localities` or `/search/filters` | Missing table/wrong DB | Apply `0001`–`0033` to the same project as `DATABASE_URL`; not caused by empty data alone |
 | `internal_error` on `/home` or `/search/venues` | Discovery SQL failure | Same as above; capture Railway traceback |
 | `404` on `/api/v1/search/` only | Wrong smoke path | Use `GET /api/v1/search/venues` |
-| `/home` **500** (~30s, HTML error) | Home feed too slow (3× discovery + enrichment) | Deploy Stage **5D** (default `limit=6`); check logs for `home_feed section=… elapsed_ms` |
+| `/home` **500** (~30s, HTML error) | Home feed too slow (3× discovery + enrichment) | Deploy Stage **5E** (default `limit=3`); check logs for `home_feed section=… elapsed_ms`; `?limit=6` may still be slow |
 | `/home` **200** but empty | No real import data | Expected until data pipeline run |
 | **`401` on `/auth-probe/private` only** | JWT issuer/JWKS/audience mismatch | Match `SUPABASE_JWT_*` to same `<project-ref>` as token source |
 | **`401` on all private routes** | Same as above, or expired token | Refresh token; verify mobile/backend same Supabase project |

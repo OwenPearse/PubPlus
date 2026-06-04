@@ -8,9 +8,9 @@ from common.auth.request_context import get_auth_context
 from services.discovery import DiscoveryFilterError
 from services.home_feed.service import HomeFeedQuery, home_feed_to_dict, run_home_feed
 
-# Per-section venue cap (three discovery passes). Tuned for Railway latency; search keeps higher limits.
-HOME_FEED_DEFAULT_LIMIT = 6
-HOME_FEED_MAX_LIMIT = 12
+# Per-section venue cap (three discovery passes). Conservative for Railway/TestFlight reliability; search keeps higher limits.
+HOME_FEED_DEFAULT_LIMIT = 3
+HOME_FEED_MAX_LIMIT = 6
 
 
 def _optional_float(request, key: str) -> float | None:

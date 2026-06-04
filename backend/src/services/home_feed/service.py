@@ -16,7 +16,7 @@ from services.discovery import (
 logger = logging.getLogger(__name__)
 
 # Default per section — see api.v1.home.views.HOME_FEED_DEFAULT_LIMIT (kept in sync).
-HOME_FEED_DEFAULT_LIMIT = 6
+HOME_FEED_DEFAULT_LIMIT = 3
 
 
 @dataclass(frozen=True)
