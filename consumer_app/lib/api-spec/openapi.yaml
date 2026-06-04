@@ -147,11 +147,14 @@ paths:
         - name: limit
           in: query
           required: false
+          description: |
+            Maximum venues per section (`nearby`, `open_now`, `specials_tonight`). The backend runs three
+            discovery passes — lower limits improve latency on constrained hosts. Search/map use separate limits (up to 200).
           schema:
             type: integer
             minimum: 1
-            maximum: 200
-            default: 12
+            maximum: 12
+            default: 6
       responses:
         "200":
           description: Home feed
