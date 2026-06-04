@@ -19,12 +19,14 @@ import { resolvePortalRole, type ResolvePortalRoleResult } from "@/shared/lib/po
 import {
   getVerifiedTotpFactorId,
   resolvePostAuthMfaStep,
+  sendPasswordResetEmail,
   signInWithPassword,
   signOut,
   signUpWithPassword,
 } from "@/shared/lib/supabase";
 
 type EntryMode = "sign-in" | "sign-up";
+type CredentialView = "form" | "forgot-password" | "forgot-password-sent";
 
 type PortalPhase =
   | { kind: "credentials" }
@@ -44,6 +46,8 @@ export function PortalEntryPage() {
   const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState<PortalPhase>({ kind: "credentials" });
+  const [credentialView, setCredentialView] = useState<CredentialView>("form");
+  const [resetEmail, setResetEmail] = useState("");
 
   const supportUrl = getPortalSupportUrl();
 
@@ -141,8 +145,27 @@ export function PortalEntryPage() {
 
   function resetToCredentials() {
     setPhase({ kind: "credentials" });
+    setCredentialView("form");
     setPassword("");
     setError("");
+  }
+
+  async function handleForgotPasswordSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(resetEmail.trim());
+      setCredentialView("forgot-password-sent");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not send password reset email. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleContinueAfterAuth(roleResult: ResolvePortalRoleResult) {
@@ -201,6 +224,7 @@ export function PortalEntryPage() {
             <MfaEnrollStep
               onComplete={() => void completeMfaAndRoute()}
               onSignOut={handleSignOutFromMfa}
+              onNeedVerify={(factorId) => setPhase({ kind: "mfa-verify", factorId })}
             />
           ) : phase.kind === "mfa-verify" ? (
             <MfaVerifyStep
@@ -228,78 +252,155 @@ export function PortalEntryPage() {
       <PortalEntryHeader />
 
       <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex rounded-lg border border-slate-200 p-1" role="tablist">
-          <ModeButton
-            active={mode === "sign-in"}
-            label="Sign in"
-            onClick={() => {
-              setMode("sign-in");
-              setError("");
-            }}
-          />
-          <ModeButton
-            active={mode === "sign-up"}
-            label="Create account"
-            onClick={() => {
-              setMode("sign-up");
-              setError("");
-            }}
-          />
-        </div>
+        {credentialView === "form" ? (
+          <>
+            <div className="mb-6 flex rounded-lg border border-slate-200 p-1" role="tablist">
+              <ModeButton
+                active={mode === "sign-in"}
+                label="Sign in"
+                onClick={() => {
+                  setMode("sign-in");
+                  setError("");
+                }}
+              />
+              <ModeButton
+                active={mode === "sign-up"}
+                label="Create account"
+                onClick={() => {
+                  setMode("sign-up");
+                  setError("");
+                }}
+              />
+            </div>
 
-        <h2 className="mb-1 text-lg font-semibold text-slate-900">
-          {mode === "sign-in" ? "Sign in" : "Create your account"}
-        </h2>
-        <p className="mb-4 text-sm text-slate-600">
-          {mode === "sign-in"
-            ? "Sign in for venue operators or internal operators."
-            : "Register as a venue operator. Access may require approval after your account is created."}
-        </p>
+            <h2 className="mb-1 text-lg font-semibold text-slate-900">
+              {mode === "sign-in" ? "Sign in" : "Create your account"}
+            </h2>
+            <p className="mb-4 text-sm text-slate-600">
+              {mode === "sign-in"
+                ? "Sign in for venue operators or internal operators."
+                : "Register as a venue operator. Access may require approval after your account is created."}
+            </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="block text-sm">
-            Email
-            <input
-              type="email"
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete={mode === "sign-in" ? "username" : "email"}
-              disabled={loading}
-            />
-          </label>
-          <label className="block text-sm">
-            Password
-            <input
-              type="password"
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-              disabled={loading}
-            />
-          </label>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <label className="block text-sm">
+                Email
+                <input
+                  type="email"
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete={mode === "sign-in" ? "username" : "email"}
+                  disabled={loading}
+                />
+              </label>
+              <label className="block text-sm">
+                Password
+                <input
+                  type="password"
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+                  disabled={loading}
+                />
+              </label>
 
-          <ErrorBanner message={error} onDismiss={error ? () => setError("") : undefined} />
+              {mode === "sign-in" ? (
+                <p className="text-right text-sm">
+                  <button
+                    type="button"
+                    className="font-medium text-slate-900 underline"
+                    onClick={() => {
+                      setResetEmail(email);
+                      setCredentialView("forgot-password");
+                      setError("");
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </p>
+              ) : null}
 
-          <button
-            type="submit"
-            aria-label={mode === "sign-in" ? "Submit sign in" : "Submit create account"}
-            className="w-full rounded bg-slate-900 py-2 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={loading}
-          >
-            {loading
-              ? mode === "sign-in"
-                ? "Signing in…"
-                : "Creating account…"
-              : mode === "sign-in"
-                ? "Sign in"
-                : "Create account"}
-          </button>
-        </form>
+              <ErrorBanner message={error} onDismiss={error ? () => setError("") : undefined} />
+
+              <button
+                type="submit"
+                aria-label={mode === "sign-in" ? "Submit sign in" : "Submit create account"}
+                className="w-full rounded bg-slate-900 py-2 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading}
+              >
+                {loading
+                  ? mode === "sign-in"
+                    ? "Signing in…"
+                    : "Creating account…"
+                  : mode === "sign-in"
+                    ? "Sign in"
+                    : "Create account"}
+              </button>
+            </form>
+          </>
+        ) : credentialView === "forgot-password" ? (
+          <>
+            <h2 className="mb-1 text-lg font-semibold text-slate-900">Reset your password</h2>
+            <p className="mb-4 text-sm text-slate-600">
+              Enter the email for your account and we&apos;ll send reset instructions if it exists.
+            </p>
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+              <label className="block text-sm">
+                Email
+                <input
+                  type="email"
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  disabled={loading}
+                />
+              </label>
+              <ErrorBanner message={error} onDismiss={error ? () => setError("") : undefined} />
+              <button
+                type="submit"
+                className="w-full rounded bg-slate-900 py-2 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading}
+              >
+                {loading ? "Sending…" : "Send reset email"}
+              </button>
+            </form>
+            <button
+              type="button"
+              className="mt-4 text-sm text-slate-600 underline"
+              onClick={() => {
+                setCredentialView("form");
+                setError("");
+              }}
+            >
+              Back to sign in
+            </button>
+          </>
+        ) : (
+          <>
+            <h2 className="mb-1 text-lg font-semibold text-slate-900">Check your email</h2>
+            <p className="text-sm text-slate-600">
+              If an account exists for this email, we&apos;ll send password reset instructions.
+            </p>
+            <button
+              type="button"
+              className="mt-4 text-sm font-medium text-slate-900 underline"
+              onClick={() => {
+                setCredentialView("form");
+                setMode("sign-in");
+                setError("");
+              }}
+            >
+              Back to sign in
+            </button>
+          </>
+        )}
       </div>
 
       {supportUrl ? (

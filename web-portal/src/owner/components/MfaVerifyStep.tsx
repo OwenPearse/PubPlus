@@ -88,28 +88,31 @@ export function MfaVerifyStep({ factorId, onComplete, onSignOut }: Props) {
         </button>
       </form>
 
-      {error ? (
+      <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {error ? (
+          <button
+            type="button"
+            className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            onClick={() => {
+              setCode("");
+              setError("");
+            }}
+            disabled={busy}
+          >
+            Try again
+          </button>
+        ) : (
+          <span className="hidden sm:block" aria-hidden />
+        )}
         <button
           type="button"
-          className="text-sm font-medium text-slate-900 underline disabled:opacity-60"
-          onClick={() => {
-            setCode("");
-            setError("");
-          }}
+          className="text-sm text-slate-600 underline disabled:opacity-60 sm:ml-auto"
+          onClick={() => void handleSignOut()}
           disabled={busy}
         >
-          Try again
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
-      ) : null}
-
-      <button
-        type="button"
-        className="text-sm text-slate-600 underline disabled:opacity-60"
-        onClick={() => void handleSignOut()}
-        disabled={busy}
-      >
-        {signingOut ? "Signing out…" : "Sign out"}
-      </button>
+      </div>
     </div>
   );
 }

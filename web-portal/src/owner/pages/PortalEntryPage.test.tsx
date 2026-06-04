@@ -9,6 +9,7 @@ const signInWithPassword = vi.fn();
 const signUpWithPassword = vi.fn();
 const resolvePostAuthMfaStep = vi.fn();
 const getVerifiedTotpFactorId = vi.fn();
+const sendPasswordResetEmail = vi.fn();
 const signOut = vi.fn();
 const resolvePortalRole = vi.fn();
 const ownerProvision = vi.fn();
@@ -24,6 +25,7 @@ vi.mock("@/shared/lib/supabase", () => ({
   signUpWithPassword: (...args: unknown[]) => signUpWithPassword(...args),
   resolvePostAuthMfaStep: (...args: unknown[]) => resolvePostAuthMfaStep(...args),
   getVerifiedTotpFactorId: (...args: unknown[]) => getVerifiedTotpFactorId(...args),
+  sendPasswordResetEmail: (...args: unknown[]) => sendPasswordResetEmail(...args),
   signOut: (...args: unknown[]) => signOut(...args),
 }));
 
@@ -38,8 +40,17 @@ vi.mock("@/shared/lib/portalRole", () => ({
 }));
 
 vi.mock("@/owner/components/MfaEnrollStep", () => ({
-  MfaEnrollStep: ({ onSignOut }: { onSignOut: () => void }) => (
+  MfaEnrollStep: ({
+    onSignOut,
+    onNeedVerify,
+  }: {
+    onSignOut: () => void;
+    onNeedVerify: (factorId: string) => void;
+  }) => (
     <div data-testid="mfa-enroll-step">
+      <button type="button" onClick={() => onNeedVerify("from-enroll")}>
+        MFA route verify
+      </button>
       <button type="button" onClick={onSignOut}>
         MFA enroll sign out
       </button>
@@ -79,6 +90,7 @@ describe("PortalEntryPage", () => {
     signUpWithPassword.mockReset();
     resolvePostAuthMfaStep.mockReset();
     getVerifiedTotpFactorId.mockReset();
+    sendPasswordResetEmail.mockReset();
     signOut.mockReset();
     resolvePortalRole.mockReset();
     ownerProvision.mockReset();
@@ -178,6 +190,42 @@ describe("PortalEntryPage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("Invalid login credentials");
+    });
+  });
+
+  it("shows forgot password link on sign-in form", async () => {
+    renderPage();
+    expect(screen.getByRole("button", { name: "Forgot password?" })).toBeInTheDocument();
+  });
+
+  it("submits forgot password email with non-enumerating success copy", async () => {
+    const user = userEvent.setup();
+    sendPasswordResetEmail.mockResolvedValue(undefined);
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.type(screen.getByLabelText("Email"), "reset@example.com");
+    await user.click(screen.getByRole("button", { name: "Send reset email" }));
+
+    await waitFor(() => {
+      expect(sendPasswordResetEmail).toHaveBeenCalledWith("reset@example.com");
+      expect(
+        screen.getByText(/If an account exists for this email, we'll send password reset instructions/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows error when forgot password submit fails", async () => {
+    const user = userEvent.setup();
+    sendPasswordResetEmail.mockRejectedValue(new Error("Rate limit exceeded"));
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.type(screen.getByLabelText("Email"), "reset@example.com");
+    await user.click(screen.getByRole("button", { name: "Send reset email" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Rate limit exceeded");
     });
   });
 

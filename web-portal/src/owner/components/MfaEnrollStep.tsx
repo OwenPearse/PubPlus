@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ErrorBanner } from "@/shared/components/ErrorBanner";
 import {
   challengeMfaFactor,
-  enrollTotpFactor,
+  formatMfaError,
+  restartUnverifiedTotpEnrollment,
+  startOrRecoverTotpEnrollment,
   type MfaTotpEnrollment,
   verifyMfaChallenge,
 } from "@/shared/lib/supabase";
@@ -11,57 +13,82 @@ import {
 type Props = {
   onComplete: () => void;
   onSignOut: () => void | Promise<void>;
+  onNeedVerify: (factorId: string) => void;
 };
 
-export function MfaEnrollStep({ onComplete, onSignOut }: Props) {
+type EnrollMode = "loading" | "new" | "resume-unverified";
+
+export function MfaEnrollStep({ onComplete, onSignOut, onNeedVerify }: Props) {
+  const [mode, setMode] = useState<EnrollMode>("loading");
   const [enrollment, setEnrollment] = useState<MfaTotpEnrollment | null>(null);
-  const [enrollLoading, setEnrollLoading] = useState(true);
+  const [resumeFactorId, setResumeFactorId] = useState<string | null>(null);
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [restartLoading, setRestartLoading] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
+  const onNeedVerifyRef = useRef(onNeedVerify);
+  onNeedVerifyRef.current = onNeedVerify;
 
   useEffect(() => {
     let cancelled = false;
 
-    async function startEnrollment() {
-      setEnrollLoading(true);
+    async function initEnrollment() {
+      setMode("loading");
       setError("");
+      setEnrollment(null);
+      setResumeFactorId(null);
       try {
-        const data = await enrollTotpFactor();
-        if (!cancelled) setEnrollment(data);
+        const result = await startOrRecoverTotpEnrollment();
+        if (cancelled) return;
+        if (result.kind === "existing-verified") {
+          onNeedVerifyRef.current(result.factorId);
+          return;
+        }
+        if (result.kind === "resume-unverified") {
+          setResumeFactorId(result.factorId);
+          setMode("resume-unverified");
+          return;
+        }
+        setEnrollment(result.enrollment);
+        setMode("new");
       } catch (err) {
         if (!cancelled) {
           setError(
-            err instanceof Error
-              ? err.message
-              : "Could not start two-step verification setup. Please try again.",
+            formatMfaError(
+              err,
+              "Could not start two-step verification setup. Please try again.",
+            ),
           );
+          setMode("new");
         }
-      } finally {
-        if (!cancelled) setEnrollLoading(false);
       }
     }
 
-    void startEnrollment();
+    void initEnrollment();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  async function verifyFactor(factorId: string) {
+    const challengeId = await challengeMfaFactor(factorId);
+    await verifyMfaChallenge({
+      factorId,
+      challengeId,
+      code,
+    });
+    onComplete();
+  }
+
   async function handleVerify(event: FormEvent) {
     event.preventDefault();
-    if (!enrollment) return;
+    const factorId = enrollment?.factorId ?? resumeFactorId;
+    if (!factorId) return;
     setError("");
     setVerifyLoading(true);
     try {
-      const challengeId = await challengeMfaFactor(enrollment.factorId);
-      await verifyMfaChallenge({
-        factorId: enrollment.factorId,
-        challengeId,
-        code,
-      });
-      onComplete();
+      await verifyFactor(factorId);
     } catch (err) {
       setError(
         err instanceof Error
@@ -73,22 +100,24 @@ export function MfaEnrollStep({ onComplete, onSignOut }: Props) {
     }
   }
 
-  async function handleRetryEnrollment() {
-    setEnrollment(null);
+  async function handleRestartSetup() {
     setCode("");
     setError("");
-    setEnrollLoading(true);
+    setRestartLoading(true);
+    setEnrollment(null);
+    setResumeFactorId(null);
+    setMode("loading");
     try {
-      const data = await enrollTotpFactor();
+      const data = await restartUnverifiedTotpEnrollment();
       setEnrollment(data);
+      setMode("new");
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Could not restart enrollment. Please try again.",
+        formatMfaError(err, "Could not restart authenticator setup. Please try again."),
       );
+      setMode("resume-unverified");
     } finally {
-      setEnrollLoading(false);
+      setRestartLoading(false);
     }
   }
 
@@ -101,7 +130,9 @@ export function MfaEnrollStep({ onComplete, onSignOut }: Props) {
     }
   }
 
-  const busy = enrollLoading || verifyLoading || signingOut;
+  const busy = mode === "loading" || verifyLoading || restartLoading || signingOut;
+  const activeFactorId = enrollment?.factorId ?? resumeFactorId;
+  const showCodeForm = Boolean(activeFactorId) && mode !== "loading";
 
   return (
     <div className="space-y-4">
@@ -113,41 +144,49 @@ export function MfaEnrollStep({ onComplete, onSignOut }: Props) {
         </p>
       </div>
 
-      {enrollLoading ? (
+      {mode === "loading" ? (
         <p className="text-sm text-slate-600" role="status">
           Preparing your authenticator setup…
         </p>
       ) : null}
 
-      {enrollment ? (
-        <div className="space-y-4">
-          {enrollment.qrCode ? (
-            <div className="flex justify-center rounded-lg border border-slate-200 bg-white p-4">
-              <img
-                src={enrollment.qrCode}
-                alt="QR code for authenticator app"
-                className="h-40 w-40"
-                width={160}
-                height={160}
-              />
-            </div>
-          ) : null}
-          {enrollment.secret ? (
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-              <p className="font-medium text-slate-700">Manual setup code</p>
-              <p className="mt-1 break-all font-mono text-slate-900">{enrollment.secret}</p>
-            </div>
-          ) : null}
-          <p className="text-sm text-slate-600">
-            Scan the QR code or enter the manual code in your authenticator app, then enter the
-            6-digit code below.
-          </p>
+      {mode === "resume-unverified" ? (
+        <p className="text-sm text-slate-600">
+          An authenticator setup already exists for this account. Enter the 6-digit code from your
+          authenticator app to finish setup, or restart setup if you no longer have access to that
+          app.
+        </p>
+      ) : null}
+
+      {enrollment?.qrCode ? (
+        <div className="flex justify-center rounded-lg border border-slate-200 bg-white p-4">
+          <img
+            src={enrollment.qrCode}
+            alt="QR code for authenticator app"
+            className="h-40 w-40"
+            width={160}
+            height={160}
+          />
         </div>
+      ) : null}
+
+      {enrollment?.secret ? (
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+          <p className="font-medium text-slate-700">Manual setup code</p>
+          <p className="mt-1 break-all font-mono text-slate-900">{enrollment.secret}</p>
+        </div>
+      ) : null}
+
+      {enrollment && mode === "new" ? (
+        <p className="text-sm text-slate-600">
+          Scan the QR code or enter the manual code in your authenticator app, then enter the
+          6-digit code below.
+        </p>
       ) : null}
 
       <ErrorBanner message={error} onDismiss={error ? () => setError("") : undefined} />
 
-      {enrollment ? (
+      {showCodeForm ? (
         <form onSubmit={handleVerify} className="space-y-4">
           <label className="block text-sm">
             Verification code
@@ -175,25 +214,75 @@ export function MfaEnrollStep({ onComplete, onSignOut }: Props) {
         </form>
       ) : null}
 
-      {!enrollLoading && !enrollment ? (
+      {!showCodeForm && mode !== "loading" && error ? (
         <button
           type="button"
-          className="text-sm font-medium text-slate-900 underline disabled:opacity-60"
-          onClick={() => void handleRetryEnrollment()}
+          className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+          onClick={() => {
+            setError("");
+            setMode("loading");
+            void startOrRecoverTotpEnrollment()
+              .then((result) => {
+                if (result.kind === "existing-verified") {
+                  onNeedVerifyRef.current(result.factorId);
+                  return;
+                }
+                if (result.kind === "resume-unverified") {
+                  setResumeFactorId(result.factorId);
+                  setMode("resume-unverified");
+                  return;
+                }
+                setEnrollment(result.enrollment);
+                setMode("new");
+              })
+              .catch((err) => {
+                setError(
+                  formatMfaError(
+                    err,
+                    "Could not start two-step verification setup. Please try again.",
+                  ),
+                );
+              });
+          }}
           disabled={busy}
         >
           Retry setup
         </button>
       ) : null}
 
-      <button
-        type="button"
-        className="text-sm text-slate-600 underline disabled:opacity-60"
-        onClick={() => void handleSignOut()}
-        disabled={busy}
-      >
-        {signingOut ? "Signing out…" : "Sign out"}
-      </button>
+      {mode === "resume-unverified" ? (
+        <button
+          type="button"
+          className="w-full rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+          onClick={() => void handleRestartSetup()}
+          disabled={busy}
+        >
+          {restartLoading ? "Restarting setup…" : "Restart setup"}
+        </button>
+      ) : null}
+
+      <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {showCodeForm && mode === "new" && !error ? (
+          <button
+            type="button"
+            className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            onClick={() => void handleRestartSetup()}
+            disabled={busy}
+          >
+            {restartLoading ? "Restarting…" : "Restart setup"}
+          </button>
+        ) : (
+          <span className="hidden sm:block" aria-hidden />
+        )}
+        <button
+          type="button"
+          className="text-sm text-slate-600 underline disabled:opacity-60 sm:ml-auto"
+          onClick={() => void handleSignOut()}
+          disabled={busy}
+        >
+          {signingOut ? "Signing out…" : "Sign out"}
+        </button>
+      </div>
     </div>
   );
 }

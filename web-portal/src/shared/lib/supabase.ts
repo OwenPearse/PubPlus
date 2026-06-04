@@ -82,6 +82,26 @@ export type MfaTotpEnrollment = {
 
 export type PostAuthMfaStep = "complete" | "enroll" | "verify";
 
+export const TOTP_FRIENDLY_NAME = "Authenticator app";
+
+export const DUPLICATE_MFA_FACTOR_MESSAGE =
+  "An authenticator setup already exists for this account. Continue by entering your verification code, or restart setup if you no longer have access.";
+
+export function isDuplicateMfaFactorError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message: unknown }).message)
+        : String(error);
+  return /friendly name|already exists/i.test(message);
+}
+
+export function formatMfaError(error: unknown, fallback: string): string {
+  if (isDuplicateMfaFactorError(error)) return DUPLICATE_MFA_FACTOR_MESSAGE;
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function isMfaSatisfied(aal: AuthenticatorAssuranceLevel): boolean {
   return aal.currentLevel === "aal2" && aal.nextLevel === "aal2";
 }
@@ -117,23 +137,84 @@ export async function listMfaFactors(): Promise<MfaTotpFactor[]> {
   }));
 }
 
+/** Alias for listMfaFactors — existing TOTP factors for the signed-in user. */
+export async function getExistingTotpFactors(): Promise<MfaTotpFactor[]> {
+  return listMfaFactors();
+}
+
+/** Prefer a verified factor; otherwise the first unverified TOTP factor. */
+export async function getPrimaryTotpFactor(): Promise<MfaTotpFactor | null> {
+  const factors = await getExistingTotpFactors();
+  return factors.find((f) => f.status === "verified") ?? factors.find((f) => f.status === "unverified") ?? null;
+}
+
 export async function getVerifiedTotpFactorId(): Promise<string | null> {
-  const factors = await listMfaFactors();
-  const verified = factors.find((f) => f.status === "verified");
-  return verified?.id ?? null;
+  const factors = await getExistingTotpFactors();
+  return factors.find((f) => f.status === "verified")?.id ?? null;
+}
+
+export async function getUnverifiedTotpFactorId(): Promise<string | null> {
+  const factors = await getExistingTotpFactors();
+  return factors.find((f) => f.status === "unverified")?.id ?? null;
 }
 
 export async function resolvePostAuthMfaStep(): Promise<PostAuthMfaStep> {
   const aal = await getAuthenticatorAssuranceLevel();
   if (isMfaSatisfied(aal)) return "complete";
   if (needsMfaVerification(aal)) {
-    const factorId = await getVerifiedTotpFactorId();
-    return factorId ? "verify" : "enroll";
+    const verifiedId = await getVerifiedTotpFactorId();
+    if (verifiedId) return "verify";
+    return "enroll";
   }
+  const primary = await getPrimaryTotpFactor();
+  if (primary?.status === "verified") return "verify";
+  if (primary?.status === "unverified") return "enroll";
   return "enroll";
 }
 
-export async function enrollTotpFactor(friendlyName = "Authenticator app"): Promise<MfaTotpEnrollment> {
+export type TotpEnrollmentStart =
+  | { kind: "new"; enrollment: MfaTotpEnrollment }
+  | { kind: "resume-unverified"; factorId: string }
+  | { kind: "existing-verified"; factorId: string };
+
+export async function startOrRecoverTotpEnrollment(): Promise<TotpEnrollmentStart> {
+  const factors = await getExistingTotpFactors();
+  const verified = factors.find((f) => f.status === "verified");
+  if (verified) {
+    return { kind: "existing-verified", factorId: verified.id };
+  }
+  const unverified = factors.find((f) => f.status === "unverified");
+  if (unverified) {
+    return { kind: "resume-unverified", factorId: unverified.id };
+  }
+  try {
+    const enrollment = await enrollTotpFactor(TOTP_FRIENDLY_NAME);
+    return { kind: "new", enrollment };
+  } catch (err) {
+    if (!isDuplicateMfaFactorError(err)) throw err;
+    const recovered = await getExistingTotpFactors();
+    const recoveredVerified = recovered.find((f) => f.status === "verified");
+    if (recoveredVerified) {
+      return { kind: "existing-verified", factorId: recoveredVerified.id };
+    }
+    const recoveredUnverified = recovered.find((f) => f.status === "unverified");
+    if (recoveredUnverified) {
+      return { kind: "resume-unverified", factorId: recoveredUnverified.id };
+    }
+    throw err;
+  }
+}
+
+/** Removes stale unverified TOTP factors, then enrolls a new one. Never removes verified factors. */
+export async function restartUnverifiedTotpEnrollment(): Promise<MfaTotpEnrollment> {
+  const factors = await getExistingTotpFactors();
+  for (const factor of factors.filter((f) => f.status === "unverified")) {
+    await unenrollMfaFactor(factor.id);
+  }
+  return enrollTotpFactor(TOTP_FRIENDLY_NAME);
+}
+
+export async function enrollTotpFactor(friendlyName = TOTP_FRIENDLY_NAME): Promise<MfaTotpEnrollment> {
   const { data, error } = await getSupabaseClient().auth.mfa.enroll({
     factorType: "totp",
     friendlyName,
@@ -176,4 +257,18 @@ export async function unenrollMfaFactor(factorId: string) {
   const { data, error } = await getSupabaseClient().auth.mfa.unenroll({ factorId });
   if (error) throw error;
   return data;
+}
+
+export function getPasswordResetRedirectUrl(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/access?mode=reset`;
+  }
+  return "/access?mode=reset";
+}
+
+export async function sendPasswordResetEmail(email: string, redirectTo?: string) {
+  const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: redirectTo ?? getPasswordResetRedirectUrl(),
+  });
+  if (error) throw error;
 }

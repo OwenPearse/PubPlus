@@ -154,11 +154,27 @@ Record results in PR or below (`[ ]` pending, `[x]` pass, `[!]` fail + note).
 
 ---
 
+## Auth fix smoke (MFA recovery + forgot password)
+
+**E2E framework:** No web-portal Playwright/Cypress setup; manual browser smoke only where noted.
+
+| Scenario | Automated (Vitest) | Manual / live |
+|----------|-------------------|---------------|
+| New sign-up → MFA without duplicate-factor dead-end | ✅ `startOrRecoverTotpEnrollment`, `MfaEnrollStep` | _pending_ |
+| Existing verified TOTP → verify step | ✅ `resolvePostAuthMfaStep`, `PortalEntryPage` | _pending_ |
+| Stale unverified TOTP → resume / restart setup | ✅ `restartUnverifiedTotpEnrollment`, `MfaEnrollStep` | _pending_ |
+| Forgot password → reset email + success copy | ✅ `PortalEntryPage`, `sendPasswordResetEmail` | _pending_ |
+| Admin `/access` → `/internal/founder-venues` | ✅ `PortalEntryPage`, `App.test.tsx` | _pending_ |
+
+**QA helper:** `docs/frontend-owner-signup/sql/confirm-test-user-email.md` and `database/sql/dev/confirm_test_user_email.sql` bypass email confirmation in dev/staging only.
+
+**Follow-up:** `/access?mode=reset` receives Supabase redirect after password reset; implement “set new password” form when product prioritizes it.
+
 ## Manual QA execution log
 
 | Date | Environment | Executor | Result |
 |------|-------------|----------|--------|
-| _pending_ | local dev | — | Not run in Stage 6 agent session (requires live Supabase + backend) |
+| 2026-06-04 | local dev | Cursor agent | Vitest green; live Supabase/browser smoke not run (credentials/env) |
 
 ---
 
