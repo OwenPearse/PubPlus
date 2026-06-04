@@ -42,6 +42,12 @@ export async function signInWithPassword(email: string, password: string) {
   return data.session;
 }
 
+export async function signUpWithPassword(email: string, password: string) {
+  const { data, error } = await getSupabaseClient().auth.signUp({ email, password });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut() {
   await getSupabaseClient().auth.signOut();
 }

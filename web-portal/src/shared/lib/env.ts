@@ -28,3 +28,7 @@ export function getSupabasePublishableKey(): string | null {
 export function hasSupabaseAuthConfig(): boolean {
   return Boolean(getSupabaseUrl() && getSupabasePublishableKey());
 }
+
+export function getPortalSupportUrl(): string | null {
+  return readEnv("VITE_PORTAL_SUPPORT_URL") ?? null;
+}
