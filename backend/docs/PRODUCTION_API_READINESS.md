@@ -361,9 +361,10 @@ EAS production profile injects mobile `EXPO_PUBLIC_*` at build time. Backend pro
 | **5B** | Owen: Railway project, env vars, first deploy, smoke | **In progress** — guided checklist in [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5B |
 | **5C** | Apply `database/supabase/migrations/`; re-smoke DB routes; plan **real import** (import not run in 5C) | **Guided** — [database/docs/RAILWAY_STAGE_5C_DB_READINESS.md](../../database/docs/RAILWAY_STAGE_5C_DB_READINESS.md), [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5C |
 | **5D** | Home default `limit` first Railway tuning (6/12) | Done — superseded by **5E** on production |
-| **5E** | Home MVP reliability: default **3**, max **6** per section; re-smoke `/api/v1/home` | Done in code — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5E; Owen: deploy + curl |
-| **5F** | Create PubPlus Dev + Prod Supabase split (before external TestFlight) | Pending |
-| **5G** | Point TestFlight EAS at Railway URL + matching Supabase (native stages) | Pending |
+| **5E** | Home MVP reliability: default **3**, max **6** per section; re-smoke `/api/v1/home` | Done — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5E |
+| **5F** | Home/search batch card loading; discovery timing logs; re-smoke latency | Done in code — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5F; Owen: deploy + curl |
+| **5G** | Create PubPlus Dev + Prod Supabase split (before external TestFlight) | Pending |
+| **5H** | Point TestFlight EAS at Railway URL + matching Supabase (native stages) | Pending |
 
 ---
 

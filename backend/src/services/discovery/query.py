@@ -4,6 +4,8 @@ Single shared discovery query for list + map. Reads published public truth only.
 
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -13,7 +15,8 @@ from zoneinfo import ZoneInfo
 from django.db import connection
 
 from apps.venues.services.published_venue_read import (
-    load_published_venue_read_bundle,
+    PublishedVenueReadBundle,
+    load_published_venue_read_bundles,
     map_published_hours_uncertainty,
 )
 from apps.venues.services.venue_read_service import bundle_to_public_venue_card
@@ -27,6 +30,7 @@ from services.discovery.open_now import OpenNowResult, compute_open_now
 from services.discovery.q_text import sql_ilike_pattern
 from services.discovery.ranking import apply_open_now_to_card, score_rank
 
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class DiscoveryHit:
@@ -186,8 +190,10 @@ def run_discovery(
     filters: DiscoveryMvpFilters,
     *,
     at_utc: datetime | None = None,
+    bundle_cache: dict[str, PublishedVenueReadBundle] | None = None,
 ) -> DiscoveryResult:
     filters.validate(mode)
+    started = time.perf_counter()
     t0 = at_utc or datetime.now(ZoneInfo("UTC"))
     if t0.tzinfo is None:
         raise ValueError("at_utc must be tz-aware or None")
@@ -195,21 +201,34 @@ def run_discovery(
     pre = min(200, filters.limit * 5) if filters.open_now is True else min(200, filters.limit)
 
     sql, params = build_discovery_sql(mode, filters)
+    sql_started = time.perf_counter()
     rows: list[tuple[Any, ...]] = []
     with connection.cursor() as c:
         c.execute(f"{sql} LIMIT {pre}", params)  # noqa: S608
         rows = c.fetchall()
+    sql_elapsed_ms = (time.perf_counter() - sql_started) * 1000
 
     uids = [str(r[0]) for r in rows] if rows else []
     umap = map_published_hours_uncertainty(uids)
 
+    if bundle_cache is None:
+        bundle_cache = {}
+
+    missing_ids = [uid for uid in uids if uid not in bundle_cache]
+    cache_hits = len(uids) - len(missing_ids)
+    bundle_started = time.perf_counter()
+    if missing_ids:
+        bundle_cache.update(load_published_venue_read_bundles(missing_ids))
+    bundle_elapsed_ms = (time.perf_counter() - bundle_started) * 1000
+
     hits: list[DiscoveryHit] = []
+    enrich_started = time.perf_counter()
     for r in rows:
         vid, has_desc, _dname, _sub, _c, vlat, vlng, d_m = r[0:8]
         o_lat = o_lon = None
         if filters.has_radius():
             o_lat, o_lon = float(filters.lat or 0), float(filters.lng or 0)
-        bundle = load_published_venue_read_bundle(vid)
+        bundle = bundle_cache.get(str(vid))
         if not bundle:
             continue
         o_res = compute_open_now(
@@ -265,6 +284,21 @@ def run_discovery(
 
     hits.sort(key=lambda h: (-h.rank_score, h.venue_id))
     hits = hits[: filters.limit]
+    enrich_elapsed_ms = (time.perf_counter() - enrich_started) * 1000
+
+    logger.info(
+        "discovery done mode=%s candidates=%s hits=%s unique_bundles_loaded=%s "
+        "cache_hits=%s sql_ms=%.0f bundle_ms=%.0f enrich_ms=%.0f total_ms=%.0f",
+        mode.value,
+        len(rows),
+        len(hits),
+        len(missing_ids),
+        cache_hits,
+        sql_elapsed_ms,
+        bundle_elapsed_ms,
+        enrich_elapsed_ms,
+        (time.perf_counter() - started) * 1000,
+    )
 
     return DiscoveryResult(
         mode=mode.value, filters=filters, at_utc=t0, hits=hits, prelimit_used=pre

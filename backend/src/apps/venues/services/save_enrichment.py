@@ -19,25 +19,33 @@ from apps.venues.public_read.detail import AuthenticatedActionsBlock, PublicVenu
 
 
 def venue_id_in_any_user_list(*, venue_id: UUID | str, auth: AuthContext) -> bool:
+    return map_venue_ids_in_any_user_list(venue_ids=[str(venue_id)], auth=auth).get(
+        str(venue_id), False
+    )
+
+
+def map_venue_ids_in_any_user_list(
+    *, venue_ids: list[str], auth: AuthContext
+) -> dict[str, bool]:
+    ids = [str(v) for v in venue_ids if v]
+    if not ids:
+        return {}
     with connection.cursor() as c:
+        placeholders = ",".join(["%s"] * len(ids))
         c.execute(
-            """
-            SELECT EXISTS (
-              SELECT 1
-              FROM public.saved_list_membership m
-              INNER JOIN public.saved_list s ON s.id = m.saved_list_id
-              INNER JOIN public.consumer_account cac ON cac.id = s.consumer_account_id
-              WHERE m.venue_id = %s
-                AND cac.auth_user_id = %s::uuid
-                AND s.is_archived = false
-            ) AS in_list
+            f"""
+            SELECT DISTINCT m.venue_id::text
+            FROM public.saved_list_membership m
+            INNER JOIN public.saved_list s ON s.id = m.saved_list_id
+            INNER JOIN public.consumer_account cac ON cac.id = s.consumer_account_id
+            WHERE m.venue_id IN ({placeholders})
+              AND cac.auth_user_id = %s::uuid
+              AND s.is_archived = false
             """,
-            [str(venue_id), auth.subject],
+            [*ids, auth.subject],
         )
-        row = c.fetchone()
-        if not row:
-            return False
-        return bool(row[0])
+        saved_ids = {str(row[0]) for row in c.fetchall()}
+    return {vid: vid in saved_ids for vid in ids}
 
 
 def apply_save_to_card(
@@ -49,6 +57,17 @@ def apply_save_to_card(
         card,
         is_saved=venue_id_in_any_user_list(venue_id=venue_id, auth=auth),
     )
+
+
+def apply_save_to_cards(
+    cards: list[PublicVenueCard], *, auth: AuthContext | None
+) -> list[PublicVenueCard]:
+    if auth is None:
+        return [replace(card, is_saved=None) for card in cards]
+    saved_map = map_venue_ids_in_any_user_list(
+        venue_ids=[card.id for card in cards], auth=auth
+    )
+    return [replace(card, is_saved=saved_map.get(card.id, False)) for card in cards]
 
 
 def build_actions_block(*, auth: AuthContext | None, is_saved: bool | None) -> AuthenticatedActionsBlock:

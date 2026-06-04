@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass, field, replace
 
 from apps.venues.public_read.card import PublicVenueCard, public_venue_card_to_dict
+from apps.venues.services.published_venue_read import PublishedVenueReadBundle
 from common.auth.context import AuthContext
 from services.discovery import (
     MEAL_STRUCT_KINDS,
@@ -50,22 +51,43 @@ def _base_filters(q: HomeFeedQuery) -> DiscoveryMvpFilters:
     )
 
 
-def _run_section(filters: DiscoveryMvpFilters) -> list[PublicVenueCard]:
-    result = run_discovery(DiscoveryMode.LIST, filters)
+def _run_section(
+    filters: DiscoveryMvpFilters,
+    *,
+    bundle_cache: dict[str, PublishedVenueReadBundle],
+) -> list[PublicVenueCard]:
+    result = run_discovery(DiscoveryMode.LIST, filters, bundle_cache=bundle_cache)
     return [hit.card for hit in result.hits]
 
 
-def _with_save_state(
-    cards: list[PublicVenueCard], *, auth: AuthContext | None
-) -> list[PublicVenueCard]:
+def _apply_save_state_to_sections(
+    section_items: list[tuple[str, str, list[PublicVenueCard]]],
+    *,
+    auth: AuthContext | None,
+) -> list[HomeFeedSection]:
     if auth is None:
-        return cards
-    from apps.venues.services.save_enrichment import apply_save_to_card
+        return [
+            HomeFeedSection(id=section_id, title=title, items=items)
+            for section_id, title, items in section_items
+        ]
 
-    return [
-        apply_save_to_card(card, auth=auth, venue_id=card.id)
-        for card in cards
-    ]
+    from apps.venues.services.save_enrichment import apply_save_to_cards
+
+    all_cards = [card for _, _, items in section_items for card in items]
+    enriched = apply_save_to_cards(all_cards, auth=auth)
+    cursor = 0
+    sections: list[HomeFeedSection] = []
+    for section_id, title, items in section_items:
+        count = len(items)
+        sections.append(
+            HomeFeedSection(
+                id=section_id,
+                title=title,
+                items=enriched[cursor : cursor + count],
+            )
+        )
+        cursor += count
+    return sections
 
 
 def run_home_feed(
@@ -89,22 +111,27 @@ def run_home_feed(
         ),
     ]
 
-    sections: list[HomeFeedSection] = []
+    bundle_cache: dict[str, PublishedVenueReadBundle] = {}
+    section_items: list[tuple[str, str, list[PublicVenueCard]]] = []
     for section_id, title, filters in section_specs:
         section_started = time.perf_counter()
-        items = _with_save_state(_run_section(filters), auth=auth)
+        items = _run_section(filters, bundle_cache=bundle_cache)
         elapsed_ms = (time.perf_counter() - section_started) * 1000
         logger.info(
-            "home_feed section=%s venues=%s elapsed_ms=%.0f",
+            "home_feed section=%s venues=%s bundle_cache=%s elapsed_ms=%.0f",
             section_id,
             len(items),
+            len(bundle_cache),
             elapsed_ms,
         )
-        sections.append(HomeFeedSection(id=section_id, title=title, items=items))
+        section_items.append((section_id, title, items))
+
+    sections = _apply_save_state_to_sections(section_items, auth=auth)
 
     logger.info(
-        "home_feed done sections=%s elapsed_ms=%.0f",
+        "home_feed done sections=%s unique_bundles=%s elapsed_ms=%.0f",
         len(sections),
+        len(bundle_cache),
         (time.perf_counter() - started) * 1000,
     )
     return HomeFeedResult(sections=sections)

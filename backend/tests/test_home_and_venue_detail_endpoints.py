@@ -225,7 +225,7 @@ class HomeFeedServiceTests(SimpleTestCase):
         self.assertEqual(run_discovery_mock.call_count, 3)
         self.assertTrue(run_discovery_mock.call_args_list[1].args[1].open_now)
 
-    @patch("apps.venues.services.save_enrichment.apply_save_to_card")
+    @patch("apps.venues.services.save_enrichment.apply_save_to_cards")
     @patch("services.home_feed.service.run_discovery")
     def test_home_service_optional_authenticated_enrichment(
         self,
@@ -257,7 +257,7 @@ class HomeFeedServiceTests(SimpleTestCase):
             prelimit_used=1,
         )
         run_discovery_mock.side_effect = [result, result, result]
-        apply_save_mock.return_value = replace(card, is_saved=True)
+        apply_save_mock.return_value = [replace(card, is_saved=True)]
 
         from services.home_feed import run_home_feed
 
@@ -272,7 +272,7 @@ class HomeFeedServiceTests(SimpleTestCase):
         output = run_home_feed(HomeFeedQuery(limit=12), auth=auth)
 
         self.assertTrue(output.sections[0].items[0].is_saved)
-        self.assertEqual(apply_save_mock.call_count, 3)
+        apply_save_mock.assert_called_once()
 
 
 class VenueDetailDbBackedTests(TestCase):
