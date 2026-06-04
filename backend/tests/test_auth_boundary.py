@@ -137,6 +137,14 @@ class AuthBoundaryEndpointTests(SimpleTestCase):
             {"status": "ok", "subject": "internal-admin-001"},
         )
 
+    def test_owner_provision_without_token_returns_401(self):
+        response = self.client.post("/api/v1/owner/provision")
+        self.assertEqual(response.status_code, 401)
+
+    def test_owner_auth_probe_without_token_returns_401(self):
+        response = self.client.get("/api/v1/owner/auth-probe")
+        self.assertEqual(response.status_code, 401)
+
     def test_internal_endpoint_with_internal_admin_claim_is_allowed(self):
         verified_internal_context = AuthContext(
             subject="consumer-user-123",

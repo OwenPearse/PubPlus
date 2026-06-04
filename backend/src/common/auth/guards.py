@@ -10,6 +10,8 @@ from common.auth.errors import InvalidTokenError, MissingBearerTokenError
 from common.auth.jwt_verifier import verify_supabase_jwt
 from common.auth.request_context import get_auth_context, set_auth_context
 from common.auth.token_extraction import extract_bearer_token
+from common.owner_account import get_owner_account_id
+from common.owner_mfa import is_owner_mfa_satisfied
 
 
 def _unauthorized_response() -> JsonResponse:
@@ -105,6 +107,58 @@ def require_internal_admin_auth(
     # These endpoints use Authorization: Bearer <Supabase JWT> for auth, not
     # cookie-backed browser sessions. Exempt CSRF so the portal can call them
     # without needing a CSRF cookie.
+    return csrf_exempt(wrapped)
+
+
+def _owner_mfa_forbidden_response() -> JsonResponse:
+    return JsonResponse(
+        {
+            "error": {
+                "code": "mfa_required",
+                "message": "Owner portal access requires MFA (AAL2).",
+            }
+        },
+        status=403,
+    )
+
+
+def _owner_not_provisioned_response() -> JsonResponse:
+    return JsonResponse(
+        {
+            "error": {
+                "code": "owner_not_provisioned",
+                "message": "Owner account is not provisioned for this identity.",
+            }
+        },
+        status=403,
+    )
+
+
+def require_owner_portal_auth(
+    view_func: Callable[..., HttpResponse],
+) -> Callable[..., HttpResponse]:
+    """
+    Bearer JWT + provisioned owner_account + AAL2 for future owner-protected routes.
+    """
+
+    @wraps(view_func)
+    def wrapped(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        try:
+            _resolve_auth_context(request, required=True)
+        except (MissingBearerTokenError, InvalidTokenError):
+            return _unauthorized_response()
+
+        auth_context = get_auth_context(request)
+        assert auth_context is not None
+
+        if get_owner_account_id(auth_context) is None:
+            return _owner_not_provisioned_response()
+
+        if not is_owner_mfa_satisfied(auth_context.claims or {}):
+            return _owner_mfa_forbidden_response()
+
+        return view_func(request, *args, **kwargs)
+
     return csrf_exempt(wrapped)
 
 

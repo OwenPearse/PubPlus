@@ -16,4 +16,5 @@ urlpatterns = [
     path("profile/", include("api.v1.profile.urls")),
     path("submissions/", include("api.v1.submissions.urls")),
     path("internal/", include("api.v1.internal.urls")),
+    path("owner/", include("api.v1.owner.urls")),
 ]
