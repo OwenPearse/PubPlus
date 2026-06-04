@@ -159,6 +159,63 @@ export function internalAuthProbe() {
   );
 }
 
+export type OwnerNextStep =
+  | "complete_owner_provisioning"
+  | "enroll_mfa"
+  | "owner_waiting_for_membership"
+  | "owner_waiting_for_venue_access"
+  | "portal_home";
+
+export type OwnerProvisionResponse = {
+  authenticated: boolean;
+  owner_account_exists: boolean;
+  owner_account_id: string;
+  provisioned: boolean;
+  created: boolean;
+  next_step: OwnerNextStep;
+};
+
+export type OwnerAuthProbeBody = {
+  authenticated: boolean;
+  owner_account_exists: boolean;
+  owner_account_active: boolean;
+  mfa_required: boolean;
+  aal: string | null;
+  has_active_business_membership: boolean;
+  has_approved_managed_venue_relationship: boolean;
+  business_count: number;
+  venue_count: number;
+  owner_account_id: string | null;
+  next_step: OwnerNextStep;
+  error?: { code: string; message: string };
+};
+
+export type OwnerAuthProbeResult =
+  | { status: 200; body: OwnerAuthProbeBody }
+  | { status: 403; body: OwnerAuthProbeBody };
+
+export function ownerProvision() {
+  return apiRequest<OwnerProvisionResponse>("/api/v1/owner/provision", {
+    method: "POST",
+  });
+}
+
+export async function ownerAuthProbe(): Promise<OwnerAuthProbeResult> {
+  try {
+    const body = await apiRequest<OwnerAuthProbeBody>("/api/v1/owner/auth-probe");
+    return { status: 200, body };
+  } catch (error) {
+    if (isApiRequestError(error) && error.status === 403 && error.details) {
+      return { status: 403, body: error.details as OwnerAuthProbeBody };
+    }
+    throw error;
+  }
+}
+
+export function isApiRequestError(error: unknown): error is ApiRequestError {
+  return Boolean(error && typeof error === "object" && "code" in error && "status" in error);
+}
+
 export {
   markFounderVenueCalled,
   markFounderVenueDoNotContact,

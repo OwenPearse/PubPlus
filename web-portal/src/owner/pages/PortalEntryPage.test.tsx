@@ -10,6 +10,14 @@ const signUpWithPassword = vi.fn();
 const resolvePostAuthMfaStep = vi.fn();
 const getVerifiedTotpFactorId = vi.fn();
 const signOut = vi.fn();
+const resolvePortalRole = vi.fn();
+const ownerProvision = vi.fn();
+const navigate = vi.fn();
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return { ...actual, useNavigate: () => navigate };
+});
 
 vi.mock("@/shared/lib/supabase", () => ({
   signInWithPassword: (...args: unknown[]) => signInWithPassword(...args),
@@ -17,6 +25,16 @@ vi.mock("@/shared/lib/supabase", () => ({
   resolvePostAuthMfaStep: (...args: unknown[]) => resolvePostAuthMfaStep(...args),
   getVerifiedTotpFactorId: (...args: unknown[]) => getVerifiedTotpFactorId(...args),
   signOut: (...args: unknown[]) => signOut(...args),
+}));
+
+vi.mock("@/shared/lib/api", () => ({
+  ownerProvision: (...args: unknown[]) => ownerProvision(...args),
+  formatApiError: (err: unknown) => (err instanceof Error ? err.message : "error"),
+  isApiRequestError: () => false,
+}));
+
+vi.mock("@/shared/lib/portalRole", () => ({
+  resolvePortalRole: (...args: unknown[]) => resolvePortalRole(...args),
 }));
 
 vi.mock("@/owner/components/MfaEnrollStep", () => ({
@@ -62,9 +80,12 @@ describe("PortalEntryPage", () => {
     resolvePostAuthMfaStep.mockReset();
     getVerifiedTotpFactorId.mockReset();
     signOut.mockReset();
+    resolvePortalRole.mockReset();
+    ownerProvision.mockReset();
+    navigate.mockReset();
     resolvePostAuthMfaStep.mockResolvedValue("complete");
-    getVerifiedTotpFactorId.mockResolvedValue("factor-1");
-    signOut.mockResolvedValue(undefined);
+    resolvePortalRole.mockResolvedValue({ role: "admin" });
+    ownerProvision.mockResolvedValue({});
   });
 
   it("renders portalBrand product name and sign-in mode by default", () => {
@@ -83,10 +104,10 @@ describe("PortalEntryPage", () => {
     expect(screen.getByRole("button", { name: "Submit create account" })).toBeInTheDocument();
   });
 
-  it("shows MFA complete state after sign-in when MFA is satisfied", async () => {
+  it("routes to admin workspace after sign-in when role is admin", async () => {
     const user = userEvent.setup();
     signInWithPassword.mockResolvedValue({ user: { id: "u1" } });
-    resolvePostAuthMfaStep.mockResolvedValue("complete");
+    resolvePortalRole.mockResolvedValue({ role: "admin" });
     renderPage();
 
     await user.type(screen.getByLabelText("Email"), "owner@example.com");
@@ -94,13 +115,9 @@ describe("PortalEntryPage", () => {
     await user.click(screen.getByRole("button", { name: "Submit sign in" }));
 
     await waitFor(() => {
-      expect(signInWithPassword).toHaveBeenCalledWith("owner@example.com", "secret12");
-      expect(resolvePostAuthMfaStep).toHaveBeenCalled();
+      expect(resolvePortalRole).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Continue to operator workspace" })).toBeInTheDocument();
     });
-    expect(
-      screen.getByRole("heading", { name: "Two-step verification complete" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/may still require account approval or provisioning/i)).toBeInTheDocument();
   });
 
   it("transitions to MFA enroll step after sign-in when enrollment is required", async () => {
@@ -164,10 +181,14 @@ describe("PortalEntryPage", () => {
     });
   });
 
-  it("starts MFA flow when sign-up returns a session", async () => {
+  it("provisions owner on sign-up with session then resolves role", async () => {
     const user = userEvent.setup();
     signUpWithPassword.mockResolvedValue({ user: { id: "u3" }, session: { access_token: "t" } });
-    resolvePostAuthMfaStep.mockResolvedValue("enroll");
+    resolvePostAuthMfaStep.mockResolvedValue("complete");
+    resolvePortalRole.mockResolvedValue({
+      role: "owner",
+      probe: { next_step: "portal_home" },
+    });
     renderPage();
 
     await user.click(screen.getByRole("tab", { name: "Create account" }));
@@ -176,8 +197,9 @@ describe("PortalEntryPage", () => {
     await user.click(screen.getByRole("button", { name: "Submit create account" }));
 
     await waitFor(() => {
-      expect(resolvePostAuthMfaStep).toHaveBeenCalled();
-      expect(screen.getByTestId("mfa-enroll-step")).toBeInTheDocument();
+      expect(ownerProvision).toHaveBeenCalled();
+      expect(resolvePortalRole).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Continue to owner portal" })).toBeInTheDocument();
     });
   });
 });

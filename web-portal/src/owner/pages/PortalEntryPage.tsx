@@ -1,11 +1,21 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { MfaEnrollStep } from "@/owner/components/MfaEnrollStep";
 import { MfaVerifyStep } from "@/owner/components/MfaVerifyStep";
 import { ErrorBanner } from "@/shared/components/ErrorBanner";
+import {
+  formatApiError,
+  isApiRequestError,
+  ownerProvision,
+} from "@/shared/lib/api";
 import { getPortalSupportUrl, hasSupabaseAuthConfig } from "@/shared/lib/env";
 import { portalBrand } from "@/shared/lib/portalBrand";
+import {
+  getPostAuthContinuePath,
+  shouldShowAccessDenied,
+} from "@/shared/lib/portalRedirect";
+import { resolvePortalRole, type ResolvePortalRoleResult } from "@/shared/lib/portalRole";
 import {
   getVerifiedTotpFactorId,
   resolvePostAuthMfaStep,
@@ -21,15 +31,17 @@ type PortalPhase =
   | { kind: "mfa-loading" }
   | { kind: "mfa-enroll" }
   | { kind: "mfa-verify"; factorId: string }
-  | { kind: "mfa-complete" }
-  | { kind: "sign-up-confirm" }
-  | { kind: "sign-up-pending" };
+  | { kind: "routing-loading" }
+  | { kind: "post-auth"; roleResult: ResolvePortalRoleResult }
+  | { kind: "sign-up-confirm" };
 
 export function PortalEntryPage() {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<EntryMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState<PortalPhase>({ kind: "credentials" });
 
@@ -41,7 +53,7 @@ export function PortalEntryPage() {
     try {
       const step = await resolvePostAuthMfaStep();
       if (step === "complete") {
-        setPhase({ kind: "mfa-complete" });
+        await completeMfaAndRoute();
         return;
       }
       if (step === "verify") {
@@ -59,6 +71,41 @@ export function PortalEntryPage() {
           ? err.message
           : "Could not check two-step verification status. Please try again.",
       );
+    }
+  }
+
+  async function completeMfaAndRoute() {
+    setPhase({ kind: "routing-loading" });
+    setError("");
+    try {
+      if (mode === "sign-up") {
+        try {
+          await ownerProvision();
+        } catch (provisionErr) {
+          if (!isApiRequestError(provisionErr) || provisionErr.code !== "forbidden") {
+            throw provisionErr;
+          }
+        }
+      }
+      const roleResult = await resolvePortalRole();
+      setPhase({ kind: "post-auth", roleResult });
+    } catch (err) {
+      setPhase({ kind: "credentials" });
+      setError(formatApiError(err));
+    }
+  }
+
+  async function handleRetryOwnerProvision() {
+    setProvisioning(true);
+    setError("");
+    try {
+      await ownerProvision();
+      const roleResult = await resolvePortalRole();
+      setPhase({ kind: "post-auth", roleResult });
+    } catch (err) {
+      setError(formatApiError(err));
+    } finally {
+      setProvisioning(false);
     }
   }
 
@@ -98,6 +145,21 @@ export function PortalEntryPage() {
     setError("");
   }
 
+  function handleContinueAfterAuth(roleResult: ResolvePortalRoleResult) {
+    const path = getPostAuthContinuePath(roleResult);
+    if (path) {
+      navigate(path);
+      return;
+    }
+    if (shouldShowAccessDenied(roleResult)) {
+      const message =
+        roleResult.role === "error"
+          ? roleResult.message
+          : "Your account is signed in but does not have portal access yet.";
+      navigate("/access/denied", { state: { message } });
+    }
+  }
+
   if (!hasSupabaseAuthConfig()) {
     return (
       <div className="mx-auto max-w-lg p-8">
@@ -129,64 +191,33 @@ export function PortalEntryPage() {
                 Back to sign in
               </button>
             </>
-          ) : phase.kind === "mfa-loading" ? (
+          ) : phase.kind === "mfa-loading" || phase.kind === "routing-loading" ? (
             <p className="text-sm text-slate-600" role="status">
-              Checking two-step verification…
+              {phase.kind === "mfa-loading"
+                ? "Checking two-step verification…"
+                : "Checking your portal access…"}
             </p>
           ) : phase.kind === "mfa-enroll" ? (
             <MfaEnrollStep
-              onComplete={() => setPhase({ kind: "mfa-complete" })}
+              onComplete={() => void completeMfaAndRoute()}
               onSignOut={handleSignOutFromMfa}
             />
           ) : phase.kind === "mfa-verify" ? (
             <MfaVerifyStep
               factorId={phase.factorId}
-              onComplete={() => setPhase({ kind: "mfa-complete" })}
+              onComplete={() => void completeMfaAndRoute()}
               onSignOut={handleSignOutFromMfa}
             />
-          ) : phase.kind === "mfa-complete" ? (
-            <>
-              <h2 className="text-lg font-semibold text-slate-900">Two-step verification complete</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Your sign-in passed two-step verification. Venue portal access may still require
-                account approval or provisioning before you can enter the owner area.
-              </p>
-              <p className="mt-3 text-sm text-slate-600">
-                If you have internal operator access, you can open the admin workspace below once your
-                role has been confirmed.
-              </p>
-              <button
-                type="button"
-                className="mt-4 text-sm text-slate-600 underline"
-                onClick={resetToCredentials}
-              >
-                Back to sign in
-              </button>
-              <p className="mt-4">
-                <Link
-                  to="/internal/founder-venues"
-                  className="text-sm font-medium text-slate-900 underline"
-                >
-                  Continue to operator workspace
-                </Link>
-              </p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-lg font-semibold text-slate-900">Account created</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Your sign-in details were accepted. Venue portal access may require approval or
-                provisioning before you can enter the owner area.
-              </p>
-              <button
-                type="button"
-                className="mt-4 text-sm text-slate-600 underline"
-                onClick={resetToCredentials}
-              >
-                Back to sign in
-              </button>
-            </>
-          )}
+          ) : phase.kind === "post-auth" ? (
+            <PostAuthPanel
+              roleResult={phase.roleResult}
+              provisioning={provisioning}
+              error={error}
+              onContinue={() => handleContinueAfterAuth(phase.roleResult)}
+              onProvision={() => void handleRetryOwnerProvision()}
+              onDismissError={() => setError("")}
+            />
+          ) : null}
         </div>
       </div>
     );
@@ -285,6 +316,121 @@ export function PortalEntryPage() {
         </p>
       ) : null}
     </div>
+  );
+}
+
+function PostAuthPanel({
+  roleResult,
+  provisioning,
+  error,
+  onContinue,
+  onProvision,
+  onDismissError,
+}: {
+  roleResult: ResolvePortalRoleResult;
+  provisioning: boolean;
+  error: string;
+  onContinue: () => void;
+  onProvision: () => void;
+  onDismissError: () => void;
+}) {
+  if (roleResult.role === "admin") {
+    return (
+      <>
+        <h2 className="text-lg font-semibold text-slate-900">Signed in</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Two-step verification is complete. You can continue to the internal operator workspace.
+        </p>
+        <button
+          type="button"
+          className="mt-4 w-full rounded bg-slate-900 py-2 text-sm text-white hover:bg-slate-800"
+          onClick={onContinue}
+        >
+          Continue to operator workspace
+        </button>
+      </>
+    );
+  }
+
+  if (roleResult.role === "owner") {
+    return (
+      <>
+        <h2 className="text-lg font-semibold text-slate-900">Two-step verification complete</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Your owner account is recognized. You can open the owner portal area; some features may
+          still be pending depending on business or venue access.
+        </p>
+        <button
+          type="button"
+          className="mt-4 w-full rounded bg-slate-900 py-2 text-sm text-white hover:bg-slate-800"
+          onClick={onContinue}
+        >
+          Continue to owner portal
+        </button>
+      </>
+    );
+  }
+
+  if (roleResult.role === "none" && roleResult.reason === "owner_not_provisioned") {
+    return (
+      <>
+        <h2 className="text-lg font-semibold text-slate-900">Complete owner setup</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Your sign-in is valid, but your owner account still needs to be provisioned before you can
+          use the venue portal.
+        </p>
+        <ErrorBanner message={error} onDismiss={error ? onDismissError : undefined} />
+        <button
+          type="button"
+          className="mt-4 w-full rounded bg-slate-900 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+          onClick={onProvision}
+          disabled={provisioning}
+        >
+          {provisioning ? "Provisioning…" : "Complete owner setup"}
+        </button>
+      </>
+    );
+  }
+
+  if (roleResult.role === "error" && roleResult.code === "dual_access") {
+    return (
+      <>
+        <h2 className="text-lg font-semibold text-slate-900">Access conflict</h2>
+        <p className="mt-2 text-sm text-slate-600">{roleResult.message}</p>
+        <Link to="/access/denied" className="mt-4 inline-block text-sm font-medium underline">
+          View access details
+        </Link>
+      </>
+    );
+  }
+
+  if (roleResult.role === "expired") {
+    return (
+      <>
+        <h2 className="text-lg font-semibold text-slate-900">Session expired</h2>
+        <p className="mt-2 text-sm text-slate-600">Please sign in again.</p>
+        <button type="button" className="mt-4 text-sm underline" onClick={onDismissError}>
+          Back to sign in
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h2 className="text-lg font-semibold text-slate-900">Access not available</h2>
+      <p className="mt-2 text-sm text-slate-600">
+        You are signed in, but neither operator nor owner portal access is available for this
+        account yet.
+      </p>
+      <button
+        type="button"
+        className="mt-4 text-sm font-medium text-slate-900 underline"
+        onClick={onContinue}
+      >
+        Continue
+      </button>
+    </>
   );
 }
 
