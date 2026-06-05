@@ -2,35 +2,43 @@
 
 ## Purpose
 
-Rules for downstream Cursor agents implementing onboarding/profile builder—after Stage 0 discovery.
+Rules for downstream Cursor agents implementing onboarding/profile builder.
 
 ## Current stage
 
-Stage 1 complete. Applies to all stages in `docs/owner-venue-onboarding/stages/`. **Normative API:** `OWNER_VENUE_API_CONTRACT.md`.
+**Stage 4+.** Normative edit policy: `OWNER_EDIT_POLICY.md`. Normative API DTOs: `OWNER_VENUE_API_CONTRACT.md`.
 
 ## Decisions
 
-- **Implementer, not replanner** — follow active `stages/STAGE_*.md` and `PRD.md`.
-- **No full owner dashboard** — guided hub + wizard only until product expands scope.
-- **Proposal workflow** — no direct published-truth writes from owner UI.
+- **Implementer, not replanner** — follow active stage docs and `OWNER_EDIT_POLICY.md`.
+- **No full owner dashboard** — guided hub + step pages only.
+- **Direct operational edits** — verified owners PATCH published operational tables via backend (service role); **no per-field admin review**.
+- **Restricted proposals** — identity/location only; existing staging tables; admin moderation + publish worker.
 - **No self-approval** — venue claims and relationships remain admin-mediated.
+
+### Superseded (pre–Stage 4)
+
+> ~~Proposal workflow — no direct published-truth writes from owner UI~~ — operational fields use direct PATCH after capability check.
 
 ## Assumptions
 
-- Read before coding: `STAGE_0_DISCOVERY.md`, `API_REQUIREMENTS.md`, active stage doc.
+- Read before coding: `OWNER_EDIT_POLICY.md`, `API_REQUIREMENTS.md`, active stage doc.
 - Owner auth from `docs/frontend-owner-signup/` is stable; reuse `OwnerRouteGuard` and `ownerAuthProbe`.
+- Phase A proposal code exists; migrate rather than delete until Stage 4.3.
 
 ## Open questions
 
 If stage is **BLOCKED** on missing API, stop and report—do not invent endpoints or migrations unless stage explicitly includes them.
 
-## Contract rules (Stage 1+)
+## Contract rules (Stage 4+)
 
-- Implement Phase A exactly as `OWNER_VENUE_API_CONTRACT.md` — paths, DTOs, `intent`, field classification.
-- Do not add phone/email/website to UI until contact schema migration lands.
-- Owner POST must not mutate `venue_published_*` tables.
-- Return `proposal_id` from owner POST (unlike consumer ack-only).
+- Classify every field per `OWNER_EDIT_POLICY.md` before wiring UI or API.
+- Direct writes: require `manage_published_venue_operations`; write published tables; append `audit_event`.
+- Restricted writes: require `submit_restricted_changes_for_review`; use proposal/staging only; never mutate published on POST.
+- Do not route descriptions/hours/specials/taps/features through `POST .../proposals` in new code.
+- Do not add phone/email/website to UI until contact schema migration lands (unless stage includes migration).
 - Use `GET /api/v1/reference/localities` for locality — no hardcoded suburb lists.
+- Return structured errors via `validation_error` + `details`.
 
 ## Dependencies
 
@@ -38,7 +46,7 @@ If stage is **BLOCKED** on missing API, stop and report—do not invent endpoint
 
 ## Next downstream use
 
-Open assigned `stages/STAGE_*.md` before editing code.
+Stage 4.1: extend `owner_venue_service.py` with direct-write functions; add PATCH routes in `api/v1/owner/`.
 
 ---
 
@@ -49,38 +57,41 @@ Open assigned `stages/STAGE_*.md` before editing code.
 | Owner UI | `web-portal/src/owner/**` |
 | Shared | `web-portal/src/shared/**` — generic only |
 | Admin | `web-portal/src/admin/**` — no regression on founder-venues |
-| Backend | `backend/src/api/v1/owner/**`, `apps/owner/`, `apps/submissions/` (if extending intake) |
+| Backend | `backend/src/api/v1/owner/**`, `apps/owner/` |
 | Consumer app | Out of scope |
 | Docs | `docs/owner-venue-onboarding/**` |
 
 ## Auth & permissions
 
 - Reuse `OwnerRouteGuard`, `ownerAuthProbe`, `ownerProvision`.
-- New routes: `require_owner_portal_auth` on backend; frontend still calls probe for empty states.
-- Check venue scope on every `venue_id` path param.
+- `require_owner_portal_auth` on backend; venue scope on every `venue_id`.
+- Enforce capability grants on writes (not just warnings) from Stage 4.1 onward.
 - Do not bypass admin approval for claims or `business_venue_management_relationship`.
 
 ## Data & taxonomy
 
 - Do not duplicate `venue_attribute_definition` or beverage reference data.
-- Use `stable_key` from reference API or seed-aligned constants—no hardcoded category lists that contradict DB.
+- Use `stable_key` from reference API — no hardcoded category lists.
 - Do not expose `google_place_id` to owners.
+- Do not delete proposal/staging tables.
 
 ## UX
 
-- Step 1 required; other steps skippable with explicit “Skip for now.”
-- Save-as-you-go per step; show pending review state when API provides it.
-- Preserve `portalBrand` env branding and placeholder logo path.
+- Step 1 required; other steps skippable with “Skip for now.”
+- **Save changes** for operational; **Request change** for restricted.
+- Show restricted pending state separately from operational saves.
+- Preserve `portalBrand` env branding.
 
 ## Testing
 
-- Run `pnpm typecheck` and relevant Vitest when touching `web-portal/`.
-- Run `pytest` for owner/submission tests when touching `backend/`.
-- Cite test files added/updated in stage PR description.
+- `pnpm typecheck` + Vitest when touching `web-portal/`.
+- `pytest` when touching `backend/` — include tests that PATCH mutates published rows and POST restricted does not.
+- Cite test files in PR description.
 
-## Prohibited in all stages unless explicitly scoped
+## Prohibited unless explicitly scoped
 
 - New owner dashboard with dense nav/analytics
-- Schema migrations without Data review
-- Client-side insert into `owner_account` or approval of own venue relationship
+- Schema migrations without stage authorization
+- Client-side approval of own venue relationship
+- Direct owner edit of `display_name`, address, locality, coordinates
 - Force-push or git config changes

@@ -2,40 +2,48 @@
 
 ## Purpose
 
-Owner-facing navigation and screen contracts for Stages 2–3, aligned with frozen API DTOs.
+Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md` — direct operational saves vs restricted change requests.
 
 ## Current stage
 
-**Stage 1 complete.** Routes and states defined for implementation.
+**Stage 4 — policy reframe.** Stages 2–3 shipped interim “Save progress / Submit for review” for all fields. Stage 4.2 splits Step 1 UI.
 
 ## Decisions
 
 | Topic | Decision |
 |-------|----------|
-| Single venue | When list `meta.default_venue_id` set → redirect or pre-select `/owner/venues/{id}` |
+| Single venue | `meta.default_venue_id` → redirect or pre-select `/owner/venues/{id}` |
 | Multi venue | Picker on `/owner` before venue hub |
-| Hub replaces placeholder | When `auth-probe` `portal_home` and list non-empty |
-| Step 1 route | `/owner/venues/:venueId/basics` |
-| No venue API | Keep `NoVenueAccessState`; no claim form in Phase A |
-| Save UX | `intent: draft` on save; `intent: submit` on “Submit for review” |
+| Step 1 route | `/owner/venues/:venueId/basics` — **two zones** (operational + restricted) |
+| Operational save | **Save changes** → PATCH APIs; live immediately |
+| Restricted save | **Request change** → restricted proposal; pending until admin publish |
+| No venue API | `NoVenueAccessState`; no claim form in MVP |
+| Future sections | Mostly direct-edit pages (specials, taps, features) |
+
+### Superseded (pre–Stage 4)
+
+> ~~Save UX: `intent: draft` / `intent: submit` for all Step 1 fields~~ — operational fields use PATCH; restricted uses request workflow only.
 
 ## Assumptions
 
 - `PortalShell` + `portalBrand` unchanged
 - Owner never sees Google Place ID or admin tools
+- Hub copy distinguishes “live updates” vs “pending name/address request”
 
 ## Open questions
 
-- Public preview link before publish (defer)
+- Public preview link before restricted approval (defer)
+- Whether restricted fields show diff (old vs requested) in owner UI (nice-to-have; default: show requested values in form)
 
 ## Dependencies
 
+- `OWNER_EDIT_POLICY.md`
 - `OWNER_VENUE_API_CONTRACT.md`
-- `OwnerHomePlaceholder` / `NoVenueAccessState` components
+- `OwnerHomePlaceholder` / `NoVenueAccessState`
 
 ## Next downstream use
 
-`stages/STAGE_02_owner_home_entry.md`, `stages/STAGE_03_core_pub_info.md`
+`stages/STAGE_04_2_step1_split.md` (to be authored in 4.2); Stage 5–7 section pages.
 
 ---
 
@@ -52,99 +60,119 @@ flowchart TD
   E -->|>1| G[Picker then hub]
 ```
 
-## Stage 2 — Owner home entry
+## Owner home / hub (Stage 2 — adjust copy Stage 4.2)
 
 ### Routes
 
-| Path | Component (proposed) |
-|------|----------------------|
-| `/owner` | `OwnerPortalEntry` — list or redirect |
-| `/owner/venues/:venueId` | `OwnerVenueHub` — checklist |
+| Path | Component |
+|------|-----------|
+| `/owner` | `OwnerPortalEntry` |
+| `/owner/venues/:venueId` | `OwnerVenueHub` |
 
-### API
+### Hub copy (updated)
 
-- `GET /api/v1/owner/venues`
-
-### Loading / error / empty
-
-| State | UX |
-|-------|-----|
-| Loading | “Loading your venues…” |
-| Error | `ErrorBanner` + retry |
-| `venues: []` + `portal_home` | Should not happen often; show venue wait copy + support link |
-| `venues: []` + waiting probe | Do not call list; show existing empty state |
-
-### Copy
-
-- Hub headline: “Complete your listing”
-- Subhead: “Confirm the basics now. Add more detail whenever you can.”
-- Optional row: “Changes are reviewed before they appear publicly.”
+- Headline: “Complete your listing”
+- Subhead: “Update your hours and description anytime. Name or address changes need our team to approve.”
+- Checklist row `core_details`: status from **published** completeness
+- Show badge when **restricted** proposal `in_review` (not for operational saves)
 
 ### Checklist rows
 
-| key | Label | Required | Phase A |
-|-----|-------|----------|---------|
-| `core_details` | Pub details | Yes | Active |
-| `events` | Events | No | Deferred label |
-| `meal_specials` | Meal specials | No | Disabled |
-| `tap_list` | Tap list | No | Disabled |
-| `features` | Features | No | Disabled |
-| `photos` | Photos | No | Deferred |
-
-Use `completeness.sections` from detail GET when on venue hub (Stage 2 may use list item flags only).
+| key | Label | Required | Edit model |
+|-----|-------|----------|------------|
+| `core_details` | Pub details | Yes | Mixed (Step 1) |
+| `meal_specials` | Meal specials | No | Direct (Stage 5) |
+| `tap_list` | Tap list | No | Direct (Stage 6) |
+| `features` | Features | No | Direct (Stage 7) |
+| `events` | Events | No | Deferred |
+| `photos` | Photos | No | Deferred + moderation |
 
 ---
 
-## Stage 3 — Core pub info form
+## Stage 3 / 4.2 — Pub details form (split)
 
 ### Route
 
 `/owner/venues/:venueId/basics`
 
-### API
+### Layout
 
-- `GET /api/v1/owner/venues/:venueId` — hydrate form from `published` + `draft.payload_preview`
-- `POST /api/v1/owner/venues/:venueId/proposals` — save/submit
-- `GET /api/v1/reference/localities` — locality typeahead/select
+```text
+┌─────────────────────────────────────────┐
+│ Operational details                      │
+│  Short description, long description     │
+│  Opening hours grid + notes              │
+│  Contact (when schema exists)            │
+│  [ Save changes ]                        │
+└─────────────────────────────────────────┘
 
-### Form fields (Phase A visible)
+┌─────────────────────────────────────────┐
+│ Identity & location                      │
+│  ℹ Some details need approval before     │
+│    changing (name, address).             │
+│  Display name, address, locality         │
+│  Map coordinates (optional, advanced)    │
+│  [ Request change ]                      │
+└─────────────────────────────────────────┘
+```
 
-- Display name
-- Address line 1, line 2, postcode
-- Locality (select)
-- Short description (required); long description optional
-- Opening hours (simple weekly grid → `regular_hours_json`)
-- Checkbox: “I manage this venue” (`owner_confirms_management`) — required on submit
+### API calls
 
-**Hidden until schema:** phone, email, website, contact person fields.
+| Zone | Load | Save |
+|------|------|------|
+| Operational | `GET .../venues/{id}` → `published.descriptions`, `published.hours` | `PATCH .../operational-profile`, `PATCH .../hours` |
+| Restricted | `GET .../venues/{id}` → `published.profile`, `published.location` + `draft` restricted payload | `POST .../restricted-change-requests` |
+| Locality picker | `GET /api/v1/reference/localities` | Restricted zone only |
 
 ### Actions
 
-| Button | API |
-|--------|-----|
-| Save progress | `intent: "draft"` |
-| Submit for review | `intent: "submit"` + confirm management |
+| Button | Scope | API | Success copy |
+|--------|-------|-----|--------------|
+| **Save changes** | Operational zone | PATCH endpoints | “Your updates are live on your public listing.” |
+| **Request change** | Restricted zone | POST restricted-change-requests | “We’ll review your name/address change request.” |
 
-### States after submit
+### States
 
-| `pending_review.lifecycle_status` | Message |
-|----------------------------------|---------|
-| `in_review` / staged with submitted_at | “Submitted — we’ll review your changes.” |
-| `rejected` | “Please update and resubmit.” + link to form |
+| Condition | UX |
+|-----------|-----|
+| Restricted `in_review` | Banner on restricted zone; fields read-only or show pending values |
+| Restricted `rejected` | “Please update and request again.” |
+| Operational save success | Green banner; no moderation pending |
+| No `manage_published_venue_operations` | Operational zone disabled + support message (edge case) |
+
+### `owner_confirms_management`
+
+Required on **first restricted change request** (not on operational Save).
 
 ### Validation
 
-Client-side mirrors server rules in `OWNER_VENUE_API_CONTRACT.md` (length, email format when added, etc.).
+- Operational: client mirrors PATCH contract validation
+- Restricted: client mirrors restricted payload rules (name/address required on request)
 
 ---
 
-## Routing assumptions (`App.tsx`)
+## Future section pages (direct-edit pattern)
+
+| Route | Page | Primary action |
+|-------|------|----------------|
+| `/owner/venues/:id/features` | Features | Save changes |
+| `/owner/venues/:id/specials` | Meal specials | Save changes |
+| `/owner/venues/:id/taps` | Tap list | Save changes |
+
+No “Submit for review” on these pages unless a field is later reclassified as restricted.
+
+---
+
+## Routing (`App.tsx`)
 
 ```text
 /owner/* → OwnerRouteGuard
   index → OwnerPortalEntry
   venues/:venueId → OwnerVenueHub
   venues/:venueId/basics → OwnerVenueBasicsPage
+  venues/:venueId/features → (Stage 7)
+  venues/:venueId/specials → (Stage 5)
+  venues/:venueId/taps → (Stage 6)
 ```
 
-No sidebar. Breadcrumb optional: “Back to checklist” only.
+No sidebar. Breadcrumb: “Back to checklist” only.

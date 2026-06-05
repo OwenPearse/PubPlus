@@ -2,64 +2,83 @@
 
 ## Purpose
 
-Map onboarding sections to Postgres tables and proposal staging—aligned with Stage 1 frozen API contract.
+Map onboarding sections to Postgres tables—distinguishing **direct published writes** vs **restricted proposal staging**. Aligned with `OWNER_EDIT_POLICY.md`.
 
 ## Current stage
 
-**Stage 1 complete.** Phase A captures `core_details` only via existing staging tables.
+**Stage 4 — policy reframe.** Phase A staged all `core_details` fields; Stages 4.1+ split capture paths.
 
 ## Decisions
 
-| Section | Phase A | Mechanism |
-|---------|---------|-----------|
-| Core pub info | ✅ | One proposal, targets `profile`, `geo`, `hours` |
-| Contact (phone, email, website) | ❌ deferred | Planned tables below |
-| Features | Phase B | `venue_proposal_staging_attribute` |
-| Specials / taps | Phase B | Published tables exist; owner staging TBD |
-| Events / menu / photos | Deferred | No schema |
+| Section | Mechanism | Admin review |
+|---------|-----------|--------------|
+| Descriptions | **Direct** → `venue_published_descriptive_copy` | No |
+| Opening hours | **Direct** → `venue_hours_*` | No |
+| Contact | **Direct** → `venue_published_contact` *(migration)* | No |
+| Features | **Direct** → `venue_published_attribute_value` | No |
+| Specials / taps | **Direct** → published specials/tap tables | No |
+| Identity (name) | **Restricted** → staging → publish | Yes |
+| Location / map | **Restricted** → staging → publish | Yes |
+| Claim / relationship | **Authority** tables — admin only | Yes |
 
-- Descriptions live in **`venue_proposal_staging_profile`** (not separate `descriptive_copy` target for owner MVP)
+- **Do not delete** proposal/staging tables; repurpose for restricted + future moderation
 - **No** `google_place_id` in owner capture
-- **No** direct publish from owner APIs
+- `actor_type = 'owner'`, `channel = 'owner_portal'` for restricted proposals only
+
+### Superseded (pre–Stage 4)
+
+> ~~No direct publish from owner APIs~~ — operational families write published tables via Django service role after capability check.
 
 ## Assumptions
 
-- `actor_type = 'owner'`, `channel = 'owner_portal'`
-- Draft upsert on open `staged` owner proposal per venue (see contract)
+- Audit via `audit_event` (`action = 'owner_direct_edit'`) on every direct write
+- Optional `venue_published_row_history` snapshot before overwrite (Stage 4.1b)
+- Completeness reads published truth, not staged operational data
 
 ## Open questions
 
-- Contact migration naming: `venue_published_contact` vs `venue_published_contact_links`
+- Contact migration naming: `venue_published_contact` vs `venue_published_contact_links` (unchanged)
+- Whether descriptive copy changes should emit `venue_publish_event` lineage rows in 4.1 or defer to 4.3
 
 ## Dependencies
 
-- `0007`, `0008`, `0019` migrations
+- Migrations `0003`–`0008`, `0019`, `0021`, `0025` (published + staging)
+- `OWNER_EDIT_POLICY.md` field classification
 - `OWNER_VENUE_API_CONTRACT.md` validation rules
-- `STAGING_REVIEW_PUBLISH_AUDIT.md`
 
 ## Next downstream use
 
-Backend intake mapper; Stage 3 form fields.
+Stage 4.1 intake mappers; Stage 4.2 form field zones; contact migration ticket.
 
 ---
 
-## Phase A — Core pub info field map
+## Direct-edit field map
 
-| UI / API field | Classification | Staging / published |
-|----------------|----------------|---------------------|
-| `display_name` | Review required | `venue_proposal_staging_profile` → `venue_published_profile` |
-| `short_description`, `long_description` | Review required | staging profile → `venue_published_descriptive_copy` |
-| `address_line_*`, `postal_code` | Review required | `venue_proposal_staging_location` → `venue_published_location` |
-| `locality_id` | Review required (canonical FK) | staging → `venue_published_location.locality_id` |
-| `latitude`, `longitude` | Review required | staging → `venue_published_map_point` |
-| `opening_hours` | Review required | `venue_proposal_staging_hours` → `venue_hours_*` |
-| `owner_confirms_management` | Submit gate only | Not persisted Phase A (validation + optional audit) |
+| UI / API field | Published storage | Notes |
+|----------------|-------------------|-------|
+| `short_description`, `long_description` | `venue_published_descriptive_copy` | PATCH operational-profile |
+| `opening_hours.*` | `venue_hours_regular`, `venue_hours_exception`, `venue_hours_uncertainty` | PATCH hours; transactional replace |
+| `phone`, `email`, `website` | `venue_published_contact` *(planned)* | Extend operational-profile PATCH |
+| Feature toggles | `venue_published_attribute_value` | Reference `attribute_definition_id` |
+| Meal specials | `venue_published_structured_special` + validity/eligibility | PUT replace-set |
+| Tap list | `venue_published_tap_offering` + validity/eligibility | PUT replace-set |
 
-## Contact fields — not in schema today (confirmed)
+## Restricted proposal field map
 
-**Published:** none. `ContactLinksBlock.not_implemented = true` in `backend/src/apps/venues/public_read/detail.py`.
+| UI / API field | Staging | Published target (on admin publish) |
+|----------------|---------|-------------------------------------|
+| `display_name` | `venue_proposal_staging_profile.proposed_display_name` | `venue_published_profile` |
+| `address_line_*`, `postal_code`, `country_code` | `venue_proposal_staging_location` | `venue_published_location` |
+| `locality_id` | staging location | `venue_published_location.locality_id` |
+| `latitude`, `longitude` | staging location | `venue_published_map_point` |
 
-**Proposed addition (planning note only — no migration in Stage 1):**
+**Proposal header:** `venue_change_proposal` + `venue_proposal_target` (`profile`, `geo` only — **no `hours` target** for restricted-only proposals).
+
+## Contact fields — not in schema today
+
+**Published:** none. `ContactLinksBlock.not_implemented = true` in `detail.py`.
+
+**Proposed addition (planning — migration in Stage 4.3+):**
 
 ```text
 venue_published_contact (
@@ -69,54 +88,30 @@ venue_published_contact (
   website text,
   updated_at
 )
-
-venue_proposal_staging_contact (
-  venue_change_proposal_id,
-  venue_id,
-  proposed_phone,
-  proposed_email,
-  proposed_website,
-  proposed_contact_person_name,
-  proposed_contact_person_role
-)
-
-venue_proposal_target.target_family += 'contact'
 ```
 
 | Field | Until migration |
 |-------|-----------------|
-| `phone`, `email`, `website` | Omit from Phase A API; UI hidden |
-| `contact_person_name`, `contact_person_role` | Defer with contact family |
+| `phone`, `email`, `website` | Omit from UI/API; `contact.supported: false` |
 
-When added: all **review required**; validate per contract § Validation.
-
-## Optional sections (unchanged from Stage 0)
-
-### Features (Phase B)
-
-Boolean keys from `dev_seed_mvp_filter_taxonomy.sql` — use `attribute_definition_id` / `stable_key` from reference API, not hardcoded labels in backend.
-
-### Specials
-
-`venue_published_structured_special.structured_kind`: `meal_special`, `happy_hour`, `drink_special`, `venue_offer`.
-
-### Tap list
-
-`venue_published_tap_offering` + `beverage_product_id`.
+When added: **direct-edit** (not proposal); validate per contract § Validation.
 
 ## Authority prerequisites
 
 1. `owner_business_membership.membership_status = 'active'`
 2. `business_venue_management_relationship.relationship_lifecycle = 'approved'`
-3. Phase A+: `venue_capability_grant.capability_code = 'submit_restricted_changes_for_review'` (recommended enforce)
+3. **Direct edit:** `venue_capability_grant.capability_code = 'manage_published_venue_operations'`
+4. **Restricted request:** `venue_capability_grant.capability_code = 'submit_restricted_changes_for_review'`
 
-## Completeness (server-side, Phase A)
+## Completeness (server-side)
 
-`required_basics_complete` when published or staged (open draft counts) has:
+`required_basics_complete` when **published** has:
 
-- `display_name`
-- `address_line_1` + `locality_id`
-- `short_description`
-- hours: regular row OR `uncertainty_level` ≠ confident-empty OR hours `notes`
+- `display_name` (profile)
+- `address_line_1` + `locality_id` (location)
+- `short_description` (descriptive copy)
+- hours: regular row OR non-confident uncertainty OR hours notes
 
-`completeness_percent`: weighted checklist (documented in contract) — not discovery quality score.
+`completeness_percent`: weighted checklist from published truth — not discovery quality score.
+
+`onboarding_status`: no longer `submitted` for operational-only work; `submitted` reserved for open **restricted** proposals.

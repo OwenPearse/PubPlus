@@ -1,12 +1,14 @@
-# Owner venue API contract — Phase A (frozen)
+# Owner venue API contract — Owner venue APIs
 
 ## Purpose
 
-Implementation-ready contract for Phase A owner venue onboarding APIs. Backend and frontend agents implement against this document without guessing DTOs or authorization rules.
+Implementation-ready contract for owner venue onboarding APIs. Backend and frontend agents implement against this document without guessing DTOs or authorization rules.
+
+**Edit policy (normative):** `OWNER_EDIT_POLICY.md` — direct operational PATCH vs restricted proposals.
 
 ## Current stage
 
-**Stage 1 — frozen.** No implementation in Stage 1. Implement in Backend Phase A + Stages 2–3.
+**Stage 4 — policy reframe documented.** Phase A (list, detail, bundled proposals) **implemented**. Stage 4.1 adds direct PATCH endpoints; Stage 4.2 splits frontend. Phase A proposal behaviour for operational fields is **superseded** but remains in codebase until 4.3.
 
 ## Decisions
 
@@ -15,15 +17,15 @@ Implementation-ready contract for Phase A owner venue onboarding APIs. Backend a
 | Base path | `/api/v1/owner/venues` (plural, nested under owner namespace) |
 | Auth guard | `require_owner_portal_auth` on all three endpoints (AAL1 OK) |
 | Venue access proof | `owner_account` → `owner_business_membership` (`active`) → `business_venue_management_relationship` (`approved`) |
-| Capability grants | **Phase A:** relationship check sufficient; log warning if no `submit_restricted_changes_for_review` grant. **Phase A+:** enforce grant when present in seed/prod. |
+| Capability grants | **Stage 4.1+:** enforce `manage_published_venue_operations` on direct PATCH; `submit_restricted_changes_for_review` on restricted POST. Phase A logged warnings only. |
 | Admin on owner routes | **No.** Admins use `/api/v1/internal/*`. Dual-access users follow existing portal role rules at `/access`, not owner venue APIs. |
 | Response envelope | `{ "data": ... }` for success (match `GET /api/v1/venues/{id}` and reference routes) |
 | Errors | `{ "error": { "code", "message", "details?" } }` via `apps.discovery.http.error_response` |
-| Writes | One **core_details** bundle per request → one `venue_change_proposal` with targets `profile`, `geo`, `hours` |
-| Draft vs submit | `intent: "draft"` → `lifecycle_status = staged`; `intent: "submit"` → `submitted_at = now()`, `lifecycle_status = in_review` |
-| Upsert | Reuse open owner proposal for same venue (`actor_type=owner`, `channel=owner_portal`, terminal status not in closed set) when `intent=draft`; new proposal on `submit` if prior terminal |
-| Direct publish | **None** in Phase A |
-| Contact fields | **Not in Phase A payload** — schema deferred (see `DATA_CAPTURE_MODEL.md`) |
+| Operational writes | **PATCH** → published tables + `audit_event` (Stage 4.1+) |
+| Restricted writes | **POST** `restricted-change-requests` → proposal staging (`profile`, `geo` targets only) |
+| Legacy writes | `POST .../proposals` `section: core_details` — **superseded** for operational fields; shim until 4.3 |
+| Direct publish | **Operational fields only** — immediate on PATCH success |
+| Contact fields | **Not in schema** — deferred; extend `operational-profile` PATCH when migrated |
 
 ## Assumptions
 
@@ -229,6 +231,24 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
         "display_name": "string | null",
         "address_line_1": "string | null",
         "locality_id": "uuid | null"
+      },
+      "core_details_payload": {
+        "display_name": "string | null",
+        "address_line_1": "string | null",
+        "address_line_2": "string | null",
+        "postal_code": "string | null",
+        "locality_id": "uuid | null",
+        "country_code": "AU",
+        "latitude": "number | null",
+        "longitude": "number | null",
+        "short_description": "string | null",
+        "long_description": "string | null",
+        "opening_hours": {
+          "uncertainty_level": "resolved_confident | unknown | partial | weak_stale | disputed | null",
+          "regular_hours_json": [],
+          "exceptions_json": [],
+          "notes": "string | null"
+        }
       }
     },
     "pending_review": {
@@ -313,7 +333,19 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
 | Block | Tables |
 |-------|--------|
 | draft | Latest owner proposal `lifecycle_status IN ('staged')` + staging rows |
+| draft.core_details_payload | Full staged `core_details` from `venue_proposal_staging_profile`, `_location`, `_hours` (Phase A.1) |
 | pending_review | Latest owner proposal with `submitted_at IS NOT NULL` and open/recent terminal status + `proposal_review` |
+
+When no open staged draft exists, `draft.core_details_payload` is `null`. `payload_preview` remains for backwards compatibility.
+
+### Duplicate in-review guard (Phase A.1)
+
+| Action | Behaviour |
+|--------|-----------|
+| `intent: submit` while `in_review` exists | `200` with existing proposal; message: *Your changes are already submitted for review.* No new proposal created. |
+| `intent: draft` while `in_review` exists | `409` `proposal_already_in_review` — editing blocked until review outcome. |
+
+One open submitted `core_details` proposal per owner + venue at a time.
 
 ### Errors
 
@@ -325,7 +357,9 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
 
 ---
 
-## Endpoint 3: `POST /api/v1/owner/venues/{venue_id}/proposals`
+## Legacy Endpoint 3 (Phase A — superseded): `POST /api/v1/owner/venues/{venue_id}/proposals`
+
+> **Superseded for operational fields (Stage 4).** Shim until Stage 4.3. Use PATCH + `restricted-change-requests` for new code.
 
 **Guard:** `require_owner_portal_auth` + venue scope
 
@@ -431,6 +465,8 @@ type OwnerOpeningHoursPayload = {
 
 On `intent: "submit"`, `lifecycle_status` is `in_review`, `submitted_at` set, message references admin review.
 
+Re-submit while an owner `core_details` proposal is already `in_review` returns `200` with the existing proposal (no duplicate). Draft saves while `in_review` returns `409` `proposal_already_in_review`.
+
 ### Internal mapping (normative)
 
 | Payload field | Staging table / column |
@@ -446,22 +482,24 @@ On `intent: "submit"`, `lifecycle_status` is `in_review`, `submitted_at` set, me
 
 ---
 
-## Field classification (core pub info)
+## Field classification (Stage 4+)
 
-| Field | Phase A | Classification | Storage today |
-|-------|---------|----------------|---------------|
-| `display_name` | ✅ | Review required | `venue_proposal_staging_profile` |
-| `address_line_1`, `address_line_2`, `postal_code` | ✅ | Review required | `venue_proposal_staging_location` |
-| `locality_id` | ✅ | Review required (canonical FK) | staging location |
-| `country_code`, `latitude`, `longitude` | ✅ optional | Review required | staging location |
-| `short_description`, `long_description` | ✅ | Review required | staging profile |
-| `opening_hours` | ✅ | Review required | `venue_proposal_staging_hours` |
-| `owner_confirms_management` | ✅ submit only | Validation gate | Not persisted (Phase A); optional `audit_event` on submit |
-| `phone`, `email`, `website` | ❌ | Deferred — schema | See `DATA_CAPTURE_MODEL.md` § Contact |
-| `contact_person_name`, `contact_person_role` | ❌ | Deferred | No table |
-| `google_place_id` | ❌ | Forbidden | Internal only |
+| Field | Classification | Write path | Storage |
+|-------|----------------|------------|---------|
+| `short_description`, `long_description` | **Direct edit** | PATCH `operational-profile` | `venue_published_descriptive_copy` |
+| `opening_hours` | **Direct edit** | PATCH `hours` | `venue_hours_*` |
+| `phone`, `email`, `website` | **Direct edit** (when schema exists) | PATCH `operational-profile` | `venue_published_contact` *(planned)* |
+| `display_name` | **Restricted** | POST `restricted-change-requests` | staging → `venue_published_profile` |
+| `address_line_*`, `postal_code`, `country_code` | **Restricted** | POST restricted | staging → `venue_published_location` |
+| `locality_id`, `latitude`, `longitude` | **Restricted** | POST restricted | staging → location / map_point |
+| `owner_confirms_management` | Restricted submit gate | First restricted request only | `audit_event` optional |
+| `contact_person_name`, `contact_person_role` | Deferred | — | No table |
+| `google_place_id` | Forbidden | — | Internal only |
+| `discovery_eligibility_status`, `operational_status` | Admin only | — | `venue_published_profile` |
 
-**Direct publish candidates (Phase A):** none.
+### Superseded (Phase A)
+
+> All fields above were `Review required` via bundled `POST .../proposals` — see legacy Endpoint 3 below.
 
 ---
 
@@ -488,32 +526,36 @@ Validation errors: `400` `validation_error` with `details: { field: ["message"] 
 
 ---
 
-## Frontend routing contract (Stages 2–3)
+## Frontend routing contract (Stages 2–4.2)
 
 | Route | When |
 |-------|------|
 | `/owner` | Hub; if `meta.default_venue_id` from list, optional redirect to `/owner/venues/{id}` |
 | `/owner/venues/:venueId` | Venue hub (checklist) |
-| `/owner/venues/:venueId/basics` | Step 1 form |
+| `/owner/venues/:venueId/basics` | Step 1 — operational + restricted zones |
 
 **Do not** add dense sidebar nav.
 
-### Stage 2 required calls
+### Required API calls (Stage 4.2)
 
 - `ownerAuthProbe()` (existing)
 - `GET /api/v1/owner/venues`
-
-### Stage 3 required calls
-
 - `GET /api/v1/owner/venues/{venue_id}`
-- `POST /api/v1/owner/venues/{venue_id}/proposals`
-- `GET /api/v1/reference/localities` (picker)
+- `PATCH /api/v1/owner/venues/{venue_id}/operational-profile` — Save changes (descriptions)
+- `PATCH /api/v1/owner/venues/{venue_id}/hours` — Save changes (hours)
+- `POST /api/v1/owner/venues/{venue_id}/restricted-change-requests` — Request change
+- `GET /api/v1/reference/localities` — restricted zone picker
 
-### Copy tone
+### Copy tone (Stage 4.2)
 
-- Pending: “Your changes have been submitted and will be reviewed before they appear on your public listing.”
-- Draft saved: “Saved. You can come back anytime to finish or submit.”
-- No venue access: keep existing `NoVenueAccessState` copy; add support link if `VITE_PORTAL_SUPPORT_URL` set.
+- Operational saved: “Your updates are live on your public listing.”
+- Restricted requested: “We'll review your name/address change request.”
+- Restricted pending: banner on restricted zone only
+- No venue access: `NoVenueAccessState` + support link if `VITE_PORTAL_SUPPORT_URL` set
+
+### Superseded copy (Phase A)
+
+> “Your changes have been submitted and will be reviewed before they appear on your public listing.” — applies to **restricted** requests only, not operational Save.
 
 ---
 
@@ -521,13 +563,212 @@ Validation errors: `400` `validation_error` with `details: { field: ["message"] 
 
 | File | Coverage |
 |------|----------|
-| `backend/tests/test_owner_venue_endpoints.py` (new) | list, detail, proposal, 403 scope |
+| `backend/tests/test_owner_venue_endpoints.py` | list, detail, legacy proposal, PATCH direct edit, restricted POST, 403 scope |
 | `backend/tests/test_owner_endpoints.py` | keep auth-probe |
-| `web-portal/src/shared/lib/api.owner-venues.test.ts` (new) | client parsing |
-| Stage 2–3 Vitest | hub + form |
+| `web-portal/src/shared/lib/api.owner-venues.test.ts` | client parsing + PATCH/restricted methods |
+| Stage 2–4.2 Vitest | hub + split basics form |
 
 ---
 
-## Claim API (out of Phase A)
+## Stage 4.1 — Endpoint 4: `PATCH /api/v1/owner/venues/{venue_id}/operational-profile`
+
+**Guard:** `require_owner_portal_auth` + venue scope + `manage_published_venue_operations`
+
+### Request body
+
+```json
+{
+  "short_description": "Neighbourhood pub.",
+  "long_description": "Optional longer copy."
+}
+```
+
+Partial PATCH allowed — omitted keys unchanged.
+
+### Response `200`
+
+```json
+{
+  "data": {
+    "venue_id": "uuid",
+    "updated_at": "ISO-8601",
+    "descriptions": {
+      "short_description": "Neighbourhood pub.",
+      "long_description": "Optional longer copy."
+    },
+    "message": "Your updates are live on your public listing."
+  }
+}
+```
+
+### Side effects
+
+1. Upsert `venue_published_descriptive_copy`
+2. Insert `audit_event` (`action = 'owner_direct_edit'`, `field_family = 'descriptions'`)
+3. Optional: `venue_published_row_history` snapshot of prior row (Stage 4.1b)
+
+### Validation
+
+| Field | Rules |
+|-------|--------|
+| `short_description` | If present: trim; max **500** chars; may be required for completeness elsewhere but not enforced on every PATCH |
+| `long_description` | If present: trim; max **2000** chars; null to clear |
+
+### Errors
+
+| Status | code |
+|--------|------|
+| 400 | `validation_error` |
+| 403 | `forbidden` (not manager or missing capability) |
+| 404 | `not_found` |
+
+---
+
+## Stage 4.1 — Endpoint 5: `PATCH /api/v1/owner/venues/{venue_id}/hours`
+
+**Guard:** same as Endpoint 4
+
+### Request body
+
+```json
+{
+  "uncertainty_level": "resolved_confident",
+  "regular_hours_json": [
+    {
+      "day_of_week": 5,
+      "opens_at": "12:00",
+      "closes_at": "23:00",
+      "crosses_midnight": false
+    }
+  ],
+  "exceptions_json": [],
+  "notes": null
+}
+```
+
+Reuses `OwnerOpeningHoursPayload` shape from Phase A.
+
+### Response `200`
+
+```json
+{
+  "data": {
+    "venue_id": "uuid",
+    "updated_at": "ISO-8601",
+    "hours": {
+      "uncertainty_level": "resolved_confident",
+      "regular": [],
+      "exceptions": []
+    },
+    "message": "Your updates are live on your public listing."
+  }
+}
+```
+
+### Side effects
+
+1. Transactional replace: delete existing `venue_hours_regular` / `_exception` rows for venue; insert new; upsert `venue_hours_uncertainty`
+2. `audit_event` with `field_family = 'hours'`
+3. Optional row history snapshots
+
+### Validation
+
+Same rules as Phase A `_validate_opening_hours` with `submit=true` (hours must be materially present).
+
+---
+
+## Stage 4.1 — Endpoint 6: `POST /api/v1/owner/venues/{venue_id}/restricted-change-requests`
+
+**Guard:** `require_owner_portal_auth` + venue scope + `submit_restricted_changes_for_review`
+
+### Request body
+
+```json
+{
+  "intent": "submit",
+  "payload": {
+    "display_name": "The Example Hotel",
+    "address_line_1": "1 Example St",
+    "address_line_2": null,
+    "postal_code": "3065",
+    "locality_id": "uuid",
+    "country_code": "AU",
+    "latitude": null,
+    "longitude": null,
+    "owner_confirms_management": true
+  }
+}
+```
+
+| `intent` | Behaviour |
+|----------|-----------|
+| `submit` | `lifecycle_status = in_review`, `submitted_at = now()` |
+| `draft` | `lifecycle_status = staged` (optional; restricted zone only) |
+
+**Must not** include `short_description`, `long_description`, or `opening_hours` — return `400` if present.
+
+### Response `201`
+
+```json
+{
+  "data": {
+    "proposal_id": "uuid",
+    "venue_id": "uuid",
+    "section": "restricted_identity",
+    "intent": "submit",
+    "lifecycle_status": "in_review",
+    "submitted_at": "ISO-8601",
+    "message": "We'll review your name/address change request."
+  }
+}
+```
+
+### Internal mapping
+
+| Payload field | Staging |
+|---------------|---------|
+| `display_name` | `venue_proposal_staging_profile.proposed_display_name` only |
+| address, locality, lat/lng | `venue_proposal_staging_location` |
+| — | `venue_proposal_target`: `profile`, `geo` (no `hours`) |
+
+Duplicate in-review guard: same semantics as Phase A.1 (one open restricted proposal per owner+venue).
+
+---
+
+## Stage 4.1 — Detail GET additions
+
+Extend `GET /api/v1/owner/venues/{venue_id}` with:
+
+```json
+{
+  "edit_policy": {
+    "operational_direct_edit": true,
+    "restricted_proposal_required": true,
+    "capabilities_required": {
+      "direct_edit": "manage_published_venue_operations",
+      "restricted_request": "submit_restricted_changes_for_review"
+    }
+  },
+  "restricted_draft": {
+    "proposal_id": "uuid | null",
+    "lifecycle_status": "staged | null",
+    "payload": { }
+  },
+  "restricted_pending_review": {
+    "proposal_id": "uuid | null",
+    "lifecycle_status": "in_review | null",
+    "submitted_at": "ISO-8601 | null",
+    "review_outcome": null
+  }
+}
+```
+
+Deprecate over time: `draft.core_details_payload` operational fields; keep for shim compatibility through 4.2.
+
+Adjust `onboarding_status`: `submitted` when `restricted_pending_review` open; operational PATCH does not set `submitted`.
+
+---
+
+## Claim API (out of scope)
 
 **Recommendation D:** MVP uses admin-assigned venues; waiting state only. Claim request API deferred to separate workstream (`venue_claim_request` exists in DB only).

@@ -2,203 +2,149 @@
 
 ## Purpose
 
-Audit existing proposal, staging, moderation, and publish tables; recommend MVP simplification path without destructive schema changes in Stage 1.
+Audit proposal, staging, moderation, and publish tables; define how they fit the **Stage 4** model (restricted changes only for owners; direct operational writes bypass staging).
 
 ## Current stage
 
-**Stage 1 — complete.** Recommendation locked for Phase A implementation.
+**Stage 4 — repositioned.** Staging stack retained for **restricted identity/location** owner requests and all consumer corrections. Operational owner edits write published tables directly.
 
 ## Decisions
 
-**Recommendation:** **Create a lightweight owner proposal endpoint over existing tables** — do not add a new parallel table; do not delete or consolidate tables in Stage 1.
+| Topic | Decision |
+|-------|----------|
+| Keep staging tables structurally | ✅ Yes — do not delete |
+| Owner operational edits | **Bypass staging** — PATCH → published + `audit_event` |
+| Owner restricted edits | **Use staging** — `profile` + `geo` targets only |
+| Consumer corrections | Unchanged — per-domain proposals |
+| Publish worker | Still required for **restricted** approvals; not for direct edits |
+| `venue_publish_event` / row history | Direct edits: optional snapshot in 4.1b; restricted: full lineage on publish worker |
 
-| Option | Verdict |
-|--------|---------|
-| Keep model as-is structurally | ✅ Yes |
-| Simplify by usage (one bundle intake) | ✅ Yes — application layer only |
-| Consolidate tables later | Optional future migration; not Phase A |
-| New simpler table | ❌ Rejected — duplicates `venue_change_proposal` |
-| Bypass staging | ❌ Rejected — violates published-truth RLS |
+### Superseded (pre–Stage 4)
+
+> ~~Owner POST core_details → three targets (profile, geo, hours) for every save~~ — hours/descriptions removed from owner proposal bundle.
 
 ## Assumptions
 
-- Publish/apply to `venue_published_*` will be a separate backend workstream after moderation approve.
-- Owner portal uses Django API only for writes (not Supabase direct insert), same as consumer submissions.
+- Django service role bypasses RLS for published writes (`0017`)
+- Moderation queue unchanged structurally; filters owner restricted proposals by target families
+- `decide_moderation_item(approve)` still does not auto-publish (worker TBD)
 
 ## Open questions
 
-- Should `decide_moderation_item(approve)` automatically enqueue publish job?
-- Single `core_details` proposal vs three consumer-style proposals per save — **decided:** one proposal, multiple targets for owner MVP.
+- Add `proposal_scope` metadata column vs infer from staging row presence (default: infer — no migration in 4.1)
+- Should approved restricted proposals auto-enqueue publish job? (default: yes when worker lands)
 
 ## Dependencies
 
 - Migrations `0007`, `0008`, `0009`, `0012`, `0019`, `0020`
+- `OWNER_EDIT_POLICY.md`
 - `moderation_write_service.py`, `submission_intake_service.py`
 
 ## Next downstream use
 
-Backend owner intake implementation; future publish worker design.
+Stage 4.1 restricted POST mapper; publish worker design for `profile`+`geo` only.
 
 ---
 
-## 1. Which tables stage owner-submitted venue changes?
+## 1. Tables for owner **restricted** changes
 
-| Table | Owner role |
-|-------|------------|
-| `venue_change_proposal` | Header: `actor_type='owner'`, `actor_owner_account_id`, `channel='owner_portal'` |
-| `venue_proposal_target` | Families: `profile`, `geo`, `hours` (Phase A bundle) |
-| `venue_proposal_staging_profile` | Name, descriptions (profile fields) |
+| Table | Owner restricted role |
+|-------|----------------------|
+| `venue_change_proposal` | Header: `actor_type='owner'`, `channel='owner_portal'` |
+| `venue_proposal_target` | Families: **`profile`, `geo` only** |
+| `venue_proposal_staging_profile` | Proposed `display_name` only (not descriptions in restricted flow) |
 | `venue_proposal_staging_location` | Address, locality, coordinates |
-| `venue_proposal_staging_hours` | JSON hours + uncertainty + notes |
-| `venue_proposal_staging_attribute` | Phase B features only |
+| `venue_proposal_staging_hours` | **Not used** for owner restricted proposals |
+| `proposal_review` | Admin decision |
 
-**Not used for owner MVP:** `raw_venue_intake_record`, `consumer_submission_extension`, `consumer_workflow_submission`.
+## 2. Tables for owner **direct** operational changes
 
-**RLS:** `0019_rls_owner_business_authority.sql` — owner authenticated policies on proposal + staging (Django bypasses via app DB role for intake, same as consumer).
+| Table | Role |
+|-------|------|
+| `venue_published_descriptive_copy` | Live descriptions |
+| `venue_hours_regular` / `_exception` / `_uncertainty` | Live hours |
+| `venue_published_attribute_value` | Features (Stage 7) |
+| `venue_published_structured_special` (+ satellites) | Specials (Stage 5) |
+| `venue_published_tap_offering` (+ satellites) | Taps (Stage 6) |
+| `audit_event` | `action = 'owner_direct_edit'` |
+| `venue_published_row_history` | Pre-change snapshot (optional 4.1b) |
 
----
+**Not used for owner operational MVP:** `venue_change_proposal` staging path.
 
-## 2. Which tables stage consumer corrections?
+## 3. Consumer corrections (unchanged)
 
-Same core stack:
+Same core stack as before — `submission_intake_service.py`, one domain per POST.
 
-| Table | Consumer-specific |
-|-------|-------------------|
-| `venue_change_proposal` | `actor_type='consumer'`, `channel='app_consumer'` |
-| `venue_proposal_target` + staging_* | Per-domain single family per POST |
-| `consumer_submission_extension` | Optional metadata on proposal (`0012`) |
-
-**Implementation:** `backend/src/apps/submissions/services/submission_intake_service.py` — one domain per request (`profile`, `location`, `attributes`, `hours`).
-
----
-
-## 3. Which tables record moderation review?
+## 4. Moderation review (unchanged tables)
 
 | Table | Purpose |
 |-------|---------|
-| `proposal_review` | Admin decision rows (`review_outcome`, `reviewed_at`, `reviewer_admin_account_id`) |
-| `venue_change_proposal.lifecycle_status` | Updated to `approved` or `rejected` on decide |
-| `audit_event` | `moderation_decision`, `internal_note` actions |
+| `proposal_review` | Admin decision |
+| `venue_change_proposal.lifecycle_status` | `approved` / `rejected` / etc. |
+| `audit_event` | `moderation_decision`, `internal_note` |
 
-**Implementation:** `backend/src/apps/internal_tools/services/moderation_write_service.py` — `decide_moderation_item`, `add_moderation_note`.
+**Queue content after Stage 4:** Owner items are **restricted only** (no hours/description bundles). Legacy in_review `core_details` bundles may exist until migrated/closed.
 
-**Queue read:** `moderation_read_service.py` — joins staging profile for labels.
+## 5. Publish / apply status
 
----
+| Path | Staging | Review | Apply to published |
+|------|---------|--------|-------------------|
+| Owner direct PATCH | ❌ | ❌ | ✅ immediate (4.1) |
+| Owner restricted POST | ✅ | ✅ | ❌ worker TBD |
+| Consumer correction | ✅ | ✅ | ❌ worker TBD |
+| Admin tool | varies | varies | manual / TBD |
 
-## 4. Which tables apply approved changes to published venue tables?
-
-| Table | Applies live truth? |
-|-------|---------------------|
-| `venue_publish_event` | Lineage only — **insert not implemented in backend** |
-| `venue_published_row_history` | Snapshots on publish — **not implemented** |
-| `venue_published_profile` | **Target** — no automated writer found |
-| `venue_published_location` | **Target** — no automated writer |
-| `venue_hours_*` | **Target** — no automated writer |
-| `venue_published_descriptive_copy` | **Target** — no automated writer |
-
-**Confirmed:** `backend/docs/API_ENDPOINT_OVERVIEW.md` — moderation approve does **not** write published rows or `venue_publish_event`.
-
-**Grep:** no `INSERT INTO public.venue_publish_event` in `backend/src/`.
-
----
-
-## 5. Is publish/apply implemented?
-
-| Step | Status |
-|------|--------|
-| Owner/consumer intake → staging | ✅ Consumer yes; owner **pending** |
-| Queue / review | ✅ Admin moderation |
-| Approve → lifecycle | ✅ |
-| Approve → published truth | ❌ **Not implemented** |
-| Publish event lineage | ❌ **Not implemented** |
-
-**Implication for owner UX:** Copy must say changes are **reviewed**; “live listing” updates only after future publish worker (or manual admin ops).
-
----
+**Confirmed:** moderation approve does **not** yet write `venue_published_*` for proposals.
 
 ## 6. Duplicate or overlapping tables?
 
 | Observation | Assessment |
 |-------------|------------|
-| `venue_proposal_staging_profile` holds `proposed_short_description` / `proposed_long_description` while target family `descriptive_copy` exists | **Overlap by design** — staging profile comment says profile + descriptive copy candidates; consumer uses `profile` domain only. Owner MVP: use **profile staging only**, skip separate `descriptive_copy` target. |
-| `proposal_review` vs `venue_authority_decision` | **Not duplicate** — public-truth review vs claim/verification authority (`0015`) |
-| `consumer_submission_extension` vs proposal header | Extension is optional metadata — owners skip |
-| `raw_venue_intake_record` vs proposals | Intake is import/scrape path — owners skip for MVP |
+| Profile staging holds descriptions historically | **Split usage:** descriptions → direct published; `proposed_display_name` → restricted staging only |
+| `proposal_review` vs `venue_authority_decision` | **Not duplicate** — public-truth vs claim authority |
+| `audit_event` vs `venue_published_row_history` | Complementary — audit is event log; history is rollback snapshot |
 
-**Verdict:** No table removal recommended pre-MVP. Reduce **perceived** complexity by bundling owner writes into one service function.
+**Verdict:** No table removal. Reduce complexity by **usage** split, not schema consolidation.
 
----
+## 7. Lifecycle flows
 
-## 7. Can MVP use a simpler model?
-
-### What is overbuilt for MVP?
-
-- Six target families and four staging tables — **appropriate** for long-term; heavy for a single form.
-- `venue_publish_event` + `venue_published_row_history` — **ahead of implementation**.
-- `consumer_submission_extension` — irrelevant to owners.
-
-### MVP simplification (application layer)
-
-```text
-Owner POST core_details
-  → one venue_change_proposal
-  → three venue_proposal_target rows (profile, geo, hours)
-  → upsert three staging rows
-  → optional: reuse open staged proposal for draft saves
-```
-
-**Do not** simplify DB schema in Stage 1.
-
-### Later consolidation candidates (planning only)
-
-| Future change | Risk |
-|---------------|------|
-| Merge descriptive copy into profile staging only (drop `descriptive_copy` target enum usage) | Low — doc + intake alignment |
-| Add `owner_submission_extension` for contact-person metadata | Low — mirrors consumer |
-| Add `venue_proposal_staging_contact` + `venue_published_contact` | Medium — migration required |
-| Publish worker on approve | High value — unblocks “go live” |
-
----
-
-## 8. Lifecycle flow (owner MVP)
+### Owner direct edit
 
 ```mermaid
 flowchart LR
-  A[Owner POST draft] --> B[proposal staged]
-  B --> C[Owner POST submit]
-  C --> D[proposal in_review]
-  D --> E[Admin moderation]
-  E -->|approve| F[lifecycle approved]
-  E -->|reject| G[lifecycle rejected]
-  F --> H[Publish worker TBD]
-  H --> I[venue_published_*]
+  A[Owner PATCH] --> B[Validate + capability check]
+  B --> C[Snapshot prior row optional]
+  C --> D[Update venue_published_* / venue_hours_*]
+  D --> E[audit_event owner_direct_edit]
+  D --> F[Live listing updated]
 ```
 
----
+### Owner restricted change
 
-## 9. Comparison: consumer vs owner Phase A
+```mermaid
+flowchart LR
+  A[Owner POST restricted] --> B[proposal in_review]
+  B --> C[Admin moderation]
+  C -->|approve| D[lifecycle approved]
+  D --> E[Publish worker TBD]
+  E --> F[venue_published_profile / location / map]
+```
 
-| Aspect | Consumer | Owner Phase A |
-|--------|----------|---------------|
-| Endpoint | `POST /submissions/corrections` | `POST /owner/venues/{id}/proposals` |
-| Domains per request | 1 | 3 (bundled as `core_details`) |
-| Response | Ack only, no `proposal_id` | **Return `proposal_id`** for UX |
-| `submitted_at` | Set on create | Set only on `intent=submit` |
-| Extension table | Yes | No |
+## 8. Comparison: consumer vs owner (post–Stage 4)
 
-**Recommendation:** Owner API should return `proposal_id` (improvement over consumer ack) — already in `OWNER_VENUE_API_CONTRACT.md`.
+| Aspect | Consumer | Owner operational | Owner restricted |
+|--------|----------|-------------------|------------------|
+| Endpoint | `POST /submissions/corrections` | `PATCH /owner/venues/{id}/...` | `POST .../restricted-change-requests` |
+| Staging | Yes | No | Yes |
+| Admin review | Yes | No | Yes |
+| Live on save | No | **Yes** | No |
 
----
-
-## 10. Later migration / planning note (not executed)
-
-When contact fields are added:
+## 9. Later migration notes (not executed in Stage 4)
 
 ```text
-Migration: venue_published_contact + venue_proposal_staging_contact
-Target family: contact (extend venue_proposal_target check)
-Publish worker maps staging → published for each family
+Optional: venue_published_contact + extend PATCH operational-profile
+Optional: proposal_scope enum on venue_change_proposal for queue filtering
+Publish worker: map restricted staging profile/geo → published + venue_publish_event
 ```
 
-File planning reference only under `docs/owner-venue-onboarding/` — no SQL in Stage 1.
+No SQL in Stage 4 planning.

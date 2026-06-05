@@ -2,73 +2,89 @@
 
 ## Purpose
 
-Ordered implementation stages; Stage 1 contract freeze complete.
+Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so future pages use direct-edit, not review-all proposals.
 
 ## Current stage
 
-**Stage 1 complete** → **Backend Phase A** and **Stage 2** can start in parallel after sign-off.
+**Stage 4 complete (planning).** Next: **Stage 4.1** backend direct-edit endpoints.
 
 ## Decisions
 
-| Stage | Status | Blocker |
-|-------|--------|---------|
-| 0 Discovery | ✅ Done | — |
-| 1 Planning + contract | ✅ Done | — |
-| 2 Owner home entry | Ready | `GET /owner/venues` |
-| 3 Core pub info | Ready | GET detail + POST proposals |
-| 4 Events | Deferred stub | Schema |
-| 5–7 Optional sections | Phase B | Staging for specials/taps |
-| 8 Photos | Plan only | Schema + storage |
-| 9 Review UX | Ready | Partial without publish |
-| 10 QA | Ready | After 2–3 |
+| Stage | Status | Notes |
+|-------|--------|-------|
+| 0 Discovery | ✅ Done | |
+| 1 Planning + contract | ✅ Done | Phase A contract (superseded for edit policy by Stage 4) |
+| Backend Phase A | ✅ Done | List, detail, proposal intake |
+| 2 Owner home entry | ✅ Done | Hub + picker |
+| 3 Core pub info | ✅ Done | Interim all-proposal form |
+| 3.5 Proposal hardening | ✅ Done | Draft hydration + in_review guard |
+| **4 Edit policy reframe** | ✅ Done | Docs only — `OWNER_EDIT_POLICY.md` |
+| **4.1 Direct-edit backend** | Ready | PATCH operational-profile + hours + audit |
+| **4.2 Step 1 UI split** | Blocked on 4.1 | Save vs Request change |
+| **4.3 Hardening** | Planned | Row history, contact schema, deprecate proposal shim |
+| 5 Meal specials | Ready after 4.1 | Direct-edit page |
+| 6 Tap list | Ready after 4.1 | Direct-edit page |
+| 7 Features | Ready after 4.1 | Direct-edit page |
+| Admin restricted publish | Parallel | Publish worker for approved restricted proposals |
+| 8 Photos | Plan only | Schema + moderation |
+| 9 Review UX polish | Updated scope | Restricted pending states only |
+| 10 QA | After 4.2+ | |
+
+### Superseded numbering
+
+> Old “Stage 4 Events” deferred stub — events remain schema-deferred; Stage 4 is now edit policy.
 
 ## Assumptions
 
-- Publish worker not required for Stage 2–3 ship; honest review copy.
+- Direct edits go live on PATCH; restricted still needs publish worker for approved proposals
+- No broad schema changes in Stage 4 (planning only); contact migration in 4.3
 
 ## Open questions
 
-- Parallel PR: Backend T1 + Frontend T2 with mocked list
+- Parallel PR: 4.1 backend + 4.2 frontend with mocked PATCH
 
 ## Dependencies
 
-- `OWNER_VENUE_API_CONTRACT.md`
-- `STAGING_REVIEW_PUBLISH_AUDIT.md`
+- `OWNER_EDIT_POLICY.md`
+- `OWNER_VENUE_API_CONTRACT.md` (Stage 4.1 additions)
+- Existing Phase A code in `owner_venue_service.py`
 
 ## Next downstream use
 
-Implementation agents use `stages/STAGE_02` onward.
+Open Stage 4.1 implementation ticket.
 
 ---
 
-## Sequence
+## Recommended sequence (post–Stage 4)
 
 ```text
-Stage 0  ✅ Discovery
-Stage 1  ✅ Contract freeze
-         ↓
-Backend Phase A (T1) ──┬── Stage 2 Frontend hub
-                       └── Stage 3 Frontend basics (after T1 read/POST)
-Stage 9  Review/checklist polish
-Stage 7  Features (Phase B)
-Stage 5–6 Specials/taps (Phase B)
-Stage 10 QA
-Stage 4, 8  When schema exists
+Stage 4   ✅ Edit policy docs
+Stage 4.1     Backend PATCH operational-profile + hours + audit + grant enforce
+Stage 4.2     Frontend Step 1 split (Save / Request change)
+Stage 4.3     Row history snapshots, contact migration, remove proposal shim
+Stage 7       Features direct-edit page
+Stage 5       Meal specials direct-edit page
+Stage 6       Tap list direct-edit page
+Admin         Restricted-change review + publish worker
+Later         Contact UI, photos/media, events
+Stage 10      QA across direct + restricted paths
 ```
 
-## Contract artifacts (Stage 1)
+## Contract artifacts
 
 | Doc | Role |
 |-----|------|
-| `OWNER_VENUE_API_CONTRACT.md` | **Normative** DTOs + validation |
-| `STAGING_REVIEW_PUBLISH_AUDIT.md` | Workflow + simplification |
+| `OWNER_EDIT_POLICY.md` | **Normative** edit classification (Stage 4+) |
+| `OWNER_VENUE_API_CONTRACT.md` | DTOs + validation (Phase A legacy + 4.1 additions) |
 | `API_REQUIREMENTS.md` | Endpoint index |
-| `DATA_CAPTURE_MODEL.md` | Table mapping + contact plan |
-| `UX_FLOW.md` | Stage 2–3 UX |
+| `DATA_CAPTURE_MODEL.md` | Table mapping |
+| `UX_FLOW.md` | Screen contracts |
+| `STAGING_REVIEW_PUBLISH_AUDIT.md` | Restricted proposal workflow |
 
 ## Validation gates
 
-1. Implementations must match contract (review PR against `OWNER_VENUE_API_CONTRACT.md`)
-2. `pnpm typecheck` + Vitest (frontend); `pytest` (backend)
-3. Demo owner: `database/sql/seeds/dev_seed_demo_accounts_and_relationships.sql`
-4. No self-approval paths
+1. Stage 4.1+: implementations match `OWNER_EDIT_POLICY.md` + contract additions
+2. Direct PATCH must write published tables + `audit_event`; must not create `venue_change_proposal` for operational-only edits
+3. Restricted POST must not write published tables
+4. `pnpm typecheck` + Vitest (frontend); `pytest` (backend)
+5. No self-approval paths
