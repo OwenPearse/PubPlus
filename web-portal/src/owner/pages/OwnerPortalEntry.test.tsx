@@ -12,8 +12,10 @@ vi.mock("@/shared/lib/api", () => ({
   ownerAuthProbe: () => ownerAuthProbe(),
   ownerProvision: () => ownerProvision(),
   ownerVenueList: () => ownerVenueList(),
+  referenceLocalities: vi.fn().mockResolvedValue({ data: { localities: [] } }),
   formatApiError: (err: unknown) => String(err),
   isApiRequestError: () => false,
+  parseApiValidationDetails: () => ({}),
 }));
 
 vi.mock("@/shared/lib/portalBrand", () => ({
@@ -55,20 +57,22 @@ describe("OwnerPortalEntry", () => {
     ownerVenueList.mockReset();
   });
 
-  it("shows add or claim CTA for awaiting membership state", async () => {
+  it("shows signup form immediately for awaiting membership state", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
       body: { ...baseProbe, next_step: "owner_waiting_for_membership" },
     });
     renderEntry();
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Add or claim your venue" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Tell us about your pub" })).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "Add or claim a venue" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Pub name/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add or claim a venue" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Awaiting business access/i)).not.toBeInTheDocument();
     expect(ownerVenueList).not.toHaveBeenCalled();
   });
 
-  it("shows add or claim CTA for awaiting venue access state", async () => {
+  it("shows signup form immediately for awaiting venue access state", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
       body: {
@@ -80,9 +84,10 @@ describe("OwnerPortalEntry", () => {
     });
     renderEntry();
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Add or claim your venue" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Tell us about your pub" })).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "Add or claim a venue" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Pub name/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add or claim a venue" })).not.toBeInTheDocument();
     expect(ownerVenueList).not.toHaveBeenCalled();
   });
 

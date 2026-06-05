@@ -458,6 +458,43 @@ describe("owner venue API wrappers", () => {
     );
   });
 
+  it("ownerVenueClaimRequest sends submit_new_or_claim with venue details", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            claim_request_id: "claim-3",
+            status: "submitted",
+            message: "Thanks — your venue details have been submitted for review.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerVenueClaimRequest({
+      mode: "submit_new_or_claim",
+      venue_name: "New Pub",
+      locality_id: "loc-1",
+      address_line_1: "9 Claim St",
+      claimant_note: "Licensee.",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venue-claim-requests",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          mode: "submit_new_or_claim",
+          venue_name: "New Pub",
+          locality_id: "loc-1",
+          address_line_1: "9 Claim St",
+          claimant_note: "Licensee.",
+        }),
+      }),
+    );
+  });
+
   it("ownerVenueClaimRequest sends submit_new with venue details", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(

@@ -4,12 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OwnerVenueClaimEntry } from "@/owner/pages/OwnerVenueClaimEntry";
 
-const ownerVenueClaimCandidates = vi.fn();
 const ownerVenueClaimRequest = vi.fn();
 const referenceLocalities = vi.fn();
 
 vi.mock("@/shared/lib/api", () => ({
-  ownerVenueClaimCandidates: (...args: unknown[]) => ownerVenueClaimCandidates(...args),
   ownerVenueClaimRequest: (...args: unknown[]) => ownerVenueClaimRequest(...args),
   referenceLocalities: () => referenceLocalities(),
   formatApiError: (err: unknown) => String(err),
@@ -31,110 +29,80 @@ const localities = {
   },
 };
 
-const candidate = {
-  venue_id: "v-1",
-  display_name: "Royal Hotel",
-  locality_name: "Fitzroy",
-  state_code: "VIC",
-  address_line_1: "1 Main St",
-  match_reason: "Exact name match; Same locality",
-  match_score: 95,
-};
-
 describe("OwnerVenueClaimEntry", () => {
   beforeEach(() => {
-    ownerVenueClaimCandidates.mockReset();
     ownerVenueClaimRequest.mockReset();
     referenceLocalities.mockReset();
     referenceLocalities.mockResolvedValue(localities);
   });
 
-  it("renders claim form and loads locality picker", async () => {
+  it("renders signup form and loads locality picker", async () => {
     render(<OwnerVenueClaimEntry />);
     await waitFor(() => {
-      expect(screen.getByLabelText(/Venue name/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Pub name/i)).toBeInTheDocument();
     });
+    expect(screen.getByLabelText(/Address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Suburb \/ locality/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole("option", { name: /Fitzroy/i })).toBeInTheDocument();
     });
+    expect(screen.queryByText(/duplicate/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/google_place_id/i)).not.toBeInTheDocument();
   });
 
-  it("displays likely match and claims existing venue", async () => {
+  it("submits pub details for admin review without duplicate selection UI", async () => {
     const user = userEvent.setup();
-    ownerVenueClaimCandidates.mockResolvedValue({
-      data: {
-        candidates: [candidate],
-        best_match: candidate,
-        has_good_match: true,
-      },
-    });
     ownerVenueClaimRequest.mockResolvedValue({
       data: {
         claim_request_id: "claim-1",
         status: "submitted",
-        message: "Claim request submitted.",
+        message:
+          "Thanks — your venue details have been submitted for review. We'll check the details and let you know when you can manage the listing.",
       },
     });
 
     render(<OwnerVenueClaimEntry />);
     await waitFor(() => {
-      expect(screen.getByLabelText(/Venue name/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Pub name/i)).toBeInTheDocument();
     });
-    await user.type(screen.getByLabelText(/Venue name/i), "Royal Hotel");
-    await user.click(screen.getByRole("button", { name: "Add or claim a venue" }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/This looks like your venue/i)).toBeInTheDocument();
-    });
-    expect(screen.queryByText(/google_place_id/i)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Pub name/i), "Royal Hotel");
+    await user.type(screen.getByLabelText(/^Address$/i), "1 Main St");
+    await user.selectOptions(screen.getByLabelText(/Suburb \/ locality/i), "loc-1");
+    await user.type(
+      screen.getByLabelText(/Tell us your role/i),
+      "I am the licensee.",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit for review" }));
 
-    await user.click(screen.getByRole("button", { name: "Request to claim this listing" }));
     await waitFor(() => {
       expect(ownerVenueClaimRequest).toHaveBeenCalledWith({
-        mode: "claim_existing",
-        venue_id: "v-1",
-        claimant_note: undefined,
+        mode: "submit_new_or_claim",
+        venue_name: "Royal Hotel",
+        address_line_1: "1 Main St",
+        locality_id: "loc-1",
+        claimant_note: "I am the licensee.",
       });
     });
     expect(
-      screen.getByRole("heading", { name: "Claim request submitted" }),
+      screen.getByRole("heading", { name: "Submitted for review" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/This looks like your venue/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Request to claim/i)).not.toBeInTheDocument();
   });
 
-  it("submits new venue when no good match", async () => {
+  it("validates required fields before submit", async () => {
     const user = userEvent.setup();
-    ownerVenueClaimCandidates.mockResolvedValue({
-      data: { candidates: [], best_match: null, has_good_match: false },
-    });
-    ownerVenueClaimRequest.mockResolvedValue({
-      data: {
-        claim_request_id: "claim-2",
-        status: "submitted",
-        message: "Claim request submitted.",
-      },
-    });
-
     render(<OwnerVenueClaimEntry />);
     await waitFor(() => {
-      expect(screen.getByLabelText(/Venue name/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Pub name/i)).toBeInTheDocument();
     });
-    await user.type(screen.getByLabelText(/Venue name/i), "Brand New Pub");
-    await user.click(screen.getByRole("button", { name: "Add or claim a venue" }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/couldn't find a matching listing/i)).toBeInTheDocument();
-    });
-    await user.click(screen.getByRole("button", { name: "Submit as a new venue for review" }));
+    await user.click(screen.getByRole("button", { name: "Submit for review" }));
 
-    await waitFor(() => {
-      expect(ownerVenueClaimRequest).toHaveBeenCalledWith({
-        mode: "submit_new",
-        venue_name: "Brand New Pub",
-        address_line_1: undefined,
-        locality_id: undefined,
-        claimant_note: undefined,
-      });
-    });
+    expect(screen.getByText("Pub name is required.")).toBeInTheDocument();
+    expect(screen.getByText("Address is required.")).toBeInTheDocument();
+    expect(screen.getByText("Suburb / locality is required.")).toBeInTheDocument();
+    expect(ownerVenueClaimRequest).not.toHaveBeenCalled();
   });
 });

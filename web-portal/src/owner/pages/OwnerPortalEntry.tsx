@@ -192,30 +192,16 @@ export function OwnerPortalEntry() {
   const showOptionalMfaPrompt =
     !mfaPromptDismissed && probe.aal === "aal1" && !probe.mfa_enabled;
 
-  if (probe.next_step === "owner_waiting_for_membership") {
+  if (
+    probe.next_step === "owner_waiting_for_membership" ||
+    probe.next_step === "owner_waiting_for_venue_access"
+  ) {
     return (
       <div className="max-w-2xl space-y-4">
-        <h1 className="text-2xl font-bold text-slate-900">Owner portal</h1>
         {showOptionalMfaPrompt ? (
           <OptionalMfaSecurityPrompt onDismiss={() => setMfaPromptDismissed(true)} />
         ) : null}
-        <NoVenueAccessState variant="membership" businessCount={probe.business_count} />
-      </div>
-    );
-  }
-
-  if (probe.next_step === "owner_waiting_for_venue_access") {
-    return (
-      <div className="max-w-2xl space-y-4">
-        <h1 className="text-2xl font-bold text-slate-900">Owner portal</h1>
-        {showOptionalMfaPrompt ? (
-          <OptionalMfaSecurityPrompt onDismiss={() => setMfaPromptDismissed(true)} />
-        ) : null}
-        <NoVenueAccessState
-          variant="venue"
-          businessCount={probe.business_count}
-          venueCount={probe.venue_count}
-        />
+        <NoVenueAccessState />
       </div>
     );
   }

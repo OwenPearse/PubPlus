@@ -126,6 +126,51 @@ class OwnerClaimEndpointIntegrationTests(TestCase):
         self.assertEqual(venue_id, self.e2e.venue_id)
         self.assertIsNone(relationship_id, "claim must not self-approve management access")
 
+    def test_owner_can_submit_new_or_claim_with_duplicate_metadata(self) -> None:
+        self._skip_if_no_schema()
+        assert self.e2e is not None
+        ctx = _ctx(self.e2e.owner_auth_user_id, email="e2e-owner-claim@pubplus.test")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=ctx):
+            response = self.client.post(
+                "/api/v1/owner/venue-claim-requests",
+                data=json.dumps(
+                    {
+                        "mode": "submit_new_or_claim",
+                        "venue_name": self.e2e.published_display_name,
+                        "address_line_1": "1 Claim Street",
+                        "locality_id": self.e2e.locality_id,
+                        "claimant_note": "I manage this pub.",
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(response.status_code, 201)
+        data = response.json()["data"]
+        self.assertEqual(data["status"], "submitted")
+        self.assertIn("submitted for review", data["message"].lower())
+        claim_id = data["claim_request_id"]
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT claim_lifecycle_status, summary, resulting_business_venue_management_relationship_id
+                FROM public.venue_claim_request
+                WHERE id = %s::uuid
+                """,
+                [claim_id],
+            )
+            row = c.fetchone()
+        self.assertIsNotNone(row)
+        status, summary, relationship_id = row
+        self.assertEqual(status, "submitted")
+        self.assertIsNone(relationship_id, "claim must not self-approve management access")
+        summary_data = json.loads(summary)
+        self.assertEqual(summary_data["mode"], "submit_new_or_claim")
+        self.assertIn("possible_duplicate_venue_ids", summary_data)
+        self.assertIn("duplicate_candidates", summary_data)
+        self.assertIn(self.e2e.venue_id, summary_data["possible_duplicate_venue_ids"])
+
     def test_owner_can_submit_new_venue_claim(self) -> None:
         self._skip_if_no_schema()
         assert self.e2e is not None

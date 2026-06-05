@@ -294,9 +294,9 @@ def submit_venue_claim_request(
 
     owner_account_id = str(owner_id)
     mode = body.get("mode")
-    if mode not in ("claim_existing", "submit_new"):
+    if mode not in ("claim_existing", "submit_new", "submit_new_or_claim"):
         return None, "validation_error", {
-            "mode": ["mode must be claim_existing or submit_new."]
+            "mode": ["mode must be claim_existing, submit_new, or submit_new_or_claim."]
         }
 
     note, note_err = _validate_claimant_note(body.get("claimant_note"))
@@ -384,7 +384,20 @@ def submit_venue_claim_request(
         return None, "validation_error", {"venue_name": ["This field is required."]}
 
     locality_id = body.get("locality_id")
-    if locality_id is not None:
+    if mode == "submit_new_or_claim":
+        if locality_id is None:
+            return None, "validation_error", {
+                "locality_id": ["This field is required."]
+            }
+        if _bad_uuid(locality_id):
+            return None, "validation_error", {
+                "locality_id": ["Must be a valid UUID string."]
+            }
+        if not _locality_exists(str(locality_id)):
+            return None, "validation_error", {
+                "locality_id": ["locality_id does not reference an existing locality."]
+            }
+    elif locality_id is not None:
         if _bad_uuid(locality_id):
             return None, "validation_error", {
                 "locality_id": ["Must be a valid UUID string or null."]
@@ -395,13 +408,42 @@ def submit_venue_claim_request(
             }
 
     address_line_1 = body.get("address_line_1")
-    if address_line_1 is not None and not isinstance(address_line_1, str):
+    if mode == "submit_new_or_claim":
+        if not isinstance(address_line_1, str) or not address_line_1.strip():
+            return None, "validation_error", {
+                "address_line_1": ["This field is required."]
+            }
+    elif address_line_1 is not None and not isinstance(address_line_1, str):
         return None, "validation_error", {
             "address_line_1": ["Must be a string or null."]
         }
 
+    trimmed_name = venue_name.strip()
+    trimmed_address = (address_line_1 or "").strip() if isinstance(address_line_1, str) else ""
+
+    duplicate_candidates: list[dict[str, Any]] = []
+    possible_duplicate_venue_ids: list[str] = []
+    if mode == "submit_new_or_claim":
+        dup_result, dup_code, _ = search_venue_claim_candidates(
+            auth,
+            name=trimmed_name,
+            locality_id=str(locality_id),
+            address_line_1=trimmed_address,
+        )
+        if dup_code == "ok" and dup_result:
+            for candidate in dup_result.get("candidates", []):
+                possible_duplicate_venue_ids.append(candidate["venue_id"])
+                duplicate_candidates.append(
+                    {
+                        "venue_id": candidate["venue_id"],
+                        "display_name": candidate["display_name"],
+                        "match_score": candidate["match_score"],
+                        "match_reason": candidate["match_reason"],
+                    }
+                )
+
     business_id = _resolve_owner_business_id(
-        owner_account_id, business_label=venue_name.strip()
+        owner_account_id, business_label=trimmed_name
     )
 
     with connection.cursor() as c:
@@ -423,15 +465,18 @@ def submit_venue_claim_request(
             None,
         )
 
-    summary = json.dumps(
-        {
-            "mode": "submit_new",
-            "venue_name": venue_name.strip(),
-            "address_line_1": (address_line_1 or "").strip() or None,
-            "locality_id": str(locality_id) if locality_id else None,
-            "claimant_note": note,
-        }
-    )
+    summary_payload: dict[str, Any] = {
+        "mode": mode,
+        "venue_name": trimmed_name,
+        "address_line_1": trimmed_address or None,
+        "locality_id": str(locality_id) if locality_id else None,
+        "claimant_note": note,
+    }
+    if mode == "submit_new_or_claim":
+        summary_payload["possible_duplicate_venue_ids"] = possible_duplicate_venue_ids
+        summary_payload["duplicate_candidates"] = duplicate_candidates
+
+    summary = json.dumps(summary_payload)
     with connection.cursor() as c:
         c.execute(
             """
@@ -450,14 +495,22 @@ def submit_venue_claim_request(
         )
         claim_id = c.fetchone()[0]
 
+    if mode == "submit_new_or_claim":
+        message = (
+            "Thanks — your venue details have been submitted for review. "
+            "We'll check the details and let you know when you can manage the listing."
+        )
+    else:
+        message = (
+            "Claim request submitted. We'll review that you're authorised "
+            "to manage this venue."
+        )
+
     return (
         {
             "claim_request_id": claim_id,
             "status": "submitted",
-            "message": (
-                "Claim request submitted. We'll review that you're authorised "
-                "to manage this venue."
-            ),
+            "message": message,
         },
         "ok",
         None,

@@ -550,6 +550,14 @@ export type NewVenueClaimRequest = {
   claimant_note?: string;
 };
 
+export type SubmitNewOrClaimRequest = {
+  mode: "submit_new_or_claim";
+  venue_name: string;
+  address_line_1: string;
+  locality_id: string;
+  claimant_note?: string;
+};
+
 export type VenueClaimRequestResponse = {
   claim_request_id: string;
   status: "submitted" | "under_review";
@@ -574,7 +582,7 @@ export function ownerVenueClaimCandidates(query: {
 }
 
 export function ownerVenueClaimRequest(
-  body: ExistingVenueClaimRequest | NewVenueClaimRequest,
+  body: ExistingVenueClaimRequest | NewVenueClaimRequest | SubmitNewOrClaimRequest,
 ) {
   return apiRequest<ApiResponse<VenueClaimRequestResponse>>(
     "/api/v1/owner/venue-claim-requests",
