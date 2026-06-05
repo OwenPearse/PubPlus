@@ -6,7 +6,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 
 ## Current stage
 
-**Stage 4 — policy reframe.** Phase A staged all `core_details` fields; Stages 4.1+ split capture paths.
+**Stage 4.1 complete.** Descriptions and hours write published tables directly; restricted fields still use staging.
 
 ## Decisions
 

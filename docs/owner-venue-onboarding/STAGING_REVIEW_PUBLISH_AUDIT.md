@@ -6,7 +6,7 @@ Audit proposal, staging, moderation, and publish tables; define how they fit the
 
 ## Current stage
 
-**Stage 4 — repositioned.** Staging stack retained for **restricted identity/location** owner requests and all consumer corrections. Operational owner edits write published tables directly.
+**Stage 4.1 — direct edits live.** Staging stack retained for **restricted identity/location** owner requests and all consumer corrections. Operational owner edits (descriptions, hours) write published tables directly with `audit_event`.
 
 ## Decisions
 
@@ -148,3 +148,23 @@ Publish worker: map restricted staging profile/geo → published + venue_publish
 ```
 
 No SQL in Stage 4 planning.
+
+---
+
+## 10. Review/publish table classification (Stage 4.1 audit)
+
+| Table | Classification | Reason |
+|-------|----------------|--------|
+| `venue_change_proposal` | **Keep / repurpose** | Restricted owner changes + consumer corrections |
+| `venue_proposal_target` | **Keep / repurpose** | `profile` + `geo` for restricted; consumer domains |
+| `venue_proposal_staging_profile` | **Keep / repurpose** | `proposed_display_name` for restricted; not descriptions in 4.1 |
+| `venue_proposal_staging_location` | **Keep / repurpose** | Restricted address/locality/map |
+| `venue_proposal_staging_hours` | **Keep** | Legacy Phase A bundles; consumer hours proposals |
+| `venue_proposal_staging_attribute` | **Keep** | Future restricted moderation / consumer attributes |
+| `proposal_review` | **Keep** | Admin moderation decisions |
+| `venue_publish_event` | **Keep** | Publish lineage when worker lands |
+| `venue_published_row_history` | **Keep** | Rollback snapshots (4.1b+) |
+| `consumer_submission_extension` | **Keep** | Consumer submission metadata |
+| `raw_venue_intake_record` | **Keep** | Import/scrape intake path |
+
+**No tables marked for deletion in Stage 4.1.**

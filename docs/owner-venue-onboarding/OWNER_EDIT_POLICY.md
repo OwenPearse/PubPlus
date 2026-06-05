@@ -14,7 +14,7 @@ This document supersedes the Phase A assumption that **every** `core_details` fi
 
 ## Current stage
 
-**Stage 4 — planning complete.** Implementation begins at **Stage 4.1** (backend direct-edit endpoints). Stages 2–3 and Backend Phase A/A.1 shipped the interim “review everything” model; that code remains until 4.1/4.2 migrate behaviour.
+**Stage 4.1 — backend direct-edit implemented** for descriptions and hours (`PATCH operational-profile`, `PATCH hours`). Stage 4.2 (frontend split) is next. Legacy `POST .../proposals` remains for compatibility.
 
 ## Decisions
 
@@ -155,11 +155,9 @@ Each successful direct PATCH writes:
    - `action = 'owner_direct_edit'`
    - `detail` JSON: `{ "field_family": "hours|descriptions|...", "changed_fields": [...], "before": {bounded snapshot}, "after": {bounded snapshot}, "channel": "owner_portal" }`
 
-2. **`venue_published_row_history`** (Stage 4.1 minimal):
-   - Insert snapshot of **previous** row(s) before overwrite
-   - Link to synthetic `venue_publish_event` with `publish_event_kind = 'other'` and narrative `owner_direct_edit` until full publish worker exists
+2. **`venue_published_row_history`** — **deferred to Stage 4.1b** (not written in 4.1; `audit_event` only)
 
-Bounded snapshots: truncate long text; omit secrets; never include `google_place_id`.
+Bounded snapshots in `audit_event.detail`: before/after JSON; omit secrets; never include `google_place_id`.
 
 ### 9. Should direct updates create `audit_event` rows?
 
@@ -270,7 +268,7 @@ flowchart TB
 
 | Stage | Work |
 |-------|------|
-| **4.1** | Backend `PATCH operational-profile`, `PATCH hours`, audit writes, grant enforcement |
+| **4.1** | ✅ Backend `PATCH operational-profile`, `PATCH hours`, audit writes, grant enforcement |
 | **4.2** | Frontend Step 1 split; `POST restricted-change-requests` client |
 | **4.3** | History snapshots; contact schema; remove operational proposal shim |
 | **5–7** | Direct-edit pages for specials, taps, features |
@@ -286,4 +284,20 @@ The following docs/sections assumed **review-all** and are superseded by this po
 - `AGENT_RULES.md` — “no direct published-truth writes”
 - `STAGING_REVIEW_PUBLISH_AUDIT.md` — owner MVP lifecycle treating hours/descriptions as staged-only
 
-Phase A implementation **remains in codebase** until Stages 4.1–4.2 migrate behaviour.
+Phase A `POST .../proposals` **remains** until Stage 4.2/4.3 migrate frontend and narrow shim.
+
+---
+
+## Stage 4.1 implementation notes
+
+| Item | Status |
+|------|--------|
+| `PATCH .../operational-profile` | ✅ `owner_venue_service.patch_owner_operational_profile` |
+| `PATCH .../hours` | ✅ `owner_venue_service.patch_owner_venue_hours` |
+| Capability `manage_published_venue_operations` | ✅ Enforced; `403` if missing |
+| `audit_event` (`owner_direct_edit`) | ✅ Before/after in `detail` JSON |
+| `venue_published_row_history` | Deferred 4.1b |
+| `POST .../restricted-change-requests` | Planned 4.2 backend |
+| Hour `exceptions_json` non-empty | Rejected `400` until mapping defined |
+
+**Restricted migration path:** Add `POST .../restricted-change-requests` in 4.2; narrow legacy `POST .../proposals` to reject operational-only payloads; frontend uses restricted POST for name/address zone.

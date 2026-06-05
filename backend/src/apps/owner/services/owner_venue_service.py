@@ -1,5 +1,6 @@
 """
-Owner portal venue list, detail, and core_details proposal intake (Phase A).
+Owner portal venue list, detail, core_details proposal intake (Phase A),
+and direct operational edits (Stage 4.1).
 """
 
 from __future__ import annotations
@@ -42,6 +43,54 @@ _UNSUPPORTED_PAYLOAD_KEYS = frozenset(
     }
 )
 _CORE_TARGETS = ("profile", "geo", "hours")
+_DIRECT_EDIT_CAPABILITY = "manage_published_venue_operations"
+_HOURS_NOTES_MAX_LEN = 1000
+_OPERATIONAL_PROFILE_ALLOWED_KEYS = frozenset(
+    {"short_description", "long_description"}
+)
+_OPERATIONAL_PROFILE_FORBIDDEN_KEYS = frozenset(
+    {
+        "display_name",
+        "address_line_1",
+        "address_line_2",
+        "postal_code",
+        "locality_id",
+        "country_code",
+        "latitude",
+        "longitude",
+        "phone",
+        "email",
+        "website",
+        "contact_person_name",
+        "contact_person_role",
+        "google_place_id",
+        "opening_hours",
+        "operational_status",
+        "discovery_eligibility_status",
+        "owner_confirms_management",
+    }
+)
+_HOURS_PATCH_FORBIDDEN_KEYS = frozenset(
+    {
+        "display_name",
+        "address_line_1",
+        "address_line_2",
+        "postal_code",
+        "locality_id",
+        "country_code",
+        "latitude",
+        "longitude",
+        "short_description",
+        "long_description",
+        "phone",
+        "email",
+        "website",
+        "google_place_id",
+        "operational_status",
+        "discovery_eligibility_status",
+        "owner_confirms_management",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -142,6 +191,45 @@ def assert_owner_manages_venue(
     if not _venue_row_exists(str(vid)):
         return None, "not_found"
     return None, "forbidden"
+
+
+def _has_active_capability(
+    relationship_id: UUID, owner_account_id: UUID, capability_code: str
+) -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1
+            FROM public.venue_capability_grant
+            WHERE business_venue_management_relationship_id = %s::uuid
+              AND owner_account_id = %s::uuid
+              AND capability_code = %s
+              AND grant_status = 'active'
+            LIMIT 1
+            """,
+            [str(relationship_id), str(owner_account_id), capability_code],
+        )
+        return c.fetchone() is not None
+
+
+def assert_owner_can_direct_edit(
+    auth: AuthContext, venue_id: str
+) -> tuple[ResolvedVenueAccess | None, str]:
+    """
+    Approved relationship plus manage_published_venue_operations grant.
+
+    error_code: forbidden | not_found | admin_forbidden | missing_capability
+    """
+    access, err = assert_owner_manages_venue(auth, venue_id)
+    if access is None:
+        return None, err
+    if not _has_active_capability(
+        access.relationship_id,
+        access.owner_account_id,
+        _DIRECT_EDIT_CAPABILITY,
+    ):
+        return None, "missing_capability"
+    return access, "ok"
 
 
 def _load_capabilities(relationship_id: UUID, owner_account_id: UUID) -> list[str]:
@@ -457,6 +545,106 @@ def _load_published_snapshot(venue_id: str) -> dict[str, Any]:
     }
 
 
+def _load_staged_core_details_payload(proposal_id: str) -> dict[str, Any] | None:
+    """Full staged core_details fields for form hydration (Phase A.1)."""
+    display_name = short_description = long_description = None
+    address_line_1 = address_line_2 = postal_code = locality_id = None
+    country_code = latitude = longitude = None
+    uncertainty = notes = None
+    reg: list[Any] = []
+    exc: list[Any] = []
+
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT proposed_display_name, proposed_short_description, proposed_long_description
+            FROM public.venue_proposal_staging_profile
+            WHERE venue_change_proposal_id = %s::uuid
+            """,
+            [proposal_id],
+        )
+        prof = c.fetchone()
+        if prof:
+            display_name, short_description, long_description = prof[0], prof[1], prof[2]
+
+        c.execute(
+            """
+            SELECT
+              proposed_address_line_1, proposed_address_line_2, proposed_postal_code,
+              proposed_locality_id::text, proposed_country_code,
+              proposed_latitude, proposed_longitude
+            FROM public.venue_proposal_staging_location
+            WHERE venue_change_proposal_id = %s::uuid
+            """,
+            [proposal_id],
+        )
+        loc = c.fetchone()
+        if loc:
+            (
+                address_line_1,
+                address_line_2,
+                postal_code,
+                locality_id,
+                country_code,
+                latitude,
+                longitude,
+            ) = loc
+
+        c.execute(
+            """
+            SELECT proposed_uncertainty_level, regular_hours_json, exceptions_json, notes
+            FROM public.venue_proposal_staging_hours
+            WHERE venue_change_proposal_id = %s::uuid
+            """,
+            [proposal_id],
+        )
+        hrs = c.fetchone()
+        if hrs:
+            uncertainty = hrs[0]
+            reg = hrs[1] if isinstance(hrs[1], list) else json.loads(hrs[1] or "[]")
+            exc = hrs[2] if isinstance(hrs[2], list) else json.loads(hrs[2] or "[]")
+            notes = hrs[3]
+
+    if not any(
+        (
+            display_name,
+            short_description,
+            long_description,
+            address_line_1,
+            address_line_2,
+            postal_code,
+            locality_id,
+            country_code,
+            latitude is not None,
+            longitude is not None,
+            reg,
+            exc,
+            uncertainty,
+            notes,
+        )
+    ):
+        return None
+
+    return {
+        "display_name": display_name,
+        "address_line_1": address_line_1,
+        "address_line_2": address_line_2,
+        "postal_code": postal_code,
+        "locality_id": locality_id,
+        "country_code": country_code or "AU",
+        "latitude": float(latitude) if latitude is not None else None,
+        "longitude": float(longitude) if longitude is not None else None,
+        "short_description": short_description,
+        "long_description": long_description,
+        "opening_hours": {
+            "uncertainty_level": uncertainty,
+            "regular_hours_json": reg,
+            "exceptions_json": exc,
+            "notes": notes,
+        },
+    }
+
+
 def _load_staged_basics(proposal_id: str) -> dict[str, Any] | None:
     display_name = short_description = address_line_1 = locality_id = None
     uncertainty = notes = None
@@ -534,6 +722,7 @@ def _load_owner_proposals(
             "address_line_1": None,
             "locality_id": None,
         },
+        "core_details_payload": None,
     }
     pending = {
         "proposal_id": None,
@@ -594,6 +783,7 @@ def _load_owner_proposals(
                     "address_line_1": prev[1],
                     "locality_id": prev[2],
                 }
+            draft["core_details_payload"] = _load_staged_core_details_payload(pid)
             latest_staged_basics = _load_staged_basics(pid)
 
         if submitted_at is not None and pending["proposal_id"] is None:
@@ -1050,6 +1240,35 @@ def _owner_ever_submitted(venue_id: str, owner_account_id: UUID) -> bool:
         return c.fetchone() is not None
 
 
+def _find_open_in_review_proposal(
+    venue_id: str, owner_account_id: UUID
+) -> dict[str, Any] | None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT id::text, submitted_at
+            FROM public.venue_change_proposal
+            WHERE venue_id = %s::uuid
+              AND actor_type = 'owner'
+              AND channel = 'owner_portal'
+              AND actor_owner_account_id = %s::uuid
+              AND lifecycle_status = 'in_review'
+            ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+            LIMIT 1
+            """,
+            [venue_id, str(owner_account_id)],
+        )
+        row = c.fetchone()
+    if not row:
+        return None
+    submitted_at = row[1]
+    return {
+        "proposal_id": row[0],
+        "lifecycle_status": "in_review",
+        "submitted_at": submitted_at.isoformat() if submitted_at else None,
+    }
+
+
 def _find_open_staged_proposal(venue_id: str, owner_account_id: UUID) -> str | None:
     with connection.cursor() as c:
         c.execute(
@@ -1222,6 +1441,22 @@ def create_or_update_owner_core_details_proposal(
     if val_err:
         return None, "validation_error", val_err
 
+    existing_in_review = _find_open_in_review_proposal(
+        venue_id, access.owner_account_id
+    )
+    if existing_in_review is not None:
+        if intent == "submit":
+            return {
+                "proposal_id": existing_in_review["proposal_id"],
+                "venue_id": venue_id,
+                "section": "core_details",
+                "intent": "submit",
+                "lifecycle_status": "in_review",
+                "submitted_at": existing_in_review["submitted_at"],
+                "message": "Your changes are already submitted for review.",
+            }, "already_in_review", None
+        return None, "proposal_already_in_review", None
+
     if intent == "submit":
         if not _owner_ever_submitted(venue_id, access.owner_account_id):
             if payload.get("owner_confirms_management") is not True:
@@ -1320,4 +1555,386 @@ def create_or_update_owner_core_details_proposal(
         "lifecycle_status": lifecycle,
         "submitted_at": submitted_at.isoformat() if submitted_at else None,
         "message": message,
+    }, "ok", None
+
+
+def _load_descriptive_copy(venue_id: str) -> dict[str, str | None]:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT short_description, long_description
+            FROM public.venue_published_descriptive_copy
+            WHERE venue_id = %s::uuid
+            """,
+            [venue_id],
+        )
+        row = c.fetchone()
+    if not row:
+        return {"short_description": None, "long_description": None}
+    return {"short_description": row[0], "long_description": row[1]}
+
+
+def _write_owner_direct_edit_audit(
+    *,
+    owner_account_id: UUID,
+    venue_id: str,
+    entity_table: str,
+    field_family: str,
+    endpoint: str,
+    before: dict[str, Any],
+    after: dict[str, Any],
+) -> None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.audit_event (
+                actor_type,
+                actor_owner_account_id,
+                entity_table,
+                entity_id,
+                action,
+                detail
+            ) VALUES (
+                'owner',
+                %s::uuid,
+                %s,
+                %s::uuid,
+                'owner_direct_edit',
+                %s::jsonb
+            )
+            """,
+            [
+                str(owner_account_id),
+                entity_table,
+                venue_id,
+                json.dumps(
+                    {
+                        "field_family": field_family,
+                        "endpoint": endpoint,
+                        "channel": "owner_portal",
+                        "before": before,
+                        "after": after,
+                    }
+                ),
+            ],
+        )
+
+
+def _validate_operational_profile_patch(
+    body: Any,
+) -> tuple[dict[str, Any] | None, dict[str, list[str]] | None]:
+    if not isinstance(body, dict):
+        return None, {"body": ["Request body must be a JSON object."]}
+
+    unknown = sorted(
+        set(body.keys())
+        - _OPERATIONAL_PROFILE_ALLOWED_KEYS
+        - _OPERATIONAL_PROFILE_FORBIDDEN_KEYS
+    )
+    details: dict[str, list[str]] = {}
+    if unknown:
+        for key in unknown:
+            details[key] = ["Unknown field."]
+
+    forbidden = sorted(_OPERATIONAL_PROFILE_FORBIDDEN_KEYS.intersection(body.keys()))
+    for key in forbidden:
+        details[key] = ["This field cannot be updated on this endpoint."]
+
+    if not _OPERATIONAL_PROFILE_ALLOWED_KEYS.intersection(body.keys()):
+        details.setdefault("body", []).append(
+            "At least one of short_description or long_description must be provided."
+        )
+
+    out: dict[str, Any] = {}
+    for key in ("short_description", "long_description"):
+        if key not in body:
+            continue
+        val = body[key]
+        if val is None:
+            out[key] = None
+            continue
+        if not isinstance(val, str):
+            details[key] = ["Must be a string or null."]
+            continue
+        trimmed = val.strip()
+        max_len = 500 if key == "short_description" else 2000
+        if len(trimmed) > max_len:
+            details[key] = [f"Must be at most {max_len} characters."]
+        else:
+            out[key] = trimmed or None
+
+    if details:
+        return None, details
+    return out, None
+
+
+@transaction.atomic
+def patch_owner_operational_profile(
+    auth: AuthContext,
+    venue_id: str,
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    fields, val_err = _validate_operational_profile_patch(body)
+    if val_err:
+        return None, "validation_error", val_err
+
+    before = _load_descriptive_copy(venue_id)
+    after = dict(before)
+    for key, val in (fields or {}).items():
+        after[key] = val
+
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.venue_published_descriptive_copy (
+                venue_id, short_description, long_description, updated_at
+            ) VALUES (%s::uuid, %s, %s, now())
+            ON CONFLICT (venue_id) DO UPDATE SET
+                short_description = EXCLUDED.short_description,
+                long_description = EXCLUDED.long_description,
+                updated_at = now()
+            """,
+            [
+                venue_id,
+                after["short_description"],
+                after["long_description"],
+            ],
+        )
+
+    _write_owner_direct_edit_audit(
+        owner_account_id=access.owner_account_id,
+        venue_id=venue_id,
+        entity_table="venue_published_descriptive_copy",
+        field_family="descriptions",
+        endpoint=f"/api/v1/owner/venues/{venue_id}/operational-profile",
+        before=before,
+        after=after,
+    )
+
+    return {
+        "venue_id": venue_id,
+        "updated": {
+            "short_description": after["short_description"],
+            "long_description": after["long_description"],
+        },
+        "message": "Changes saved.",
+    }, "ok", None
+
+
+def _validate_hours_patch_body(
+    body: Any,
+) -> tuple[dict[str, Any] | None, dict[str, list[str]] | None]:
+    if not isinstance(body, dict):
+        return None, {"body": ["Request body must be a JSON object."]}
+
+    details: dict[str, list[str]] = {}
+    forbidden = sorted(_HOURS_PATCH_FORBIDDEN_KEYS.intersection(body.keys()))
+    for key in forbidden:
+        details[key] = ["This field cannot be updated on this endpoint."]
+
+    unknown = sorted(
+        set(body.keys())
+        - {"uncertainty_level", "regular_hours_json", "exceptions_json", "notes"}
+        - _HOURS_PATCH_FORBIDDEN_KEYS
+    )
+    for key in unknown:
+        details[key] = ["Unknown field."]
+
+    if details:
+        return None, details
+
+    hours_pack, hours_err = _validate_opening_hours(body, submit=True)
+    if hours_err:
+        return None, hours_err
+
+    notes = body.get("notes")
+    if isinstance(notes, str) and len(notes.strip()) > _HOURS_NOTES_MAX_LEN:
+        return None, {
+            "notes": [f"Must be at most {_HOURS_NOTES_MAX_LEN} characters."]
+        }
+
+    exc = body.get("exceptions_json", [])
+    if isinstance(exc, list) and len(exc) > 0:
+        return None, {
+            "exceptions_json": [
+                "Structured hour exceptions are not supported on this endpoint yet."
+            ]
+        }
+
+    return hours_pack, None
+
+
+def _load_published_hours_for_response(venue_id: str) -> dict[str, Any]:
+    uncertainty = get_published_hours_uncertainty(venue_id) or "resolved_confident"
+    notes: str | None = None
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT notes
+            FROM public.venue_hours_uncertainty
+            WHERE venue_id = %s::uuid
+            """,
+            [venue_id],
+        )
+        unc_row = c.fetchone()
+        if unc_row:
+            notes = unc_row[0]
+
+        regular: list[dict[str, Any]] = []
+        c.execute(
+            """
+            SELECT day_of_week, opens_at, closes_at, crosses_midnight
+            FROM public.venue_hours_regular
+            WHERE venue_id = %s::uuid
+            ORDER BY day_of_week, sort_order, opens_at
+            """,
+            [venue_id],
+        )
+        for r in c.fetchall():
+            regular.append(
+                {
+                    "day_of_week": int(r[0]),
+                    "opens_at": _time_to_hhmm(r[1]),
+                    "closes_at": _time_to_hhmm(r[2]),
+                    "crosses_midnight": bool(r[3]),
+                }
+            )
+
+        exceptions: list[dict[str, Any]] = []
+        c.execute(
+            """
+            SELECT start_date, end_date, exception_kind, opens_at, closes_at,
+                   crosses_midnight, note
+            FROM public.venue_hours_exception
+            WHERE venue_id = %s::uuid
+            ORDER BY start_date
+            """,
+            [venue_id],
+        )
+        for r in c.fetchall():
+            exceptions.append(
+                {
+                    "start_date": r[0].isoformat() if r[0] else None,
+                    "end_date": r[1].isoformat() if r[1] else None,
+                    "exception_kind": r[2],
+                    "opens_at": _time_to_hhmm(r[3]) if r[3] else None,
+                    "closes_at": _time_to_hhmm(r[4]) if r[4] else None,
+                    "crosses_midnight": bool(r[5]),
+                    "note": r[6],
+                }
+            )
+
+    return {
+        "uncertainty_level": uncertainty,
+        "regular": regular,
+        "exceptions": exceptions,
+        "notes": notes,
+    }
+
+
+def _snapshot_hours_for_audit(venue_id: str) -> dict[str, Any]:
+    block = _load_published_hours_for_response(venue_id)
+    return {
+        "uncertainty_level": block["uncertainty_level"],
+        "regular_hours_json": block["regular"],
+        "exceptions_json": block["exceptions"],
+        "notes": block["notes"],
+    }
+
+
+@transaction.atomic
+def patch_owner_venue_hours(
+    auth: AuthContext,
+    venue_id: str,
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    hours_pack, val_err = _validate_hours_patch_body(body)
+    if val_err:
+        return None, "validation_error", val_err
+    assert hours_pack is not None
+
+    before = _snapshot_hours_for_audit(venue_id)
+
+    reg = hours_pack.get("regular_hours_json") or []
+    unc = hours_pack.get("uncertainty_level") or "resolved_confident"
+    notes = hours_pack.get("notes")
+    if isinstance(notes, str):
+        notes = notes.strip() or None
+
+    with connection.cursor() as c:
+        c.execute(
+            "DELETE FROM public.venue_hours_regular WHERE venue_id = %s::uuid",
+            [venue_id],
+        )
+        for index, row in enumerate(reg):
+            if not isinstance(row, dict):
+                continue
+            c.execute(
+                """
+                INSERT INTO public.venue_hours_regular (
+                    venue_id, day_of_week, opens_at, closes_at,
+                    crosses_midnight, sort_order, updated_at
+                ) VALUES (
+                    %s::uuid, %s, %s::time, %s::time, %s, %s, now()
+                )
+                """,
+                [
+                    venue_id,
+                    int(row["day_of_week"]),
+                    row["opens_at"],
+                    row["closes_at"],
+                    bool(row.get("crosses_midnight", False)),
+                    int(row.get("sort_order", index)),
+                ],
+            )
+
+        if body.get("exceptions_json") is not None:
+            c.execute(
+                "DELETE FROM public.venue_hours_exception WHERE venue_id = %s::uuid",
+                [venue_id],
+            )
+
+        c.execute(
+            """
+            INSERT INTO public.venue_hours_uncertainty (
+                venue_id, uncertainty_level, notes, updated_at
+            ) VALUES (%s::uuid, %s, %s, now())
+            ON CONFLICT (venue_id) DO UPDATE SET
+                uncertainty_level = EXCLUDED.uncertainty_level,
+                notes = EXCLUDED.notes,
+                updated_at = now()
+            """,
+            [venue_id, unc, notes],
+        )
+
+    after_block = _load_published_hours_for_response(venue_id)
+    after = {
+        "uncertainty_level": after_block["uncertainty_level"],
+        "regular_hours_json": after_block["regular"],
+        "exceptions_json": after_block["exceptions"],
+        "notes": after_block["notes"],
+    }
+
+    _write_owner_direct_edit_audit(
+        owner_account_id=access.owner_account_id,
+        venue_id=venue_id,
+        entity_table="venue_hours_regular",
+        field_family="hours",
+        endpoint=f"/api/v1/owner/venues/{venue_id}/hours",
+        before=before,
+        after=after,
+    )
+
+    return {
+        "venue_id": venue_id,
+        "hours": after_block,
+        "message": "Opening hours saved.",
     }, "ok", None

@@ -8,7 +8,7 @@ Implementation-ready contract for owner venue onboarding APIs. Backend and front
 
 ## Current stage
 
-**Stage 4 — policy reframe documented.** Phase A (list, detail, bundled proposals) **implemented**. Stage 4.1 adds direct PATCH endpoints; Stage 4.2 splits frontend. Phase A proposal behaviour for operational fields is **superseded** but remains in codebase until 4.3.
+**Stage 4.1 — direct PATCH implemented.** Phase A list/detail/proposals remain. Stage 4.2 splits frontend. Phase A proposal behaviour for operational fields is **superseded** but remains until 4.3.
 
 ## Decisions
 
@@ -591,12 +591,11 @@ Partial PATCH allowed — omitted keys unchanged.
 {
   "data": {
     "venue_id": "uuid",
-    "updated_at": "ISO-8601",
-    "descriptions": {
+    "updated": {
       "short_description": "Neighbourhood pub.",
       "long_description": "Optional longer copy."
     },
-    "message": "Your updates are live on your public listing."
+    "message": "Changes saved."
   }
 }
 ```
@@ -654,13 +653,13 @@ Reuses `OwnerOpeningHoursPayload` shape from Phase A.
 {
   "data": {
     "venue_id": "uuid",
-    "updated_at": "ISO-8601",
     "hours": {
       "uncertainty_level": "resolved_confident",
       "regular": [],
-      "exceptions": []
+      "exceptions": [],
+      "notes": null
     },
-    "message": "Your updates are live on your public listing."
+    "message": "Opening hours saved."
   }
 }
 ```

@@ -24,6 +24,7 @@ E2E_ADMIN_EMAIL = "e2e-admin-no-owner@pubplus.test"
 E2E_BUSINESS_ID = "bada0004-0000-4000-8000-0000000000b1"
 E2E_OTHER_VENUE_ID = "bada0005-0000-4000-8000-0000000000b2"
 E2E_CAPABILITY_SUBMIT = "submit_restricted_changes_for_review"
+E2E_CAPABILITY_DIRECT_EDIT = "manage_published_venue_operations"
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,23 +167,24 @@ def try_install_owner_venues_e2e_fixtures() -> OwnerVenuesE2EInstall | None:
             return None
         rel_id = rel_row[0]
 
-        c.execute(
-            """
-            INSERT INTO public.venue_capability_grant (
-                business_venue_management_relationship_id,
-                owner_account_id,
-                capability_code,
-                grant_status
+        for cap in (E2E_CAPABILITY_SUBMIT, E2E_CAPABILITY_DIRECT_EDIT):
+            c.execute(
+                """
+                INSERT INTO public.venue_capability_grant (
+                    business_venue_management_relationship_id,
+                    owner_account_id,
+                    capability_code,
+                    grant_status
+                )
+                VALUES (%s::uuid, %s::uuid, %s, 'active')
+                ON CONFLICT (
+                    business_venue_management_relationship_id,
+                    owner_account_id,
+                    capability_code
+                ) DO NOTHING
+                """,
+                [rel_id, owner_account_id, cap],
             )
-            VALUES (%s::uuid, %s::uuid, %s, 'active')
-            ON CONFLICT (
-                business_venue_management_relationship_id,
-                owner_account_id,
-                capability_code
-            ) DO NOTHING
-            """,
-            [rel_id, owner_account_id, E2E_CAPABILITY_SUBMIT],
-        )
 
         c.execute(
             """

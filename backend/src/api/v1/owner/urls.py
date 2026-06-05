@@ -4,6 +4,8 @@ from api.v1.owner.views import (
     owner_auth_probe,
     owner_provision,
     owner_venue_detail,
+    owner_venue_hours_patch,
+    owner_venue_operational_profile_patch,
     owner_venue_proposals,
     owner_venues_list,
 )
@@ -17,5 +19,15 @@ urlpatterns = [
         "venues/<uuid:venue_id>/proposals",
         owner_venue_proposals,
         name="owner-venue-proposals",
+    ),
+    path(
+        "venues/<uuid:venue_id>/operational-profile",
+        owner_venue_operational_profile_patch,
+        name="owner-venue-operational-profile-patch",
+    ),
+    path(
+        "venues/<uuid:venue_id>/hours",
+        owner_venue_hours_patch,
+        name="owner-venue-hours-patch",
     ),
 ]

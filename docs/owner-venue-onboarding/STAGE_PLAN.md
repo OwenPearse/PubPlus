@@ -6,7 +6,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 
 ## Current stage
 
-**Stage 4 complete (planning).** Next: **Stage 4.1** backend direct-edit endpoints.
+**Stage 4.1 complete (backend).** Next: **Stage 4.2** frontend Step 1 split.
 
 ## Decisions
 
@@ -19,7 +19,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 | 3 Core pub info | ✅ Done | Interim all-proposal form |
 | 3.5 Proposal hardening | ✅ Done | Draft hydration + in_review guard |
 | **4 Edit policy reframe** | ✅ Done | Docs only — `OWNER_EDIT_POLICY.md` |
-| **4.1 Direct-edit backend** | Ready | PATCH operational-profile + hours + audit |
+| **4.1 Direct-edit backend** | ✅ Done | PATCH operational-profile + hours + audit |
 | **4.2 Step 1 UI split** | Blocked on 4.1 | Save vs Request change |
 | **4.3 Hardening** | Planned | Row history, contact schema, deprecate proposal shim |
 | 5 Meal specials | Ready after 4.1 | Direct-edit page |

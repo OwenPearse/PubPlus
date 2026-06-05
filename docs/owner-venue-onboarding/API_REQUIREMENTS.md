@@ -6,7 +6,7 @@ Specify backend endpoints for owner venue onboarding. **Normative edit policy:**
 
 ## Current stage
 
-**Stage 4 — policy reframe.** Phase A list/detail/proposal APIs implemented. New direct-edit and restricted-only proposal endpoints planned for Stages 4.1–4.3.
+**Stage 4.1 complete.** Direct PATCH endpoints implemented. Restricted `POST restricted-change-requests` planned for 4.2.
 
 ## Decisions
 
@@ -60,12 +60,12 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 | GET | `/api/v1/owner/venues` | List manageable venues; `pending_proposal_count` = **restricted** proposals only |
 | GET | `/api/v1/owner/venues/{venue_id}` | Published snapshot + restricted draft/pending + `edit_policy` block |
 
-## Direct edit (Stage 4.1+)
+## Direct edit (Stage 4.1 — implemented)
 
 | Method | Path | Summary | Stage |
 |--------|------|---------|-------|
-| PATCH | `/api/v1/owner/venues/{venue_id}/operational-profile` | Descriptions (+ contact when schema exists) | 4.1 |
-| PATCH | `/api/v1/owner/venues/{venue_id}/hours` | Opening hours bundle | 4.1 |
+| PATCH | `/api/v1/owner/venues/{venue_id}/operational-profile` | Descriptions (+ contact when schema exists) | ✅ 4.1 |
+| PATCH | `/api/v1/owner/venues/{venue_id}/hours` | Opening hours bundle | ✅ 4.1 |
 | PATCH | `/api/v1/owner/venues/{venue_id}/attributes` | Feature toggles | 7 |
 | PUT | `/api/v1/owner/venues/{venue_id}/specials` | Meal specials replace-set | 5 |
 | PUT | `/api/v1/owner/venues/{venue_id}/tap-list` | Tap offerings replace-set | 6 |

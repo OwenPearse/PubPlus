@@ -11,6 +11,7 @@ from common.auth.context import AuthContext
 from common.auth.errors import InvalidTokenError
 
 from tests.support.owner_venues_e2e_data import (
+    E2E_CAPABILITY_DIRECT_EDIT,
     E2E_CAPABILITY_SUBMIT,
     try_install_owner_venues_e2e_fixtures,
 )
@@ -35,10 +36,12 @@ def _core_payload(*, locality_id: str, confirm: bool = True) -> dict:
     return {
         "display_name": "E2E Owner Pub Updated",
         "address_line_1": "99 Owner Test Street",
+        "address_line_2": "Suite 2",
         "postal_code": "3065",
         "locality_id": locality_id,
         "country_code": "AU",
         "short_description": "Updated neighbourhood pub.",
+        "long_description": "A longer draft description for hydration tests.",
         "opening_hours": {
             "uncertainty_level": "resolved_confident",
             "regular_hours_json": [
@@ -50,10 +53,89 @@ def _core_payload(*, locality_id: str, confirm: bool = True) -> dict:
                 }
             ],
             "exceptions_json": [],
-            "notes": None,
+            "notes": "Draft hours notes for QA.",
         },
         "owner_confirms_management": confirm,
     }
+
+
+def _count_owner_direct_edit_audits(venue_id: str, owner_account_id: str) -> int:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.audit_event
+            WHERE actor_type = 'owner'
+              AND actor_owner_account_id = %s::uuid
+              AND entity_id = %s::uuid
+              AND action = 'owner_direct_edit'
+            """,
+            [owner_account_id, venue_id],
+        )
+        row = c.fetchone()
+    return int(row[0]) if row else 0
+
+
+def _revoke_owner_capability(
+    venue_id: str, owner_account_id: str, capability_code: str
+) -> None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            UPDATE public.venue_capability_grant vcg
+            SET grant_status = 'revoked', revoked_at = now(), updated_at = now()
+            FROM public.business_venue_management_relationship bvmr
+            WHERE vcg.business_venue_management_relationship_id = bvmr.id
+              AND bvmr.venue_id = %s::uuid
+              AND vcg.owner_account_id = %s::uuid
+              AND vcg.capability_code = %s
+            """,
+            [venue_id, owner_account_id, capability_code],
+        )
+
+
+def _restore_owner_capability(
+    relationship_id: str, owner_account_id: str, capability_code: str
+) -> None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.venue_capability_grant (
+                business_venue_management_relationship_id,
+                owner_account_id,
+                capability_code,
+                grant_status
+            )
+            VALUES (%s::uuid, %s::uuid, %s, 'active')
+            ON CONFLICT (
+                business_venue_management_relationship_id,
+                owner_account_id,
+                capability_code
+            ) DO UPDATE SET
+                grant_status = 'active',
+                revoked_at = NULL,
+                updated_at = now()
+            """,
+            [relationship_id, owner_account_id, capability_code],
+        )
+
+
+def _count_in_review_proposals(venue_id: str, owner_account_id: str) -> int:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.venue_change_proposal
+            WHERE venue_id = %s::uuid
+              AND actor_owner_account_id = %s::uuid
+              AND actor_type = 'owner'
+              AND channel = 'owner_portal'
+              AND lifecycle_status = 'in_review'
+            """,
+            [venue_id, owner_account_id],
+        )
+        row = c.fetchone()
+    return int(row[0]) if row else 0
 
 
 @override_settings(SUPABASE_JWT_JWKS_URL="https://example.supabase.co/auth/v1/keys")
@@ -72,6 +154,22 @@ class OwnerVenueEndpointAuthTests(SimpleTestCase):
     def test_proposals_without_token_returns_401(self) -> None:
         r = self.client.post(
             f"/api/v1/owner/venues/{uuid4()}/proposals",
+            data="{}",
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_operational_profile_patch_without_token_returns_401(self) -> None:
+        r = self.client.patch(
+            f"/api/v1/owner/venues/{uuid4()}/operational-profile",
+            data="{}",
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_hours_patch_without_token_returns_401(self) -> None:
+        r = self.client.patch(
+            f"/api/v1/owner/venues/{uuid4()}/hours",
             data="{}",
             content_type="application/json",
         )
@@ -256,6 +354,7 @@ class OwnerVenueEndpointE2ETests(TestCase):
             )
         caps = r.json()["data"]["relationship"]["capabilities"]
         self.assertIn(E2E_CAPABILITY_SUBMIT, caps)
+        self.assertIn(E2E_CAPABILITY_DIRECT_EDIT, caps)
 
     def test_proposal_rejects_unsupported_section(self) -> None:
         self._skip_if_no_db()
@@ -448,6 +547,423 @@ class OwnerVenueEndpointE2ETests(TestCase):
         draft = r.json()["data"]["draft"]
         self.assertIsNotNone(draft["proposal_id"])
         self.assertEqual(draft["lifecycle_status"], "staged")
+
+    def test_detail_core_details_payload_hydrates_full_draft(self) -> None:
+        self._skip_if_no_db()
+        with connection.cursor() as c:
+            c.execute(
+                "DELETE FROM public.venue_change_proposal WHERE venue_id = %s::uuid",
+                [self.e2e.venue_id],
+            )
+        payload = _core_payload(locality_id=self.e2e.locality_id, confirm=False)
+        body = {
+            "section": "core_details",
+            "intent": "draft",
+            "payload": payload,
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            save = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/proposals",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            self.assertEqual(save.status_code, 201)
+            detail = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(detail.status_code, 200)
+        data = detail.json()["data"]
+        core = data["draft"]["core_details_payload"]
+        self.assertIsNotNone(core)
+        self.assertEqual(core["display_name"], payload["display_name"])
+        self.assertEqual(core["address_line_1"], payload["address_line_1"])
+        self.assertEqual(core["address_line_2"], payload["address_line_2"])
+        self.assertEqual(core["postal_code"], payload["postal_code"])
+        self.assertEqual(core["locality_id"], payload["locality_id"])
+        self.assertEqual(core["short_description"], payload["short_description"])
+        self.assertEqual(core["long_description"], payload["long_description"])
+        self.assertEqual(core["opening_hours"]["notes"], payload["opening_hours"]["notes"])
+        self.assertEqual(
+            core["opening_hours"]["regular_hours_json"],
+            payload["opening_hours"]["regular_hours_json"],
+        )
+        self.assertEqual(
+            data["published"]["profile"]["display_name"],
+            "E2E Saved Venues Pub",
+        )
+
+    def test_resubmit_while_in_review_returns_existing_proposal(self) -> None:
+        self._skip_if_no_db()
+        with connection.cursor() as c:
+            c.execute(
+                "DELETE FROM public.venue_change_proposal WHERE venue_id = %s::uuid",
+                [self.e2e.venue_id],
+            )
+        body = {
+            "section": "core_details",
+            "intent": "submit",
+            "payload": _core_payload(locality_id=self.e2e.locality_id),
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            first = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/proposals",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            self.assertEqual(first.status_code, 201)
+            first_id = first.json()["data"]["proposal_id"]
+            count_after_first = _count_in_review_proposals(
+                self.e2e.venue_id, self.e2e.owner_account_id
+            )
+            second = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/proposals",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(second.status_code, 200)
+        second_data = second.json()["data"]
+        self.assertEqual(second_data["proposal_id"], first_id)
+        self.assertEqual(second_data["lifecycle_status"], "in_review")
+        self.assertIn("already submitted", second_data["message"].lower())
+        self.assertEqual(
+            _count_in_review_proposals(self.e2e.venue_id, self.e2e.owner_account_id),
+            count_after_first,
+        )
+
+    def test_draft_blocked_while_in_review(self) -> None:
+        self._skip_if_no_db()
+        submit_body = {
+            "section": "core_details",
+            "intent": "submit",
+            "payload": _core_payload(locality_id=self.e2e.locality_id),
+        }
+        draft_body = {
+            "section": "core_details",
+            "intent": "draft",
+            "payload": _core_payload(locality_id=self.e2e.locality_id, confirm=False),
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/proposals",
+                data=json.dumps(submit_body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/proposals",
+                data=json.dumps(draft_body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(r.json()["error"]["code"], "proposal_already_in_review")
+
+    def test_patch_operational_profile_updates_published_copy(self) -> None:
+        self._skip_if_no_db()
+        audits_before = _count_owner_direct_edit_audits(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        body = {
+            "short_description": "Direct-edit short description.",
+            "long_description": "Direct-edit long description.",
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/operational-profile",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()["data"]
+        self.assertEqual(data["venue_id"], self.e2e.venue_id)
+        self.assertEqual(data["updated"]["short_description"], body["short_description"])
+        self.assertEqual(data["updated"]["long_description"], body["long_description"])
+        self.assertEqual(data["message"], "Changes saved.")
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT short_description, long_description
+                FROM public.venue_published_descriptive_copy
+                WHERE venue_id = %s::uuid
+                """,
+                [self.e2e.venue_id],
+            )
+            row = c.fetchone()
+        self.assertEqual(row[0], body["short_description"])
+        self.assertEqual(row[1], body["long_description"])
+        self.assertEqual(
+            _count_owner_direct_edit_audits(
+                self.e2e.venue_id, self.e2e.owner_account_id
+            ),
+            audits_before + 1,
+        )
+
+    def test_patch_operational_profile_rejects_display_name(self) -> None:
+        self._skip_if_no_db()
+        body = {"display_name": "Sneaky rename"}
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/operational-profile",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("display_name", r.json()["error"]["details"])
+
+    def test_patch_operational_profile_rejects_address_fields(self) -> None:
+        self._skip_if_no_db()
+        body = {"short_description": "Ok", "address_line_1": "1 Hack St"}
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/operational-profile",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("address_line_1", r.json()["error"]["details"])
+
+    def test_patch_operational_profile_rejects_google_place_id(self) -> None:
+        self._skip_if_no_db()
+        body = {"short_description": "Ok", "google_place_id": "ChIJxxxx"}
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/operational-profile",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("google_place_id", r.json()["error"]["details"])
+
+    def test_patch_operational_profile_missing_capability_returns_403(self) -> None:
+        self._skip_if_no_db()
+        _revoke_owner_capability(
+            self.e2e.venue_id,
+            self.e2e.owner_account_id,
+            E2E_CAPABILITY_DIRECT_EDIT,
+        )
+        try:
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                r = self.client.patch(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/operational-profile",
+                    data=json.dumps({"short_description": "Blocked"}),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            self.assertEqual(r.status_code, 403)
+            self.assertEqual(r.json()["error"]["code"], "forbidden")
+        finally:
+            with connection.cursor() as c:
+                c.execute(
+                    """
+                    SELECT bvmr.id::text
+                    FROM public.business_venue_management_relationship bvmr
+                    WHERE bvmr.venue_id = %s::uuid
+                    LIMIT 1
+                    """,
+                    [self.e2e.venue_id],
+                )
+                rel = c.fetchone()
+            if rel:
+                _restore_owner_capability(
+                    rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_DIRECT_EDIT
+                )
+
+    def test_patch_operational_profile_forbidden_for_unscoped_venue(self) -> None:
+        self._skip_if_no_db()
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.other_venue_id}/operational-profile",
+                data=json.dumps({"short_description": "Nope"}),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 403)
+
+    def test_patch_hours_replaces_regular_hours_transactionally(self) -> None:
+        self._skip_if_no_db()
+        audits_before = _count_owner_direct_edit_audits(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        body = {
+            "uncertainty_level": "resolved_confident",
+            "regular_hours_json": [
+                {
+                    "day_of_week": 1,
+                    "opens_at": "10:00",
+                    "closes_at": "22:00",
+                    "crosses_midnight": False,
+                }
+            ],
+            "exceptions_json": [],
+            "notes": "Monday hours only for direct-edit test.",
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/hours",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()["data"]
+        self.assertEqual(data["message"], "Opening hours saved.")
+        self.assertEqual(len(data["hours"]["regular"]), 1)
+        self.assertEqual(data["hours"]["regular"][0]["day_of_week"], 1)
+        self.assertEqual(data["hours"]["regular"][0]["opens_at"], "10:00")
+        self.assertEqual(data["hours"]["notes"], body["notes"])
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT day_of_week, opens_at::text, closes_at::text
+                FROM public.venue_hours_regular
+                WHERE venue_id = %s::uuid
+                ORDER BY day_of_week
+                """,
+                [self.e2e.venue_id],
+            )
+            rows = c.fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(int(rows[0][0]), 1)
+        self.assertTrue(rows[0][1].startswith("10:00"))
+        self.assertTrue(rows[0][2].startswith("22:00"))
+        self.assertEqual(
+            _count_owner_direct_edit_audits(
+                self.e2e.venue_id, self.e2e.owner_account_id
+            ),
+            audits_before + 1,
+        )
+
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            detail = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(detail.status_code, 200)
+        regular = detail.json()["data"]["published"]["hours"]["regular"]
+        self.assertEqual(len(regular), 1)
+        self.assertEqual(regular[0]["day_of_week"], 1)
+
+    def test_patch_hours_rejects_invalid_time(self) -> None:
+        self._skip_if_no_db()
+        body = {
+            "regular_hours_json": [
+                {
+                    "day_of_week": 2,
+                    "opens_at": "25:99",
+                    "closes_at": "22:00",
+                }
+            ],
+            "exceptions_json": [],
+            "notes": "Invalid time should fail validation here.",
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/hours",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        dumped = json.dumps(r.json()["error"]["details"])
+        self.assertIn("opens_at", dumped)
+
+    def test_patch_hours_rejects_invalid_day(self) -> None:
+        self._skip_if_no_db()
+        body = {
+            "regular_hours_json": [
+                {
+                    "day_of_week": 9,
+                    "opens_at": "10:00",
+                    "closes_at": "22:00",
+                }
+            ],
+            "exceptions_json": [],
+            "notes": "Invalid day should fail validation here.",
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/hours",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn(
+            "day_of_week",
+            json.dumps(r.json()["error"]["details"]),
+        )
+
+    def test_patch_hours_missing_capability_returns_403(self) -> None:
+        self._skip_if_no_db()
+        _revoke_owner_capability(
+            self.e2e.venue_id,
+            self.e2e.owner_account_id,
+            E2E_CAPABILITY_DIRECT_EDIT,
+        )
+        body = {
+            "regular_hours_json": [],
+            "exceptions_json": [],
+            "uncertainty_level": "unknown",
+            "notes": "Capability missing should block this save.",
+        }
+        try:
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                r = self.client.patch(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/hours",
+                    data=json.dumps(body),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            self.assertEqual(r.status_code, 403)
+        finally:
+            with connection.cursor() as c:
+                c.execute(
+                    """
+                    SELECT bvmr.id::text
+                    FROM public.business_venue_management_relationship bvmr
+                    WHERE bvmr.venue_id = %s::uuid
+                    LIMIT 1
+                    """,
+                    [self.e2e.venue_id],
+                )
+                rel = c.fetchone()
+            if rel:
+                _restore_owner_capability(
+                    rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_DIRECT_EDIT
+                )
+
+    def test_proposal_still_works_after_direct_edit_endpoints(self) -> None:
+        self._skip_if_no_db()
+        body = {
+            "section": "core_details",
+            "intent": "draft",
+            "payload": _core_payload(
+                locality_id=self.e2e.locality_id, confirm=False
+            ),
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/proposals",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.json()["data"]["lifecycle_status"], "staged")
 
     @patch("apps.owner.services.owner_venue_service.list_owner_venues")
     def test_multiple_venues_no_default(self, mock_list) -> None:

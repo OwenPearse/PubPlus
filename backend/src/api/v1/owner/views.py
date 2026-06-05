@@ -17,6 +17,8 @@ from apps.owner.services.owner_venue_service import (
     create_or_update_owner_core_details_proposal,
     get_owner_venue_detail,
     list_owner_venues,
+    patch_owner_operational_profile,
+    patch_owner_venue_hours,
 )
 from common.auth.guards import require_consumer_auth_api, require_owner_portal_auth
 from common.auth.request_context import get_auth_context
@@ -47,6 +49,15 @@ def _map_venue_scope_error(code: str) -> JsonResponse:
         return error_response(
             code="forbidden",
             message="Admin identities must use internal tools, not owner venue APIs.",
+            status=403,
+        )
+    if code == "missing_capability":
+        return error_response(
+            code="forbidden",
+            message=(
+                "Direct listing edits are not enabled for your account. "
+                "Contact support if you manage this venue."
+            ),
             status=403,
         )
     return error_response(
@@ -161,6 +172,14 @@ def owner_venue_proposals(request: HttpRequest, venue_id) -> JsonResponse:
     )
     if code == "ok" and result:
         return JsonResponse({"data": result}, status=201)
+    if code == "already_in_review" and result:
+        return JsonResponse({"data": result}, status=200)
+    if code == "proposal_already_in_review":
+        return error_response(
+            code="proposal_already_in_review",
+            message="Your latest changes are already submitted for review.",
+            status=409,
+        )
     if code == "validation_error" and details:
         return _validation_error(details=details)
     if code == "validation_error":
@@ -170,5 +189,75 @@ def owner_venue_proposals(request: HttpRequest, venue_id) -> JsonResponse:
     return error_response(
         code="owner_proposal_error",
         message="Could not save your proposal.",
+        status=500,
+    )
+
+
+def _parse_json_object_body(request: HttpRequest) -> tuple[dict[str, Any] | None, JsonResponse | None]:
+    try:
+        data = (
+            json.loads(request.body)
+            if isinstance(request.body, (bytes, bytearray)) and request.body
+            else {}
+        )
+    except json.JSONDecodeError:
+        return None, _validation_error("Request body must be valid JSON.")
+    if not isinstance(data, dict):
+        return None, _validation_error("Request body must be a JSON object.")
+    return data, None
+
+
+@require_http_methods(["PATCH"])
+@require_owner_portal_auth
+def owner_venue_operational_profile_patch(
+    request: HttpRequest, venue_id
+) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+    body, err_resp = _parse_json_object_body(request)
+    if err_resp is not None:
+        return err_resp
+    assert body is not None
+
+    result, code, details = patch_owner_operational_profile(
+        auth, str(venue_id), body
+    )
+    if code == "ok" and result:
+        return JsonResponse({"data": result}, status=200)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code in ("forbidden", "not_found", "admin_forbidden", "missing_capability"):
+        return _map_venue_scope_error(code)
+    return error_response(
+        code="owner_direct_edit_error",
+        message="Could not save your changes.",
+        status=500,
+    )
+
+
+@require_http_methods(["PATCH"])
+@require_owner_portal_auth
+def owner_venue_hours_patch(request: HttpRequest, venue_id) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+    body, err_resp = _parse_json_object_body(request)
+    if err_resp is not None:
+        return err_resp
+    assert body is not None
+
+    result, code, details = patch_owner_venue_hours(auth, str(venue_id), body)
+    if code == "ok" and result:
+        return JsonResponse({"data": result}, status=200)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code in ("forbidden", "not_found", "admin_forbidden", "missing_capability"):
+        return _map_venue_scope_error(code)
+    return error_response(
+        code="owner_direct_edit_error",
+        message="Could not save opening hours.",
         status=500,
     )
