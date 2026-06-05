@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 
@@ -10,7 +10,7 @@ import {
   type OwnerAuthProbeBody,
 } from "@/shared/lib/api";
 import { hasSupabaseAuthConfig } from "@/shared/lib/env";
-import { getCurrentSession, onAuthStateChange, signOut } from "@/shared/lib/supabase";
+import { onAuthStateChange, signOut, waitForSession } from "@/shared/lib/supabase";
 
 type Props = {
   children: ReactNode;
@@ -23,6 +23,7 @@ export function OwnerRouteGuard({ children }: Props) {
   const [probeStatus, setProbeStatus] = useState<200 | 403 | null>(null);
   const [probeResolved, setProbeResolved] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const sessionUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!hasSupabaseAuthConfig()) {
@@ -30,16 +31,41 @@ export function OwnerRouteGuard({ children }: Props) {
       return;
     }
     let active = true;
-    getCurrentSession().then((s) => {
-      if (active) setSession(s);
+    let sawAuthEvent = false;
+
+    const unsubscribe = onAuthStateChange((nextSession) => {
+      if (!active) return;
+      sawAuthEvent = true;
+      const nextUserId = nextSession?.user?.id ?? null;
+      if (sessionUserIdRef.current !== nextUserId) {
+        sessionUserIdRef.current = nextUserId;
+        setProbe(null);
+        setProbeStatus(null);
+        setProbeResolved(false);
+        setError(null);
+      }
+      setSession(nextSession);
       setLoading(false);
     });
-    const unsubscribe = onAuthStateChange((s) => {
-      setSession(s);
-      setProbe(null);
-      setProbeStatus(null);
-      setProbeResolved(false);
+
+    void waitForSession().then((hydratedSession) => {
+      if (!active) return;
+      if (hydratedSession) {
+        const hydratedUserId = hydratedSession.user?.id ?? null;
+        if (sessionUserIdRef.current !== hydratedUserId) {
+          sessionUserIdRef.current = hydratedUserId;
+          setProbe(null);
+          setProbeStatus(null);
+          setProbeResolved(false);
+          setError(null);
+        }
+        setSession(hydratedSession);
+      }
+      window.setTimeout(() => {
+        if (active && !sawAuthEvent) setLoading(false);
+      }, 50);
     });
+
     return () => {
       active = false;
       unsubscribe();
@@ -51,10 +77,12 @@ export function OwnerRouteGuard({ children }: Props) {
       setProbe(null);
       setProbeStatus(null);
       setProbeResolved(false);
+      setError(null);
       return;
     }
     let cancelled = false;
     setProbeResolved(false);
+    setError(null);
     ownerAuthProbe()
       .then((result) => {
         if (!cancelled) {
@@ -78,10 +106,11 @@ export function OwnerRouteGuard({ children }: Props) {
 
   async function handleSignOut() {
     await signOut();
+    sessionUserIdRef.current = null;
     setSession(null);
     setProbe(null);
     setProbeStatus(null);
-      setError(null);
+    setError(null);
   }
 
   if (!hasSupabaseAuthConfig()) {
@@ -104,19 +133,20 @@ export function OwnerRouteGuard({ children }: Props) {
   }
 
   if (!probeResolved) {
-    if (error) {
-      if (isApiRequestError(error) && error.code === "unauthorized") {
-        return <Navigate to="/access?reason=session_expired" replace />;
-      }
-      return (
-        <Navigate
-          to="/access/denied"
-          replace
-          state={{ message: formatApiError(error) }}
-        />
-      );
-    }
     return <p className="p-8 text-slate-600">Verifying owner portal access…</p>;
+  }
+
+  if (error) {
+    if (isApiRequestError(error) && error.code === "unauthorized") {
+      return <Navigate to="/access?reason=session_expired" replace />;
+    }
+    return (
+      <Navigate
+        to="/access/denied"
+        replace
+        state={{ message: formatApiError(error) }}
+      />
+    );
   }
 
   if (probeStatus === 403 || !probe?.owner_account_exists) {

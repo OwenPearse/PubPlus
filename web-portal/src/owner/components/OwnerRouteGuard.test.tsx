@@ -4,13 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OwnerRouteGuard } from "@/owner/components/OwnerRouteGuard";
 
-const getCurrentSession = vi.fn();
+const waitForSession = vi.fn();
 const onAuthStateChange = vi.fn();
 const ownerAuthProbe = vi.fn();
 const signOut = vi.fn();
 
 vi.mock("@/shared/lib/supabase", () => ({
-  getCurrentSession: () => getCurrentSession(),
+  waitForSession: () => waitForSession(),
   onAuthStateChange: (cb: (s: unknown) => void) => {
     onAuthStateChange(cb);
     return vi.fn();
@@ -72,15 +72,26 @@ function renderGuard() {
 }
 
 describe("OwnerRouteGuard", () => {
+  const ownerSession = { user: { id: "owner-1", email: "owner@example.com" } };
+
   beforeEach(() => {
-    getCurrentSession.mockReset();
+    waitForSession.mockReset();
     ownerAuthProbe.mockReset();
-    getCurrentSession.mockResolvedValue({ user: { email: "owner@example.com" } });
+    onAuthStateChange.mockReset();
+    waitForSession.mockResolvedValue(ownerSession);
+    onAuthStateChange.mockImplementation((cb: (s: unknown) => void) => {
+      cb(ownerSession);
+      return vi.fn();
+    });
     ownerAuthProbe.mockResolvedValue({ status: 200, body: portalHomeProbe });
   });
 
   it("redirects logged-out users to /access", async () => {
-    getCurrentSession.mockResolvedValue(null);
+    waitForSession.mockResolvedValue(null);
+    onAuthStateChange.mockImplementation((cb: (s: unknown) => void) => {
+      cb(null);
+      return vi.fn();
+    });
     renderGuard();
     await waitFor(() => {
       expect(screen.getByText("Access page")).toBeInTheDocument();
@@ -113,11 +124,19 @@ describe("OwnerRouteGuard", () => {
     });
   });
 
-  it("redirects to /access when probe returns unauthorized", async () => {
+  it("redirects to /access with session_expired when probe returns unauthorized", async () => {
     ownerAuthProbe.mockRejectedValue({ code: "unauthorized", status: 401, message: "expired" });
     renderGuard();
     await waitFor(() => {
       expect(screen.getByText("Access page")).toBeInTheDocument();
+    });
+  });
+
+  it("redirects to /access/denied when probe fails with a non-auth error", async () => {
+    ownerAuthProbe.mockRejectedValue({ code: "network_error", status: null, message: "offline" });
+    renderGuard();
+    await waitFor(() => {
+      expect(screen.getByText("Denied page")).toBeInTheDocument();
     });
   });
 

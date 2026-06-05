@@ -25,6 +25,7 @@ import {
   signOut,
   signUpWithPassword,
   updatePassword,
+  waitForSession,
 } from "@/shared/lib/supabase";
 
 type EntryMode = "sign-in" | "sign-up";
@@ -75,6 +76,20 @@ export function PortalEntryPage() {
       navigate(location.pathname + location.search, { replace: true, state: {} });
     }
   }, [location.pathname, location.search, location.state, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const session = await waitForSession();
+      if (!session || cancelled) return;
+      await routeAfterSignIn();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Resume post-auth when /access loads with an existing Supabase session (e.g. guard bounce).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only session restore
+  }, []);
 
   async function beginOptionalMfaSetup() {
     setPhase({ kind: "mfa-loading" });

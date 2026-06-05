@@ -50,6 +50,23 @@ export async function getCurrentSession(): Promise<Session | null> {
   return data.session;
 }
 
+/** Poll until Supabase exposes a session (post sign-in / route-guard hydration race). */
+export async function waitForSession(options?: {
+  maxAttempts?: number;
+  delayMs?: number;
+}): Promise<Session | null> {
+  const maxAttempts = options?.maxAttempts ?? 10;
+  const delayMs = options?.delayMs ?? 100;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const session = await getCurrentSession();
+    if (session) return session;
+    if (attempt + 1 < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return null;
+}
+
 export async function signInWithPassword(email: string, password: string) {
   const { data, error } = await getSupabaseClient().auth.signInWithPassword({
     email,

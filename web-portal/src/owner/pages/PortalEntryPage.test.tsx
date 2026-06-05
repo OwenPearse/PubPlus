@@ -12,6 +12,7 @@ const getVerifiedTotpFactorId = vi.fn();
 const sendPasswordResetEmail = vi.fn();
 const updatePassword = vi.fn();
 const signOut = vi.fn();
+const waitForSession = vi.fn();
 const resolvePortalRole = vi.fn();
 const ownerProvision = vi.fn();
 const navigate = vi.fn();
@@ -32,6 +33,7 @@ vi.mock("@/shared/lib/supabase", async () => {
     sendPasswordResetEmail: (...args: unknown[]) => sendPasswordResetEmail(...args),
     updatePassword: (...args: unknown[]) => updatePassword(...args),
     signOut: (...args: unknown[]) => signOut(...args),
+    waitForSession: (...args: unknown[]) => waitForSession(...args),
   };
 });
 
@@ -101,9 +103,11 @@ describe("PortalEntryPage", () => {
     sendPasswordResetEmail.mockReset();
     updatePassword.mockReset();
     signOut.mockReset();
+    waitForSession.mockReset();
     resolvePortalRole.mockReset();
     ownerProvision.mockReset();
     navigate.mockReset();
+    waitForSession.mockResolvedValue(null);
     resolvePostAuthMfaStep.mockResolvedValue("complete");
     resolvePortalRole.mockResolvedValue({ role: "admin" });
     ownerProvision.mockResolvedValue({});
