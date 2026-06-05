@@ -49,10 +49,10 @@ Full prerequisites, env details, simulators, and troubleshooting: **[README.loca
 | [README.local-run.md](./README.local-run.md) | Current | Install, env, run commands, validation, troubleshooting |
 | [README.structure.md](./README.structure.md) | Current | Workspace packages and integration file map |
 | [docs/environment-strategy.md](./docs/environment-strategy.md) | Current | Local/device/TestFlight env matrix, dev/prod Supabase split, backend alignment |
-| [docs/native-testflight-readiness.md](./docs/native-testflight-readiness.md) | Current | EAS/TestFlight path, native config audit, iOS checklists (planning) |
+| [docs/native-testflight-readiness.md](./docs/native-testflight-readiness.md) | Current | EAS/TestFlight path; **Stage 6B release pause**; rename checklist |
 | [../backend/docs/PRODUCTION_API_READINESS.md](../backend/docs/PRODUCTION_API_READINESS.md) | Current | Production Django API deploy readiness for TestFlight |
 | [docs/auth-sso-runbook.md](./docs/auth-sso-runbook.md) | Current | Supabase Auth, Google/Facebook/Apple SSO, redirect URLs, testing matrix |
-| Release / TestFlight checklist | Planned (Stage 6) | Store submission and prod smoke tests |
+| Release / TestFlight checklist | See [native-testflight-readiness.md](./docs/native-testflight-readiness.md) | Stage 6B: **paused** until final brand — no `eas init`/`eas build` |
 | [docs/integration-qa-checklists.md](./docs/integration-qa-checklists.md) | Reference | Historical stage manual verification checklists |
 
 ## Commands
@@ -69,6 +69,8 @@ Run from `consumer_app/` unless noted.
 | `corepack pnpm run typecheck` | TypeScript across workspace + mobile |
 | `corepack pnpm run openapi:lint` | Lint OpenAPI spec |
 | `corepack pnpm run openapi:generate` | Regenerate API client types from spec |
+| `corepack pnpm run mobile:eas:build:ios:dev` | EAS iOS development build (requires `eas login` + `eas init`) |
+| `corepack pnpm run mobile:expo:config` | Print public Expo config |
 
 There is **no mobile lint or test script** defined in this workspace today.
 
@@ -89,13 +91,13 @@ Backend integration tests (from `backend/`): see [README.local-run.md](./README.
 
 Local setup, **dev/prod Supabase split** (PubPlus Dev / PubPlus Prod), physical-device API URLs, and backend JWT alignment are documented in **[docs/environment-strategy.md](./docs/environment-strategy.md)**.
 
-TestFlight and production API URLs are **not finalised**; native/EAS planning: **[docs/native-testflight-readiness.md](./docs/native-testflight-readiness.md)**.
+TestFlight uses **provisional** PubPlus identifiers (`com.pubplus.mobile`, `pubplus`, `pubplus-production.up.railway.app`). **Stage 6B release pause:** do not run `eas init`, `eas build`, or create store records until final brand is chosen — see **[docs/native-testflight-readiness.md](./docs/native-testflight-readiness.md)**.
 
 ## Current limitations
 
-- **EAS/native config not implemented** — planning in [native TestFlight readiness](./docs/native-testflight-readiness.md); `eas.json` and bundle IDs still absent.
-- **SSO provider dashboards** — Google, Facebook, and Apple require manual setup (see [auth SSO runbook](./docs/auth-sso-runbook.md)); email/password works when Supabase env is set.
-- **No EAS config** — `eas.json` is not present; TestFlight/App Store path is unknown until configured.
+- **Native release paused (Stage 6B)** — EAS config exists (`eas.json`, provisional bundle ID) but **`eas init` / `eas build` / TestFlight are blocked** until final app name and identifiers are chosen. Rename checklist in [native TestFlight readiness](./docs/native-testflight-readiness.md).
+- **Provisional branding** — `PubPlus`, `com.pubplus.mobile`, `pubplus` scheme, and Railway domain are temporary scaffolding only.
+- **SSO provider dashboards** — Google, Facebook, and Apple require manual setup (see [auth SSO runbook](./docs/auth-sso-runbook.md)); **production** OAuth branding blocked until brand decision. Email/password works when Supabase env is set.
 - **Replit scripts are legacy** — `artifacts/mobile` `dev` script, `scripts/build.js`, and `server/serve.js` target Replit deployment. Use `mobile:*` / `start` / `web` for local development unless Replit is explicitly confirmed still in use.
 - **Physical devices** cannot reach `localhost` for the Django API — use a LAN IP or hosted backend URL (documented in local run guide).
 

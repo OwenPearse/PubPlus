@@ -14,6 +14,41 @@ Backend local setup: [backend/README.md](../README.md), [ENVIRONMENT_AND_LOCAL_D
 
 ---
 
+## Stage 6B — Brand-neutral pause (cross-cutting)
+
+**Owner decision:** The final public app name will **not** be PubPlus. **Native release work is paused** on the consumer side until permanent app identifiers are chosen. Backend Railway work **can continue** as a temporary development/test API.
+
+### Provisional identifiers
+
+| Layer | Provisional value |
+| ----- | ----------------- |
+| Mobile app display name | `PubPlus` |
+| iOS bundle ID / Android package | `com.pubplus.mobile` |
+| URL scheme | `pubplus` |
+| Railway API domain | `pubplus-production.up.railway.app` |
+
+### Do not proceed (consumer / native)
+
+Until the [rename checklist](../../consumer_app/docs/native-testflight-readiness.md#rename-checklist-when-new-brand-is-chosen) is complete:
+
+- `eas init`, `eas build`, TestFlight upload
+- App Store Connect / Play Console app creation
+- Apple Sign In production setup (final bundle ID)
+- Google / Facebook production OAuth branding
+- Final splash/icon and store metadata
+
+### Safe to continue (backend)
+
+- Railway deploy, env vars, health/auth smoke on provisional domain
+- Migrations, schema apply, real import data
+- API performance optimisation (home/search batch loading, etc.)
+- Supabase Dev/Prod split planning
+- Documentation
+
+Full pause details: [consumer_app/docs/native-testflight-readiness.md](../../consumer_app/docs/native-testflight-readiness.md#stage-6b--brand-neutral-pause-current-status).
+
+---
+
 ## 1. Current backend deployment status
 
 | Item | Repo finding |
@@ -364,7 +399,8 @@ EAS production profile injects mobile `EXPO_PUBLIC_*` at build time. Backend pro
 | **5E** | Home MVP reliability: default **3**, max **6** per section; re-smoke `/api/v1/home` | Done — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5E |
 | **5F** | Home/search batch card loading; discovery timing logs; re-smoke latency | Done in code — [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) § Stage 5F; Owen: deploy + curl |
 | **5G** | Create PubPlus Dev + Prod Supabase split (before external TestFlight) | Pending |
-| **5H** | Point TestFlight EAS at Railway URL + matching Supabase (native stages) | Pending |
+| **6B** | Brand-neutral pause — provisional identifiers; no `eas build`/TestFlight until rename | **Current** |
+| **5H / 7** | Point TestFlight EAS at Railway URL + matching Supabase (native stages) | **Paused** until brand decision |
 
 ---
 

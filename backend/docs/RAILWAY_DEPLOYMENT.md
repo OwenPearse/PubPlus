@@ -19,6 +19,41 @@ Related:
 
 ---
 
+## Stage 6B — Provisional naming and native release pause
+
+**Owner decision:** The final public app name will **not** be PubPlus. Native mobile release work is **paused** until permanent identifiers are chosen.
+
+### Provisional backend identifier
+
+| Item | Provisional value | Notes |
+| ---- | ----------------- | ----- |
+| Railway public domain | `pubplus-production.up.railway.app` | Temporary dev/test API host; referenced in mobile `eas.json` |
+| Railway project/service display name | May include "PubPlus" | Cosmetic only — rename when brand is final |
+
+This domain is **not** a permanent product URL. When the new brand is chosen, plan a custom domain or renamed Railway service and update `DJANGO_ALLOWED_HOSTS`, mobile `EXPO_PUBLIC_API_BASE_URL`, and EAS profiles per the [consumer rename checklist](../../consumer_app/docs/native-testflight-readiness.md#rename-checklist-when-new-brand-is-chosen).
+
+### Backend work — safe to continue
+
+- Railway deploy, env configuration, and smoke tests against the provisional domain
+- Database migrations (`database/supabase/migrations/`) and real import data loading
+- Home/search/discovery performance optimisation (Stages 5D–5F and follow-on)
+- Supabase Dev/Prod split planning and JWT alignment
+- Generic API testing (curl, mobile Expo Go pointing at Railway URL)
+- Documentation
+
+### Blocked on consumer side (not Railway deploy itself)
+
+Railway backend work does **not** require the final brand. These items wait for the **mobile/native** brand decision:
+
+- `eas init` / `eas build` / TestFlight builds pointing at this API
+- App Store Connect / Play Console app creation
+- Final Apple/Google/Facebook production OAuth branding
+- Locking privacy policy and support URLs for store/OAuth consent
+
+Do **not** run `eas init`, `eas build`, create App Store Connect records, or submit TestFlight builds until consumer [Stage 6B](../../consumer_app/docs/native-testflight-readiness.md#stage-6b--brand-neutral-pause-current-status) is resolved.
+
+---
+
 ## Railway project / service setup
 
 1. Create a Railway project (or use an existing one).
@@ -514,13 +549,13 @@ After push, Settings should be:
 | `EXPO_PUBLIC_API_BASE_URL` | No | Yes (`https://<railway-generated-domain>`) |
 | `EXPO_PUBLIC_SUPABASE_URL` | No | Yes (same project as backend) |
 
-Custom product domain, privacy policy URL, and store metadata are **out of scope** for this stage — use Railway’s generated domain until decided.
+Custom product domain, privacy policy URL, and store metadata are **out of scope** until the final brand is chosen (Stage 6B). The current `pubplus-production.up.railway.app` hostname is **provisional** — use it for dev/test smoke only until rename.
 
 ---
 
 ## Custom domain (later)
 
-Not required for initial TestFlight backend smoke. When the product domain is chosen:
+**Paused for TestFlight (Stage 6B)** until final brand is chosen. Railway provisional domain (`pubplus-production.up.railway.app`) is sufficient for backend dev/test smoke. When the product domain is chosen:
 
 1. Add custom domain in Railway networking.
 2. Append the new hostname to `DJANGO_ALLOWED_HOSTS`.

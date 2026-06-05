@@ -8,14 +8,54 @@ Entry point: [README.md](../README.md). Local run commands: [README.local-run.md
 
 ---
 
+## Stage 6B — Provisional identifiers and release pause
+
+**Owner decision:** The final public app name will **not** be PubPlus. Native release work is **paused** until permanent identifiers are chosen.
+
+### Provisional values (temporary — revisit before release)
+
+| Item | Provisional value |
+| ---- | ----------------- |
+| App display name | `PubPlus` |
+| iOS bundle ID | `com.pubplus.mobile` |
+| Android package | `com.pubplus.mobile` |
+| URL scheme | `pubplus` |
+| Production API domain | `pubplus-production.up.railway.app` |
+
+The Railway URL is a **temporary dev/test backend** — useful for API smoke and performance work, not a permanent product domain.
+
+### Do not proceed until brand is final
+
+Do **not** run `eas init`, `eas build`, create App Store Connect / Play Console records, configure final Apple/Google/Facebook production OAuth apps, or submit TestFlight builds until the rename checklist in [native-testflight-readiness.md](./native-testflight-readiness.md#rename-checklist-when-new-brand-is-chosen) is complete.
+
+### Safe to continue
+
+- Local dev and Expo Go with **Supabase Dev** + local or Railway API
+- Backend performance optimisation and Railway deploy/smoke
+- Database migrations, import planning, and data work
+- Supabase Dev/Prod split **planning** (display names can change later)
+- Generic API testing (`EXPO_PUBLIC_API_BASE_URL` pointing at Railway for device smoke)
+- UI/UX work that does not depend on final brand
+- Documentation
+
+### Blocked until brand decision
+
+- EAS project linking and native builds for TestFlight
+- App Store Connect / Play Console app creation
+- Production OAuth provider branding (Google consent screen, Meta Live app, Apple Services ID for final bundle ID)
+- Locking `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` / URL scheme in provider dashboards for production
+- Final privacy policy and support URLs in store/OAuth flows
+
+---
+
 ## 1. Environment overview
 
 | Environment | Purpose | Mobile API target (`EXPO_PUBLIC_API_BASE_URL`) | Supabase target |
 | ----------- | ------- | ---------------------------------------------- | --------------- |
 | **Local dev** | Cursor/local Expo on simulator or web | `http://localhost:8000` (local Django) or other reachable **dev** backend | **Supabase Dev** |
 | **Physical device / Expo Go** | Real phone smoke testing | LAN IP, ngrok, or **staging** URL — **not** `localhost` on the phone | **Supabase Dev** |
-| **TestFlight** | iOS pre-release testing (production-like) | **Deployed production API** (URL TBD; deploy before TestFlight) | **Supabase Prod** — see [native-testflight-readiness.md](./native-testflight-readiness.md) |
-| **Production** | App Store / Play Store users | **Unknown** — production API URL not finalised | **Supabase Prod** |
+| **TestFlight** | iOS pre-release testing (production-like) | **`https://pubplus-production.up.railway.app`** | **Supabase Prod** (or current project for internal smoke) |
+| **Production** | App Store / Play Store users | **`https://pubplus-production.up.railway.app`** | **Supabase Prod** |
 
 ### Notes
 
@@ -57,7 +97,7 @@ All mobile config is read from `EXPO_PUBLIC_*` variables (see `artifacts/mobile/
 
 | Variable | Required | Example (placeholder) | Local dev | Physical device / Expo Go | TestFlight / Prod |
 | -------- | -------- | --------------------- | --------- | ------------------------- | ----------------- |
-| `EXPO_PUBLIC_API_BASE_URL` | Yes (has code default `http://localhost:8000`) | `http://localhost:8000` | Local Django on same machine | `http://<LAN-IP>:8000` or `https://<staging-host>` | `https://<production-or-staging-api-url>` (**unknown**) |
+| `EXPO_PUBLIC_API_BASE_URL` | Yes (has code default `http://localhost:8000`) | `http://localhost:8000` | Local Django on same machine | `http://<LAN-IP>:8000` or Railway URL for device smoke | **`https://pubplus-production.up.railway.app`** (EAS preview/production) |
 | `EXPO_PUBLIC_SUPABASE_URL` | Yes for auth | `https://<pubplus-dev-project-ref>.supabase.co` | **Dev** project URL | **Dev** project URL | **Prod** project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Yes for auth | `<pubplus-dev-anon-key>` | **Dev** anon key | **Dev** anon key | **Prod** anon key |
 | `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` | No (default `pubplus`) | `pubplus` | `pubplus` | `pubplus` | `pubplus` (unless native IDs change later) |
@@ -70,7 +110,7 @@ All mobile config is read from `EXPO_PUBLIC_*` variables (see `artifacts/mobile/
 - Django API **origin only** (no trailing path); app calls `/api/v1/...` under this base.
 - Physical devices: `localhost` points at the phone, not your PC.
 - For TestFlight, backend must allow the deployment host in `DJANGO_ALLOWED_HOSTS` and CORS if web clients are used.
-- Production URL: **not finalised**.
+- Production URL: **`https://pubplus-production.up.railway.app`** — set in EAS `preview`/`production` profiles (`eas.json`); local `.env` stays on localhost for dev.
 
 **`EXPO_PUBLIC_SUPABASE_URL`**
 
@@ -128,16 +168,26 @@ EXPO_PUBLIC_AUTH_REDIRECT_SCHEME=pubplus
 
 ### Future TestFlight (and production builds)
 
-Use **Supabase Prod**. API host is a product decision:
+Production API URL is configured in **`eas.json`** for `preview` and `production` profiles. Supabase values must be **EAS secrets** (not git):
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=https://<production-or-staging-api-url>
-EXPO_PUBLIC_SUPABASE_URL=https://<pubplus-prod-project-ref>.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<pubplus-prod-anon-key>
+EXPO_PUBLIC_API_BASE_URL=https://pubplus-production.up.railway.app
+EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 EXPO_PUBLIC_AUTH_REDIRECT_SCHEME=pubplus
 ```
 
-These values are typically set in **EAS build secrets / env** ([native-testflight-readiness.md](./native-testflight-readiness.md)), not checked into the repo.
+Create secrets:
+
+```bash
+cd consumer_app/artifacts/mobile
+npx eas secret:create --name EXPO_PUBLIC_SUPABASE_URL --value "https://<ref>.supabase.co" --scope project
+npx eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "<anon-key>" --scope project
+```
+
+**Internal smoke** may use the current single Supabase project temporarily. Create **PubPlus Prod** before inviting external TestFlight testers. Never put service role keys in EAS/mobile env.
+
+See [native-testflight-readiness.md](./native-testflight-readiness.md) for profile details.
 
 ---
 
@@ -191,22 +241,38 @@ OAuth uses path `auth/callback` (see `artifacts/mobile/lib/supabase.ts`). Allow 
 
 ## 7. What changes when the app name is final
 
-Keep these as **placeholders / unknown** in env docs until Owen decides:
+**Stage 6B:** All PubPlus-branded identifiers are **provisional**. Native release is **paused** until the checklist below is completed.
 
-| Item | Status |
-| ---- | ------ |
-| Public app name | Not finalised |
-| iOS bundle ID | Not finalised |
-| Android application ID / package name | Not finalised |
-| App Store Connect record | Not created / unknown |
-| Google Play package | Not finalised |
-| Production OAuth app display names | Depend on final branding |
-| Production API domain | Not finalised |
-| Support/marketing URLs in store listings | Unknown |
+| Item | Current provisional status |
+| ---- | -------------------------- |
+| App display name | `PubPlus` — will change |
+| iOS bundle ID | `com.pubplus.mobile` — will change |
+| Android package | `com.pubplus.mobile` — will change |
+| URL scheme | `pubplus` — likely will change |
+| Production API domain | `pubplus-production.up.railway.app` — temporary; custom domain TBD |
+| App Store Connect record | **Not created** (blocked) |
+| Google Play package | **Not created** (blocked) |
+| Production OAuth app display names | **Blocked** until final branding |
+| Privacy policy / support URLs | **Unknown** — required before store + OAuth consent |
 
-Environment documentation should use **generic project names** (PubPlus Dev / PubPlus Prod) and placeholder refs — not lock in branding or bundle IDs prematurely.
+### Rename checklist (when new brand is chosen)
 
-When bundle IDs change, update `app.json` / EAS config (Stage 4) and provider OAuth apps ([auth-sso-runbook.md](./auth-sso-runbook.md)); `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` may stay `pubplus` unless the URL scheme changes.
+- [ ] App display name (`expo.name`, store title)
+- [ ] Expo slug / EAS project name
+- [ ] iOS bundle identifier (`expo.ios.bundleIdentifier`, Apple Developer, App Store Connect)
+- [ ] Android package name (`expo.android.package`, Play Console)
+- [ ] URL scheme (`expo.scheme`, `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME`, Supabase + provider redirect allow-lists)
+- [ ] Railway service/domain naming; `EXPO_PUBLIC_API_BASE_URL` in EAS profiles; `DJANGO_ALLOWED_HOSTS`
+- [ ] Supabase project display names (dashboard labels only — refs unchanged unless projects recreated)
+- [ ] OAuth redirect URLs in Google, Facebook, Apple dashboards per Dev/Prod project
+- [ ] Google / Facebook / Apple app names on OAuth consent screens
+- [ ] Privacy policy URL
+- [ ] Support URL
+- [ ] App Store / Play Store metadata (descriptions, screenshots, categories)
+
+After rename: update `app.json`, `eas.json`, EAS secrets, [auth-sso-runbook.md](./auth-sso-runbook.md), and backend `DJANGO_ALLOWED_HOSTS` if the API domain changes.
+
+Full pause details and blocked actions: [native-testflight-readiness.md](./native-testflight-readiness.md#stage-6b--brand-neutral-pause-current-status).
 
 ---
 
@@ -233,12 +299,11 @@ For Owen (manual steps in Supabase and local machine):
 
 | Question | Why it matters |
 | -------- | -------------- |
-| **Production API URL** | Required for TestFlight/prod `EXPO_PUBLIC_API_BASE_URL` |
-| **Staging API URL** | May be used for TestFlight instead of prod API — undecided |
-| **TestFlight API target** | Should TestFlight hit prod API or staging? |
+| **Production API URL** | **`https://pubplus-production.up.railway.app`** — in EAS profiles |
+| **TestFlight API target** | Production Railway backend (same as above) |
 | **Final public app name** | Store listings and OAuth app names |
-| **iOS bundle ID / Android package name** | EAS and store consoles (Stage 4) |
-| **EAS org / project linkage** | Expo account exists; EAS setup not confirmed |
+| **iOS bundle ID / Android package** | **`com.pubplus.mobile`** — confirm before stores |
+| **EAS org / project linkage** | Run `eas init` — config in repo, link pending |
 | **Dev + prod backend deployments** | Whether two Django deployments mirror two Supabase projects |
 | **Replit** | Still required for any environment? Currently legacy/unconfirmed |
 | **Dedicated staging Supabase** | Two-project split (Dev/Prod) may be enough, or a third “Staging” project may be needed later |

@@ -2,7 +2,9 @@
 
 Source of truth for Supabase Auth, OAuth providers (Google, Facebook, Apple), redirect URLs, and testing across local dev, Expo Go, and future TestFlight/production builds.
 
-**Documentation only** — does not configure Supabase, provider dashboards, EAS, or native projects.
+**Stage 6:** EAS/native config in repo (`eas.json`, bundle ID). Does not configure Supabase dashboards or run cloud builds.
+
+**Stage 6B:** Native release **paused** — provisional identifiers (`PubPlus`, `com.pubplus.mobile`, `pubplus`, `pubplus-production.up.railway.app`). Do **not** run `eas init`/`eas build`, create store records, or configure **production** OAuth branding until final brand is chosen. See [native-testflight-readiness.md](./native-testflight-readiness.md#stage-6b--brand-neutral-pause-current-status).
 
 Related docs:
 
@@ -32,10 +34,21 @@ Mobile app (artifacts/mobile)
 | Launch requirement | Google, Facebook, and Apple SSO required for launch day |
 | Apple validation | Must be verified on **native iOS** (dev build or TestFlight) — not only web/Android |
 | Frontend secrets | Only `EXPO_PUBLIC_SUPABASE_ANON_KEY` — never service role or provider client secrets |
-| TestFlight target | **PubPlus Prod** Supabase + **deployed production backend** (production-like; API URL TBD) |
+| TestFlight target | **PubPlus Prod** Supabase (or current project for internal smoke) + **`https://pubplus-production.up.railway.app`** |
 | Local dev target | **PubPlus Dev** Supabase + local (or reachable dev) Django |
 
 Provider client IDs and secrets are stored in the **Supabase dashboard** per project, not in mobile env files.
+
+### Provisional identifiers (Stage 6B)
+
+| Item | Provisional value | Notes |
+| ---- | ----------------- | ----- |
+| URL scheme | `pubplus` | Native redirect: `pubplus://auth/callback` |
+| iOS bundle ID | `com.pubplus.mobile` | Apple Sign In production requires **final** bundle ID |
+| App display name | `PubPlus` | OAuth consent screens and store listings |
+| Backend URL | `https://pubplus-production.up.railway.app` | Temporary test backend; not permanent product domain |
+
+**Release pause:** Do not configure final Google/Facebook/Apple **production** OAuth apps, App Store Connect Sign in with Apple, or TestFlight SSO validation until the [rename checklist](./native-testflight-readiness.md#rename-checklist-when-new-brand-is-chosen) is complete. Dev Supabase OAuth setup for local/Expo Go smoke may continue.
 
 ---
 
@@ -100,7 +113,7 @@ Profile sign-out: `app/(tabs)/profile.tsx` calls `signOut()` from `lib/supabase.
 | **No cold-start deep-link handler** | No `Linking.getInitialURL` / `useURL` listener for `pubplus://auth/callback` if OAuth returns while app was backgrounded or closed — flow assumes `openAuthSessionAsync` returns in-session |
 | **No `/auth/callback` route** | Direct navigation to `/auth/callback` on web may 404; normal OAuth path uses browser session return URL |
 | **Expo Go vs dev build** | Provider OAuth may behave differently; Apple especially needs native/TestFlight validation |
-| **iOS bundle ID not set** | `app.json` has no `ios.bundleIdentifier` yet — blocked until EAS/native implementation — [native-testflight-readiness.md](./native-testflight-readiness.md) |
+| **iOS bundle ID** | **`com.pubplus.mobile`** in `app.json` — confirm before App Store |
 
 ### Proposed future work (not implemented in Stage 3)
 
@@ -116,8 +129,8 @@ Profile sign-out: `app/(tabs)/profile.tsx` calls `signOut()` from `lib/supabase.
 | ----------- | ---------------- | ------------------------ | -------------- | ----- |
 | **Local web** | PubPlus Dev | Local Django (Dev Supabase in `backend/.env`) | `http://localhost:8081/auth/callback` | Use mobile emulation; add `8082` if port changes |
 | **Expo Go / local native** | PubPlus Dev | Local or LAN Django | `pubplus://auth/callback` | Some OAuth providers limited in Expo Go |
-| **Future iOS dev build** | PubPlus Dev | Dev backend | `pubplus://auth/callback` | Preferred for Apple/Google native OAuth testing |
-| **TestFlight** | PubPlus Prod | **Deployed production API** (URL TBD) | `pubplus://auth/callback` | Production-like; deploy API before TestFlight |
+| **Future iOS dev build** | Dev or current Supabase | Dev backend or Railway prod API | `pubplus://auth/callback` | EAS `development` profile + `expo-dev-client` — [native-testflight-readiness.md](./native-testflight-readiness.md) |
+| **TestFlight** | PubPlus Prod (or current for internal) | **`https://pubplus-production.up.railway.app`** | `pubplus://auth/callback` | EAS `production` profile + secrets |
 | **App Store** | PubPlus Prod | Production API | `pubplus://auth/callback` | Same as TestFlight auth config |
 
 **Owner direction:** Skip a third staging Supabase project for now. TestFlight uses **Prod** Supabase and production backend, not Dev.
@@ -332,7 +345,7 @@ Use **PubPlus Dev** + local dev backend unless noted. After OAuth success, confi
 | Risk | Detail |
 | ---- | ------ |
 | Final app name / domain | Store and OAuth branding URLs undecided |
-| iOS bundle ID / Android package | Not in `app.json`; blocks production Apple and EAS |
+| iOS bundle ID / Android package | **`com.pubplus.mobile`** (provisional — Stage 6B pause before App Store) |
 | No EAS / native build yet | TestFlight and reliable Apple OAuth blocked — [native-testflight-readiness.md](./native-testflight-readiness.md) |
 | No production API deployed yet | Must deploy before TestFlight; URL unknown |
 | Supabase Dev/Prod | May not exist yet — owner checklist below |
@@ -364,9 +377,10 @@ Use **PubPlus Dev** + local dev backend unless noted. After OAuth success, confi
 
 | Stage | Topic |
 | ----- | ----- |
-| **Native/EAS** | [native-testflight-readiness.md](./native-testflight-readiness.md) — implementation stages 5–10 listed there |
+| **Stage 6B** | Brand-neutral pause — no production OAuth branding or TestFlight SSO until rename |
+| **Native/EAS** | [native-testflight-readiness.md](./native-testflight-readiness.md) — Stages 7–10 **paused** until brand |
 | **Post-native** | Apple validation; decide on `expo-apple-authentication` if TestFlight fails |
-| **TestFlight** | SSO smoke on Prod Supabase + production API |
+| **TestFlight** | SSO smoke on Prod Supabase + production API — **after** brand + provider prod apps |
 | **Launch** | App Store metadata, privacy, provider prod review |
 
 Do not implement these in the auth runbook stage.

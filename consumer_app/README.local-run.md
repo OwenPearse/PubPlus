@@ -148,10 +148,31 @@ Use `mobile:start`, `mobile:web`, `mobile:android`, `mobile:ios`, or the equival
 
 Whether Replit deployment remains a supported path is **unconfirmed** — treat as legacy until Owen confirms.
 
+## Native / EAS (Stage 6 + 6B pause)
+
+Expo Go remains the **default and recommended** local path.
+
+**Stage 6B — release paused:** The final app name will not be PubPlus. Do **not** run `eas init`, `eas build`, create App Store / Play records, or configure production OAuth until the final brand is chosen. See [native-testflight-readiness.md](./docs/native-testflight-readiness.md#stage-6b--brand-neutral-pause-current-status).
+
+Provisional identifiers in repo (temporary only):
+
+| Item | Value |
+| ---- | ----- |
+| App display name | `PubPlus` |
+| Bundle ID / package | `com.pubplus.mobile` |
+| URL scheme | `pubplus` |
+
+When brand is final, complete the rename checklist in [native-testflight-readiness.md](./docs/native-testflight-readiness.md) before resuming iOS dev builds:
+
+```bash
+# Blocked until brand decision — do not run yet
+corepack pnpm run mobile:eas:build:ios:dev
+```
+
 ## Known gaps
 
 - **No mobile lint or test script** in workspace `package.json` today.
 - **SSO** (Google, Facebook, Apple) requires Supabase and external provider setup — [auth SSO runbook](./docs/auth-sso-runbook.md).
-- **Native dev builds / EAS / TestFlight** — not documented yet (Stage 4–6). Expo Go is the current local device path.
+- **Native dev builds / TestFlight** — **Paused (Stage 6B)** until final brand; EAS config is scaffolding only — [native-testflight-readiness.md](./docs/native-testflight-readiness.md).
 - **Event discovery UI** is deferred when API returns empty event data.
 - **Profile taste preferences** (drinks, features, etc.) are deferred; default suburb and notification toggles are supported.

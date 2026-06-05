@@ -1,6 +1,6 @@
 # Native, EAS, and TestFlight Readiness — Consumer Mobile App
 
-Source of truth for moving from **Expo Go** smoke success to **EAS native builds**, **iOS dev builds**, and **TestFlight** (production-like). This document plans future implementation; it does **not** create `eas.json`, bundle IDs, or native config.
+Source of truth for moving from **Expo Go** smoke success to **EAS native builds**, **iOS dev builds**, and **TestFlight** (production-like).
 
 Related docs:
 
@@ -10,24 +10,94 @@ Related docs:
 
 ---
 
+## Stage 6B — Brand-neutral pause (current status)
+
+**Owner decision:** The final public app name will **not** be PubPlus. A new product name/brand is in development. **Native release work is paused** until permanent app identifiers are chosen.
+
+### Provisional identifiers (do not treat as final)
+
+All of the following were added in Stage 6 for config scaffolding only. **Revisit every item before EAS linking, App Store Connect, or TestFlight:**
+
+| Identifier | Current provisional value | Where it appears |
+| ---------- | ------------------------- | ---------------- |
+| **App display name** | `PubPlus` | `app.json` `expo.name` |
+| **iOS bundle identifier** | `com.pubplus.mobile` | `app.json` `expo.ios.bundleIdentifier` |
+| **Android package name** | `com.pubplus.mobile` | `app.json` `expo.android.package` |
+| **URL scheme / deep link** | `pubplus` | `app.json` `expo.scheme`, `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME`, OAuth redirects (`pubplus://auth/callback`) |
+| **Railway backend domain** | `pubplus-production.up.railway.app` | `eas.json` `EXPO_PUBLIC_API_BASE_URL`, backend docs |
+
+The Railway URL remains useful as a **temporary development/test backend**; it is not a permanent product domain.
+
+### Release pause — do not proceed until brand is final
+
+**Do not run** any of the following until the final brand, app name, and native identifiers are chosen:
+
+- `eas init` (EAS project linking)
+- `eas build` (any profile — development, preview, or production)
+- App Store Connect app record creation
+- Google Play Console app record creation
+- Final Apple Sign In **production** setup (Services ID tied to final bundle ID)
+- Final Google / Facebook **production** OAuth app branding and consent screens
+- TestFlight build upload or internal/external tester invites
+- Final splash screen, app icon, and store marketing assets
+
+Stage 6 config files (`eas.json`, `app.json` bundle IDs) remain in the repo as **scaffolding** — they are not approval to ship under the PubPlus name.
+
+### Rename checklist (when new brand is chosen)
+
+Complete this checklist before resuming Stage 7+ native release work:
+
+- [ ] **App display name** — `expo.name` in `app.json` and store listing title
+- [ ] **Expo slug / EAS project name** — `expo.slug` and Expo dashboard project name
+- [ ] **iOS bundle identifier** — `expo.ios.bundleIdentifier`, Apple Developer App ID, App Store Connect
+- [ ] **Android package name** — `expo.android.package`, Play Console application ID
+- [ ] **URL scheme** — `expo.scheme`, `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME`, Supabase redirect allow-list, provider OAuth redirect URIs
+- [ ] **Railway service / domain naming** — Railway project/service display name; optional custom domain; `DJANGO_ALLOWED_HOSTS`; mobile `EXPO_PUBLIC_API_BASE_URL` in EAS profiles
+- [ ] **Supabase project display names** — dashboard labels (e.g. “PubPlus Dev” → new brand); project refs/URLs unchanged unless projects are recreated
+- [ ] **OAuth redirect URLs** — Supabase Auth allow-list per Dev/Prod project; `https://<ref>.supabase.co/auth/v1/callback` in Google/Facebook/Apple dashboards
+- [ ] **Google / Facebook / Apple app names** — OAuth consent screens, Meta app display name, Apple Services ID labels
+- [ ] **Privacy policy URL** — store listings and OAuth consent (Google, Facebook, Apple, App Store)
+- [ ] **Support URL** — store listings and OAuth consent
+- [ ] **App Store / Play Store metadata** — descriptions, keywords, screenshots, categories, age rating
+
+After the checklist, update [auth-sso-runbook.md](./auth-sso-runbook.md) redirect allow-lists and [environment-strategy.md](./environment-strategy.md) env examples.
+
+### Safe to continue (no brand lock-in)
+
+- Backend performance optimisation (Railway deploy, home/search tuning)
+- Database migrations, schema work, and data/import pipelines
+- Supabase Dev/Prod split **planning** (project creation can use generic display names)
+- Generic API testing against Railway or local Django
+- UI/UX work in Expo Go / web that does not depend on final brand (screens, navigation, API integration)
+- Documentation updates
+
+### Blocked until brand decision
+
+- EAS project linking (`eas init`)
+- Native builds intended for TestFlight or App Store submission
+- App Store Connect / Play Console app creation
+- Apple Sign In production setup (requires final bundle ID)
+- Google / Facebook production OAuth branding and Live-mode apps
+- Final splash screen, app icon, and store marketing creative
+
+---
+
 ## 1. Current native readiness summary
 
 | Area | State |
 | ---- | ----- |
 | **Expo Go** | Suitable for smoke testing; previously passed for core flows |
-| **Email/password auth** | Works when Supabase Dev env is configured |
-| **Native dev builds** | Not configured — no `eas.json`, no iOS bundle ID |
-| **EAS** | Intended; owner has Expo account; **EAS project/link not confirmed in repo** |
-| **TestFlight** | Not started — blocked on production API, EAS, identifiers, Prod Supabase |
-| **SSO (Google/Facebook/Apple)** | Code exists; provider dashboards incomplete; **native validation required** for launch |
-| **Apple Sign In** | Supabase browser OAuth via `expo-web-browser` — not `expo-apple-authentication` |
+| **Email/password auth** | Works when Supabase env is configured |
+| **EAS config** | **`eas.json` added** (Stage 6) — profiles: `development`, `preview`, `production` |
+| **Native identifiers** | **`com.pubplus.mobile`** — iOS bundle ID + Android package in `app.json` (**confirm before public launch**) |
+| **`expo-dev-client`** | **Installed** — required for EAS `development` profile builds |
+| **EAS project link** | **Paused (Stage 6B)** — do not run `eas init` until brand/identifiers final |
+| **TestFlight** | **Paused (Stage 6B)** — config scaffolding only; blocked on final brand + identifiers |
+| **Production API** | **`https://pubplus-production.up.railway.app`** — baked into EAS `preview`/`production` profiles |
+| **SSO (Google/Facebook/Apple)** | Code exists; provider dashboards incomplete; **native validation required** |
 | **Typecheck / OpenAPI lint** | Pass from `consumer_app/` |
-| **Mobile lint/test scripts** | None defined |
-| **Replit deploy** | Legacy — not required for current release path |
 
-**Bottom line:** Expo Go proves JS bundle and integration; **TestFlight readiness is a separate track** requiring EAS, native identifiers, deployed production backend, and Prod Supabase.
-
-**Backend blocker:** TestFlight needs a **deployed** Railway Django API (config in repo: [backend/docs/RAILWAY_DEPLOYMENT.md](../../backend/docs/RAILWAY_DEPLOYMENT.md); readiness: [PRODUCTION_API_READINESS.md](../../backend/docs/PRODUCTION_API_READINESS.md)). Owen deploys; generated Railway domain is enough for initial smoke.
+**Bottom line:** Stage 6 adds EAS/native **config scaffolding** with **provisional PubPlus identifiers**. Stage 6B **pauses** `eas init`, `eas build`, and TestFlight until the final brand is chosen. See [Stage 6B](#stage-6b--brand-neutral-pause-current-status).
 
 ---
 
@@ -37,12 +107,11 @@ Primary path is **iOS first** (TestFlight). Android internal testing is follow-u
 
 ```text
 Expo Go smoke (done / ongoing for JS-level QA)
-  -> EAS project setup + eas.json
-  -> iOS development build (expo-dev-client TBD)
+  -> EAS project setup (eas init) + eas.json  [config done Stage 6]
+  -> iOS development build (expo-dev-client)
   -> native iPhone smoke (API, auth, SSO, core tabs)
-  -> deploy production Django backend (URL TBD)
-  -> configure Prod Supabase + provider OAuth (prod)
-  -> TestFlight build (Prod Supabase + production API via EAS env)
+  -> configure EAS Supabase secrets (Dev for dev build; Prod before external TestFlight)
+  -> TestFlight build (production profile)
   -> TestFlight auth/SSO validation (Google, Facebook, Apple)
   -> App Store metadata / privacy / review readiness
 ```
@@ -69,74 +138,95 @@ No third **staging** Supabase project for now (owner direction).
 
 ---
 
-## 4. Native identifiers and naming decisions
+| Item | Value | Notes |
+| ---- | ----- | ----- |
+| **App display name** | `PubPlus` in `app.json` `expo.name` | Final public name may change |
+| **Expo slug** | `mobile` | EAS project slug reference |
+| **iOS bundle ID** | **`com.pubplus.mobile`** | Confirm before App Store Connect |
+| **Android package** | **`com.pubplus.mobile`** | Android follow-up; not immediate priority |
+| **URL scheme / deep link** | `pubplus` | OAuth: `pubplus://auth/callback` |
+| **Production API URL** | **`https://pubplus-production.up.railway.app`** | In EAS `preview`/`production` `env` |
+| **Privacy policy / support URLs** | **Unknown** | Required for store + OAuth consent |
 
-These are **not final**. Do not create permanent App Store / Play records or hardcode production names in repo docs until Owen confirms.
+### Identifier policy
 
-| Item | Current / placeholder | Notes |
-| ---- | --------------------- | ----- |
-| **App display name** | `PubPlus` in `app.json` `expo.name` | Final public name **not chosen** |
-| **Expo slug** | `mobile` | May differ from store listing name |
-| **iOS bundle ID** | **Missing** in `app.json` | Required for EAS iOS + Apple Developer |
-| **Android package name** | **Missing** in `app.json` `android.package` | Required for Play; follow-up after iOS |
-| **URL scheme / deep link** | `pubplus` (`scheme` in `app.json`) | Used for `pubplus://auth/callback`; may change with final branding |
-| **Production API URL** | **Unknown** | Must exist before TestFlight |
-| **Production web domain** | **Unknown** | Only if web OAuth against prod domain later |
-| **Privacy policy / support URLs** | **Unknown** | Required for store + OAuth consent screens |
-
-### Placeholder policy
-
-- Use `PubPlus Dev` / `PubPlus Prod` and `<bundle-id TBD>` in planning docs.
-- Avoid committing real bundle IDs or store IDs until a dedicated implementation stage.
-- EAS env injection should carry secrets/URLs — not source-controlled `.env` for prod.
+- **All PubPlus identifiers are provisional (Stage 6B)** — `PubPlus`, `com.pubplus.mobile`, `pubplus`, and `pubplus-production.up.railway.app` must be revisited before any release setup. See [rename checklist](#rename-checklist-when-new-brand-is-chosen).
+- **Do not run `eas init`, `eas build`, or create store records** until the final brand is chosen.
+- EAS Supabase values use **secrets**, not git.
+- Do not commit populated `.env` or anon keys.
 
 ---
 
-## 5. EAS setup requirements (future implementation)
+## 5. EAS setup (Stage 6 — implemented)
 
-A later stage will **create** configuration; this section lists decisions only.
+### Files
 
-### EAS project
+| File | Purpose |
+| ---- | ------- |
+| `artifacts/mobile/eas.json` | Build profiles |
+| `artifacts/mobile/app.json` | Bundle ID, package, scheme, plugins |
+| `artifacts/mobile/.env.example` | Local env template + EAS secret notes |
 
-- [ ] Link `artifacts/mobile` to an EAS project (`eas init` or equivalent) under owner Expo account.
-- [ ] Confirm org/team name on Expo — **unknown** from repo.
+### Build profiles (`eas.json`)
 
-### `eas.json` (to be created later)
+| Profile | Purpose | Key settings |
+| ------- | ------- | -------------- |
+| **development** | iOS dev client, internal device testing | `developmentClient: true`, `distribution: internal` |
+| **preview** | Internal production-like build before TestFlight | Production API URL in `env`; Supabase via **EAS secrets** |
+| **production** | TestFlight / App Store archive | Production API URL; `autoIncrement: true`; Supabase via **EAS secrets** |
 
-Likely build profiles:
+Public env in `eas.json` (not secrets):
 
-| Profile | Purpose |
-| ------- | ------- |
-| **development** | Dev client, internal device testing, **PubPlus Dev** Supabase + dev/reachable API |
-| **preview** (optional) | Internal distribution before TestFlight |
-| **production** | TestFlight / App Store archive, **PubPlus Prod** + **production API** |
+- `EXPO_PUBLIC_API_BASE_URL=https://pubplus-production.up.railway.app` (`preview`, `production`)
+- `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME=pubplus` (all profiles)
 
-### Environment variables (EAS)
+### EAS secrets (Owen — Dashboard or CLI)
 
-Inject at build time (secrets), not in git:
+Set per project/environment; **never commit**:
 
-- `EXPO_PUBLIC_API_BASE_URL`
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` (likely `pubplus` until scheme changes)
+```bash
+cd consumer_app/artifacts/mobile
+npx eas secret:create --name EXPO_PUBLIC_SUPABASE_URL --value "https://<project-ref>.supabase.co" --scope project
+npx eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "<anon-key>" --scope project
+```
 
-**TestFlight production profile** must use **Prod** Supabase and **deployed production** Django base URL.
+| Build | Supabase target | Notes |
+| ----- | --------------- | ----- |
+| **development** (first native smoke) | Current single project or **PubPlus Dev** | Must match backend JWT config |
+| **preview / production** | **PubPlus Prod** preferred before external TestFlight | Internal smoke may use current project temporarily |
 
-### iOS credentials
+**Never** put `SUPABASE_SERVICE_ROLE_KEY` in mobile/EAS env.
 
-- [ ] Apple Developer team ID — **unknown**
-- [ ] Distribution certificate / provisioning via EAS credentials or manual
-- [ ] App Store Connect app record — **after** bundle ID and name strategy
+### Link EAS project (manual — **paused Stage 6B**)
 
-### Workflow decisions (TBD)
+```bash
+cd consumer_app/artifacts/mobile
+npx eas login
+npx eas init
+```
 
-| Decision | Options / notes |
-| -------- | ---------------- |
-| **`expo-dev-client`** | Not in `package.json` today; likely needed for reliable dev native + OAuth smoke |
-| **Managed vs prebuild** | Current `app.json` plugins suggest managed workflow; confirm at implementation |
-| **Runtime version / OTA** | No `runtimeVersion` or `updates` in `app.json` today — decide for EAS Update later or skip initially |
+Adds `expo.extra.eas.projectId` to `app.json`. Required before first cloud build — **do not run until final brand and bundle ID are chosen**.
 
-**Do not create `eas.json` in documentation-only stages.**
+### Useful workspace scripts (from `consumer_app/`)
+
+```bash
+corepack pnpm run mobile:eas:build:ios:dev
+corepack pnpm run mobile:eas:build:ios:preview
+corepack pnpm run mobile:eas:build:ios:production
+corepack pnpm run mobile:expo:config
+```
+
+**Do not run `eas build` (Stage 6B pause)** — wait until final brand and native identifiers are chosen.
+
+### iOS credentials (manual)
+
+- Apple Developer Program membership
+- Team ID configured in EAS (`eas credentials`)
+- App Store Connect app record — **after** bundle ID confirmed
+
+### `expo-dev-client`
+
+**Added in Stage 6.** Required for EAS `development` profile. Local Expo Go still works via `pnpm run mobile:start`; use `start:dev-client` (or `expo start --dev-client`) after installing a dev build on device.
 
 ---
 
@@ -155,13 +245,14 @@ From `consumer_app/artifacts/mobile/app.json` (exact values as of repo inspectio
 | `expo.splash.image` | Same as icon | Basic; may need dedicated splash creative |
 | `expo.newArchEnabled` | `true` | New Architecture on — validate on first native build |
 | `expo.ios.supportsTablet` | `false` | iPhone-focused |
-| `expo.ios.bundleIdentifier` | **Not set** | **Blocker** for iOS EAS |
-| `expo.android` | `{}` empty | **No `package`** — Android release blocked |
+| `expo.ios.bundleIdentifier` | **`com.pubplus.mobile`** | Confirm before App Store |
+| `expo.android.package` | **`com.pubplus.mobile`** | Android follow-up |
 | `expo.android.adaptiveIcon` | **Not set** | Android store gap |
 | `expo.web.favicon` | `./assets/images/icon.png` | Web only |
 
 ### Plugins (`expo.plugins`)
 
+- `expo-dev-client` (Stage 6 — EAS development builds)
 - `expo-router`
 - `expo-font`
 - `expo-web-browser` (OAuth)
@@ -178,16 +269,18 @@ From `consumer_app/artifacts/mobile/app.json` (exact values as of repo inspectio
 
 ### `package.json` notes
 
-- **No** `expo-dev-client`, **no** `expo-apple-authentication`
-- **No** `eas-cli` script; EAS invoked via `npx eas` / global CLI at implementation time
+- **`expo-dev-client`** installed (~6.0.21)
+- **`eas.json`** at `artifacts/mobile/eas.json`
+- EAS invoked via `npx eas` / workspace scripts (`mobile:eas:build:ios:*`)
 - Replit `dev` / `build` / `serve` scripts — **legacy**, not TestFlight path
 
-### Obvious release gaps
+### Remaining release gaps
 
-- Missing iOS bundle ID and Android package
-- No `eas.json`
+- EAS project not linked (`eas init` pending)
+- Apple Developer / App Store Connect not configured
+- EAS Supabase secrets not set
+- SSO provider dashboards incomplete
 - Minimal icon/splash (store marketing TBD)
-- No App Store privacy manifest / encryption export compliance docs in repo (add at submission stage)
 - No `runtimeVersion` / EAS Update policy documented
 
 ---
@@ -208,7 +301,7 @@ TestFlight builds should be **production-like**:
 
 | Variable | TestFlight expectation |
 | -------- | ---------------------- |
-| `EXPO_PUBLIC_API_BASE_URL` | `https://<production-api-url>` (**unknown**) |
+| `EXPO_PUBLIC_API_BASE_URL` | **`https://pubplus-production.up.railway.app`** (EAS preview/production) |
 | `EXPO_PUBLIC_SUPABASE_URL` | `https://<pubplus-prod-project-ref>.supabase.co` |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Prod anon key (EAS secret) |
 | `EXPO_PUBLIC_AUTH_REDIRECT_SCHEME` | `pubplus` (unless scheme changes) |
@@ -219,27 +312,17 @@ Backend deployment must use matching **Prod** `SUPABASE_URL`, JWT issuer, and JW
 
 ---
 
-## 8. iOS development build checklist (future implementation)
+## 8. iOS development build checklist
 
-Use **PubPlus Dev** + local or LAN Django unless explicitly testing against deployed API.
-
-- [ ] Decide **bundle ID** strategy (final vs temporary dev bundle — coordinate with Apple Developer)
-- [ ] Create/link **EAS project** for `artifacts/mobile`
-- [ ] Add **`eas.json`** with development profile
-- [ ] Set **`expo.ios.bundleIdentifier`** in `app.json` (implementation stage)
-- [ ] Add **`expo-dev-client`** if dev builds require custom native client (likely for OAuth reliability)
+- [x] Add **`eas.json`** with development profile (Stage 6)
+- [x] Set **`expo.ios.bundleIdentifier`** → `com.pubplus.mobile`
+- [x] Add **`expo-dev-client`**
+- [ ] Run **`eas init`** + **`eas login`** (Owen)
+- [ ] Configure **EAS Supabase secrets** for dev smoke
 - [ ] Configure **Apple Developer team** in EAS
-- [ ] Run **EAS development build** for iOS
+- [ ] Run **`pnpm run mobile:eas:build:ios:dev`** (Owen — when ready)
 - [ ] Install on **physical iPhone**
-- [ ] Smoke test:
-  - [ ] App launches
-  - [ ] `GET /api/v1/health` (or Home load) succeeds
-  - [ ] Email/password sign-in, sign-out, session after restart
-  - [ ] Google SSO
-  - [ ] Facebook SSO
-  - [ ] Apple SSO (iOS)
-  - [ ] Saved venues, profile PATCH, submission/correction if in scope
-- [ ] Note OAuth/cold-start issues — see [auth-sso-runbook.md](./auth-sso-runbook.md) implementation gaps
+- [ ] Smoke test (API, email auth, SSO, deep links) — [auth-sso-runbook.md](./auth-sso-runbook.md)
 
 ---
 
@@ -304,14 +387,11 @@ Do not add dependencies in documentation-only stages.
 
 | Blocker | Impact |
 | ------- | ------ |
-| **No production API** | Cannot complete meaningful TestFlight against real launch backend |
-| **Production API URL unknown** | Cannot set EAS prod `EXPO_PUBLIC_API_BASE_URL` |
-| **No `eas.json` / EAS project** | No native binaries |
-| **No iOS bundle ID** | Cannot register app or build for TestFlight |
-| **Apple Developer not confirmed** | Signing, Sign in with Apple, TestFlight blocked |
-| **PubPlus Prod Supabase may not exist** | Prod auth/OAuth blocked |
-| **SSO provider setup incomplete** | Launch-day requirement; native testing will fail until done |
-| **Final app name / domain not chosen** | Store metadata and OAuth consent URLs blocked |
+| **No EAS project link** | Run `eas init` before cloud build |
+| **No Apple Developer** | Signing, Sign in with Apple, TestFlight blocked |
+| **EAS Supabase secrets** | Auth will fail in native builds until set |
+| **SSO provider setup incomplete** | Native OAuth smoke will fail until dashboards done |
+| **Bundle ID provisional** | Confirm `com.pubplus.mobile` before public launch |
 | **No native build smoke yet** | OAuth and location behaviour unverified outside Expo Go |
 | **Possible OAuth cold-start gap** | Deep link not handled on app resume — [auth-sso-runbook.md](./auth-sso-runbook.md) |
 | **Basic icon/splash** | May block polished store submission; not necessarily TestFlight internal |
@@ -326,8 +406,9 @@ Documentation and implementation order (do not execute in Stage 4):
 | Stage | Focus |
 | ----- | ----- |
 | **Stage 5** | Production backend deployment readiness (hosting, env, CORS, Prod Supabase JWT) |
-| **Stage 6** | EAS / native config implementation (`eas.json`, bundle ID, `expo-dev-client` decision, `app.json` iOS block) |
-| **Stage 7** | iOS dev build smoke on physical iPhone |
+| **Stage 6** | EAS / native config (`eas.json`, bundle ID, `expo-dev-client`) | **Done in repo** — provisional identifiers only |
+| **Stage 6B** | Brand-neutral pause; rename checklist; release hold | **Current** — no `eas init` / `eas build` / store records |
+| **Stage 7** | iOS dev build smoke on physical iPhone | **Paused** until brand decision |
 | **Stage 8** | SSO provider setup and validation (Dev then Prod) — extends [auth-sso-runbook.md](./auth-sso-runbook.md) |
 | **Stage 9** | TestFlight build, upload, internal tester smoke |
 | **Stage 10** | App Store metadata, privacy policy, encryption questionnaire, screenshots |
