@@ -47,17 +47,32 @@ function toApiError(error: unknown): ApiRequestError {
     const status = Number((error as { status?: number }).status);
     const details = (error as { data?: unknown }).data;
     let message = `Request failed (${status})`;
-    if (details && typeof details === "object" && "message" in details) {
-      message = String((details as { message: string }).message);
+    let code: ApiErrorCode = "unknown_error";
+
+    if (details && typeof details === "object") {
+      const body = details as {
+        error?: { code?: string; message?: string };
+        message?: string;
+      };
+      if (body.error?.message) {
+        message = body.error.message;
+      } else if ("message" in body) {
+        message = String(body.message);
+      }
+      if (body.error?.code === "validation_error") code = "validation_error";
+      else if (body.error?.code === "forbidden") code = "forbidden";
+      else if (body.error?.code === "not_found") code = "not_found";
+      else if (body.error?.code === "unauthorized") code = "unauthorized";
     }
-    if (status === 401) return { code: "unauthorized", message, status, details };
-    if (status === 403) return { code: "forbidden", message, status, details };
-    if (status === 404) return { code: "not_found", message, status, details };
-    if (status === 400 || status === 422) {
-      return { code: "validation_error", message, status, details };
+
+    if (code === "unknown_error") {
+      if (status === 401) code = "unauthorized";
+      else if (status === 403) code = "forbidden";
+      else if (status === 404) code = "not_found";
+      else if (status === 400 || status === 422) code = "validation_error";
+      else if (status >= 500) code = "server_error";
     }
-    if (status >= 500) return { code: "server_error", message, status, details };
-    return { code: "unknown_error", message, status, details };
+    return { code, message, status, details };
   }
   if (error instanceof TypeError) {
     return { code: "network_error", message: error.message, status: null };
@@ -346,6 +361,94 @@ export function ownerVenueDetail(venueId: string) {
   return apiRequest<ApiResponse<OwnerVenueDetailResponse>>(
     `/api/v1/owner/venues/${encodeURIComponent(venueId)}`,
   );
+}
+
+export type OwnerOpeningHoursPayload = {
+  uncertainty_level?:
+    | "unknown"
+    | "partial"
+    | "weak_stale"
+    | "disputed"
+    | "resolved_confident";
+  regular_hours_json?: Array<{
+    day_of_week: number;
+    opens_at: string;
+    closes_at: string;
+    crosses_midnight?: boolean;
+    sort_order?: number;
+  }>;
+  exceptions_json?: Array<Record<string, unknown>>;
+  notes?: string | null;
+};
+
+export type OwnerCoreDetailsPayload = {
+  display_name?: string;
+  address_line_1?: string;
+  address_line_2?: string | null;
+  postal_code?: string;
+  locality_id?: string;
+  country_code?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  short_description?: string;
+  long_description?: string | null;
+  opening_hours?: OwnerOpeningHoursPayload;
+  owner_confirms_management?: boolean;
+};
+
+export type OwnerVenueProposalRequest = {
+  section: "core_details";
+  intent: "draft" | "submit";
+  payload: OwnerCoreDetailsPayload;
+};
+
+export type OwnerVenueProposalResponse = {
+  proposal_id: string;
+  venue_id: string;
+  section: "core_details";
+  intent: "draft" | "submit";
+  lifecycle_status: "staged" | "in_review";
+  submitted_at: string | null;
+  message: string;
+};
+
+export function ownerVenueProposal(venueId: string, body: OwnerVenueProposalRequest) {
+  return apiRequest<ApiResponse<OwnerVenueProposalResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/proposals`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export type ReferenceLocality = {
+  id: string;
+  name: string;
+  state?: string;
+  country_code?: string;
+  geographic_region_id: string;
+  geographic_region_name: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+export type ReferenceLocalitiesResponse = {
+  localities: ReferenceLocality[];
+};
+
+export function referenceLocalities() {
+  return apiRequest<ApiResponse<ReferenceLocalitiesResponse>>(
+    "/api/v1/reference/localities",
+  );
+}
+
+export function parseApiValidationDetails(error: unknown): Record<string, string[]> {
+  if (!isApiRequestError(error)) return {};
+  const data = error.details;
+  if (!data || typeof data !== "object") return {};
+  const body = data as { error?: { details?: Record<string, string[]> } };
+  if (body.error?.details && typeof body.error.details === "object") {
+    return body.error.details;
+  }
+  return {};
 }
 
 export function isApiRequestError(error: unknown): error is ApiRequestError {

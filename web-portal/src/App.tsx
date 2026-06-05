@@ -5,7 +5,7 @@ import { FounderVenueDetailPage } from "@/admin/pages/FounderVenueDetailPage";
 import { FounderVenuesListPage } from "@/admin/pages/FounderVenuesListPage";
 import { AccessDeniedPage } from "@/owner/pages/AccessDeniedPage";
 import { OwnerPortalEntry } from "@/owner/pages/OwnerPortalEntry";
-import { OwnerVenueBasicsPlaceholder } from "@/owner/pages/OwnerVenueBasicsPlaceholder";
+import { OwnerVenueBasicsPage } from "@/owner/pages/OwnerVenueBasicsPage";
 import { OwnerVenueHub } from "@/owner/pages/OwnerVenueHub";
 import { PortalEntryPage } from "@/owner/pages/PortalEntryPage";
 import { OwnerRouteGuard } from "@/owner/components/OwnerRouteGuard";
@@ -27,7 +27,7 @@ function OwnerAppRoutes() {
     <Routes>
       <Route index element={<OwnerPortalEntry />} />
       <Route path="venues/:venueId" element={<OwnerVenueHub />} />
-      <Route path="venues/:venueId/basics" element={<OwnerVenueBasicsPlaceholder />} />
+      <Route path="venues/:venueId/basics" element={<OwnerVenueBasicsPage />} />
       <Route path="*" element={<Navigate to="/owner" replace />} />
     </Routes>
   );

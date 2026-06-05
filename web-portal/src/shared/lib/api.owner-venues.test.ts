@@ -10,7 +10,13 @@ vi.mock("@/shared/lib/env", () => ({
   getApiBaseUrl: () => "http://api.test",
 }));
 
-import { ownerVenueDetail, ownerVenueList } from "@/shared/lib/api";
+import {
+  ownerVenueDetail,
+  ownerVenueList,
+  ownerVenueProposal,
+  parseApiValidationDetails,
+  referenceLocalities,
+} from "@/shared/lib/api";
 
 const listEnvelope = {
   data: {
@@ -148,6 +154,138 @@ describe("owner venue API wrappers", () => {
       ),
     );
 
-    await expect(ownerVenueList()).rejects.toMatchObject({ code: "forbidden" });
+    await expect(ownerVenueList()).rejects.toMatchObject({
+      code: "forbidden",
+      message: "Denied.",
+    });
+  });
+
+  it("ownerVenueProposal sends correct path and body", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const proposalResponse = {
+      data: {
+        proposal_id: "prop-1",
+        venue_id: "v-1",
+        section: "core_details",
+        intent: "draft",
+        lifecycle_status: "staged",
+        submitted_at: null,
+        message: "Draft saved.",
+      },
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(proposalResponse), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const body = {
+      section: "core_details" as const,
+      intent: "draft" as const,
+      payload: { display_name: "Test Pub" },
+    };
+    const result = await ownerVenueProposal("v-1", body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/proposals",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(result.data.proposal_id).toBe("prop-1");
+    expect(result.data.lifecycle_status).toBe("staged");
+  });
+
+  it("ownerVenueProposal parses submit response", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            proposal_id: "prop-2",
+            venue_id: "v-1",
+            section: "core_details",
+            intent: "submit",
+            lifecycle_status: "in_review",
+            submitted_at: "2026-06-01T00:00:00Z",
+            message: "Submitted for review.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const result = await ownerVenueProposal("v-1", {
+      section: "core_details",
+      intent: "submit",
+      payload: { display_name: "Done Pub", owner_confirms_management: true },
+    });
+    expect(result.data.intent).toBe("submit");
+    expect(result.data.lifecycle_status).toBe("in_review");
+    expect(result.data.submitted_at).toBe("2026-06-01T00:00:00Z");
+  });
+
+  it("ownerVenueProposal surfaces validation error envelope", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "validation_error",
+            message: "Please check the highlighted fields.",
+            details: { display_name: ["This field is required."] },
+          },
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    let caught: unknown;
+    try {
+      await ownerVenueProposal("v-1", {
+        section: "core_details",
+        intent: "submit",
+        payload: {},
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toMatchObject({
+      code: "validation_error",
+      message: "Please check the highlighted fields.",
+    });
+    expect(parseApiValidationDetails(caught)).toEqual({
+      display_name: ["This field is required."],
+    });
+  });
+
+  it("referenceLocalities parses data envelope", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            localities: [
+              {
+                id: "loc-1",
+                name: "Fitzroy",
+                state: "VIC",
+                geographic_region_id: "gr-1",
+                geographic_region_name: "Victoria",
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const result = await referenceLocalities();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/reference/localities",
+      expect.any(Object),
+    );
+    expect(result.data.localities[0].name).toBe("Fitzroy");
   });
 });
