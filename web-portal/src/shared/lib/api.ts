@@ -213,6 +213,141 @@ export async function ownerAuthProbe(): Promise<OwnerAuthProbeResult> {
   }
 }
 
+export type ApiResponse<T> = { data: T };
+
+export type OwnerOnboardingStatus =
+  | "not_started"
+  | "in_progress"
+  | "submitted"
+  | "needs_changes"
+  | "complete";
+
+export type OwnerVenueListItem = {
+  venue_id: string;
+  display_name: string;
+  locality_name: string | null;
+  state_code: string | null;
+  relationship_lifecycle: "approved";
+  onboarding_status: OwnerOnboardingStatus;
+  pending_proposal_count: number;
+  completeness_percent: number;
+  required_basics_complete: boolean;
+};
+
+export type OwnerVenueListResponse = {
+  venues: OwnerVenueListItem[];
+  meta: {
+    total: number;
+    default_venue_id: string | null;
+  };
+};
+
+export type OwnerVenueHoursRegular = {
+  day_of_week: number;
+  opens_at: string;
+  closes_at: string;
+  crosses_midnight: boolean;
+};
+
+export type OwnerVenueContactBlock = {
+  supported: false;
+  phone: null;
+  email: null;
+  website: null;
+};
+
+export type OwnerVenueCompletenessSection = {
+  key: string;
+  label: string;
+  status: string;
+  required: boolean;
+  available: boolean;
+};
+
+export type OwnerVenueDetail = {
+  venue_id: string;
+  display_name: string;
+  listing: {
+    discovery_eligibility_status: string;
+    operational_status: string;
+  };
+  relationship: {
+    lifecycle: "approved";
+    business_id: string;
+    capabilities: string[];
+  };
+  published: {
+    profile: {
+      display_name: string | null;
+      slug: string | null;
+      operational_status: string | null;
+    };
+    location: {
+      locality_id: string | null;
+      locality_name: string | null;
+      state_code: string | null;
+      address_line_1: string | null;
+      address_line_2: string | null;
+      postal_code: string | null;
+      country_code: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    };
+    descriptions: {
+      short_description: string | null;
+      long_description: string | null;
+    };
+    hours: {
+      uncertainty_level: string;
+      regular: OwnerVenueHoursRegular[];
+      exceptions: unknown[];
+    };
+    contact: OwnerVenueContactBlock;
+  };
+  draft: {
+    proposal_id: string | null;
+    lifecycle_status: string | null;
+    last_saved_at: string | null;
+    payload_preview: {
+      display_name: string | null;
+      address_line_1: string | null;
+      locality_id: string | null;
+    };
+  };
+  pending_review: {
+    proposal_id: string | null;
+    lifecycle_status: string | null;
+    submitted_at: string | null;
+    reviewed_at: string | null;
+    review_outcome: "approved" | "rejected" | "changes_requested" | null;
+  };
+  completeness: {
+    percent: number;
+    required_basics_complete: boolean;
+    sections: OwnerVenueCompletenessSection[];
+  };
+  sections_available: {
+    core_details: boolean;
+    events: boolean;
+    meal_specials: boolean;
+    tap_list: boolean;
+    features: boolean;
+    photos: boolean;
+  };
+};
+
+export type OwnerVenueDetailResponse = OwnerVenueDetail;
+
+export function ownerVenueList() {
+  return apiRequest<ApiResponse<OwnerVenueListResponse>>("/api/v1/owner/venues");
+}
+
+export function ownerVenueDetail(venueId: string) {
+  return apiRequest<ApiResponse<OwnerVenueDetailResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}`,
+  );
+}
+
 export function isApiRequestError(error: unknown): error is ApiRequestError {
   return Boolean(error && typeof error === "object" && "code" in error && "status" in error);
 }

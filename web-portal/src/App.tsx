@@ -4,7 +4,9 @@ import { AdminRouteGuard } from "@/admin/components/AdminRouteGuard";
 import { FounderVenueDetailPage } from "@/admin/pages/FounderVenueDetailPage";
 import { FounderVenuesListPage } from "@/admin/pages/FounderVenuesListPage";
 import { AccessDeniedPage } from "@/owner/pages/AccessDeniedPage";
-import { OwnerHomePlaceholder } from "@/owner/pages/OwnerHomePlaceholder";
+import { OwnerPortalEntry } from "@/owner/pages/OwnerPortalEntry";
+import { OwnerVenueBasicsPlaceholder } from "@/owner/pages/OwnerVenueBasicsPlaceholder";
+import { OwnerVenueHub } from "@/owner/pages/OwnerVenueHub";
 import { PortalEntryPage } from "@/owner/pages/PortalEntryPage";
 import { OwnerRouteGuard } from "@/owner/components/OwnerRouteGuard";
 import { RootRedirect } from "@/shared/components/RootRedirect";
@@ -23,7 +25,9 @@ function AdminAppRoutes() {
 function OwnerAppRoutes() {
   return (
     <Routes>
-      <Route index element={<OwnerHomePlaceholder />} />
+      <Route index element={<OwnerPortalEntry />} />
+      <Route path="venues/:venueId" element={<OwnerVenueHub />} />
+      <Route path="venues/:venueId/basics" element={<OwnerVenueBasicsPlaceholder />} />
       <Route path="*" element={<Navigate to="/owner" replace />} />
     </Routes>
   );

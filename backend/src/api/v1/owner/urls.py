@@ -1,8 +1,21 @@
 from django.urls import path
 
-from api.v1.owner.views import owner_auth_probe, owner_provision
+from api.v1.owner.views import (
+    owner_auth_probe,
+    owner_provision,
+    owner_venue_detail,
+    owner_venue_proposals,
+    owner_venues_list,
+)
 
 urlpatterns = [
     path("provision", owner_provision, name="owner-provision"),
     path("auth-probe", owner_auth_probe, name="owner-auth-probe"),
+    path("venues", owner_venues_list, name="owner-venues-list"),
+    path("venues/<uuid:venue_id>", owner_venue_detail, name="owner-venue-detail"),
+    path(
+        "venues/<uuid:venue_id>/proposals",
+        owner_venue_proposals,
+        name="owner-venue-proposals",
+    ),
 ]

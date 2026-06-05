@@ -39,8 +39,8 @@ vi.mock("@/admin/pages/FounderVenueDetailPage", () => ({
   FounderVenueDetailPage: () => <div>Founder detail</div>,
 }));
 
-vi.mock("@/owner/pages/OwnerHomePlaceholder", () => ({
-  OwnerHomePlaceholder: () => <div data-testid="owner-home">Owner home</div>,
+vi.mock("@/owner/pages/OwnerPortalEntry", () => ({
+  OwnerPortalEntry: () => <div data-testid="owner-home">Owner home</div>,
 }));
 
 describe("App routing", () => {
