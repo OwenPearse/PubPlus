@@ -14,6 +14,8 @@ import {
   ownerPatchHours,
   ownerPatchOperationalProfile,
   ownerRestrictedChangeRequest,
+  ownerVenueClaimCandidates,
+  ownerVenueClaimRequest,
   ownerVenueDetail,
   ownerVenueList,
   ownerVenueProposal,
@@ -386,5 +388,108 @@ describe("owner venue API wrappers", () => {
       }),
     );
     expect(result.data.section).toBe("identity_location");
+  });
+
+  it("ownerVenueClaimCandidates sends GET with query params", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            candidates: [
+              {
+                venue_id: "v-1",
+                display_name: "Royal Hotel",
+                locality_name: "Fitzroy",
+                state_code: "VIC",
+                address_line_1: "1 St",
+                match_reason: "Exact name match",
+                match_score: 95,
+              },
+            ],
+            best_match: null,
+            has_good_match: true,
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerVenueClaimCandidates({
+      name: "Royal Hotel",
+      locality_id: "loc-1",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venue-claim-candidates?name=Royal+Hotel&locality_id=loc-1",
+      expect.any(Object),
+    );
+  });
+
+  it("ownerVenueClaimRequest sends claim_existing with venue_id", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            claim_request_id: "claim-1",
+            status: "submitted",
+            message: "Claim request submitted.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerVenueClaimRequest({
+      mode: "claim_existing",
+      venue_id: "v-1",
+      claimant_note: "I manage this pub.",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venue-claim-requests",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          mode: "claim_existing",
+          venue_id: "v-1",
+          claimant_note: "I manage this pub.",
+        }),
+      }),
+    );
+  });
+
+  it("ownerVenueClaimRequest sends submit_new with venue details", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            claim_request_id: "claim-2",
+            status: "submitted",
+            message: "Claim request submitted.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerVenueClaimRequest({
+      mode: "submit_new",
+      venue_name: "New Pub",
+      locality_id: "loc-1",
+      address_line_1: "9 Claim St",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venue-claim-requests",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          mode: "submit_new",
+          venue_name: "New Pub",
+          locality_id: "loc-1",
+          address_line_1: "9 Claim St",
+        }),
+      }),
+    );
   });
 });

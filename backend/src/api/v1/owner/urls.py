@@ -3,6 +3,8 @@ from django.urls import path
 from api.v1.owner.views import (
     owner_auth_probe,
     owner_provision,
+    owner_venue_claim_candidates,
+    owner_venue_claim_requests,
     owner_venue_detail,
     owner_venue_hours_patch,
     owner_venue_operational_profile_patch,
@@ -14,6 +16,16 @@ from api.v1.owner.views import (
 urlpatterns = [
     path("provision", owner_provision, name="owner-provision"),
     path("auth-probe", owner_auth_probe, name="owner-auth-probe"),
+    path(
+        "venue-claim-candidates",
+        owner_venue_claim_candidates,
+        name="owner-venue-claim-candidates",
+    ),
+    path(
+        "venue-claim-requests",
+        owner_venue_claim_requests,
+        name="owner-venue-claim-requests",
+    ),
     path("venues", owner_venues_list, name="owner-venues-list"),
     path("venues/<uuid:venue_id>", owner_venue_detail, name="owner-venue-detail"),
     path(

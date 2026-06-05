@@ -55,19 +55,20 @@ describe("OwnerPortalEntry", () => {
     ownerVenueList.mockReset();
   });
 
-  it("shows awaiting membership state", async () => {
+  it("shows add or claim CTA for awaiting membership state", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
       body: { ...baseProbe, next_step: "owner_waiting_for_membership" },
     });
     renderEntry();
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Awaiting business access" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Add or claim your venue" })).toBeInTheDocument();
     });
+    expect(screen.getByRole("button", { name: "Add or claim a venue" })).toBeInTheDocument();
     expect(ownerVenueList).not.toHaveBeenCalled();
   });
 
-  it("shows awaiting venue access state", async () => {
+  it("shows add or claim CTA for awaiting venue access state", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
       body: {
@@ -79,8 +80,9 @@ describe("OwnerPortalEntry", () => {
     });
     renderEntry();
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Awaiting venue access" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Add or claim your venue" })).toBeInTheDocument();
     });
+    expect(screen.getByRole("button", { name: "Add or claim a venue" })).toBeInTheDocument();
     expect(ownerVenueList).not.toHaveBeenCalled();
   });
 

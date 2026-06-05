@@ -520,6 +520,68 @@ export function referenceLocalities() {
   );
 }
 
+export type VenueClaimCandidate = {
+  venue_id: string;
+  display_name: string;
+  locality_name: string | null;
+  state_code: string | null;
+  address_line_1: string | null;
+  match_reason: string;
+  match_score: number;
+};
+
+export type VenueClaimCandidatesResponse = {
+  candidates: VenueClaimCandidate[];
+  best_match: VenueClaimCandidate | null;
+  has_good_match: boolean;
+};
+
+export type ExistingVenueClaimRequest = {
+  mode: "claim_existing";
+  venue_id: string;
+  claimant_note?: string;
+};
+
+export type NewVenueClaimRequest = {
+  mode: "submit_new";
+  venue_name: string;
+  address_line_1?: string;
+  locality_id?: string;
+  claimant_note?: string;
+};
+
+export type VenueClaimRequestResponse = {
+  claim_request_id: string;
+  status: "submitted" | "under_review";
+  message: string;
+};
+
+export function ownerVenueClaimCandidates(query: {
+  name?: string;
+  locality_id?: string;
+  q?: string;
+  address_line_1?: string;
+}) {
+  const params: Record<string, string> = {};
+  if (query.name) params.name = query.name;
+  if (query.locality_id) params.locality_id = query.locality_id;
+  if (query.q) params.q = query.q;
+  if (query.address_line_1) params.address_line_1 = query.address_line_1;
+  return apiRequest<ApiResponse<VenueClaimCandidatesResponse>>(
+    "/api/v1/owner/venue-claim-candidates",
+    { query: params },
+  );
+}
+
+export function ownerVenueClaimRequest(
+  body: ExistingVenueClaimRequest | NewVenueClaimRequest,
+) {
+  return apiRequest<ApiResponse<VenueClaimRequestResponse>>(
+    "/api/v1/owner/venue-claim-requests",
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
 export function parseApiValidationDetails(error: unknown): Record<string, string[]> {
   if (!isApiRequestError(error)) return {};
   const data = error.details;

@@ -13,6 +13,10 @@ from apps.owner.services.owner_access_service import (
     provision_owner_account,
     resolve_owner_auth_probe,
 )
+from apps.owner.services.owner_claim_service import (
+    search_venue_claim_candidates,
+    submit_venue_claim_request,
+)
 from apps.owner.services.owner_venue_service import (
     create_or_update_owner_core_details_proposal,
     create_owner_restricted_change_request,
@@ -119,6 +123,86 @@ def owner_auth_probe(request: HttpRequest) -> JsonResponse:
             status=403,
         )
     return JsonResponse(body, status=status)
+
+
+@require_http_methods(["GET", "HEAD"])
+@require_owner_portal_auth
+def owner_venue_claim_candidates(request: HttpRequest) -> JsonResponse:
+    if request.method == "HEAD":
+        return JsonResponse({}, status=200)
+    auth = get_auth_context(request)
+    assert auth is not None
+    if admin_account_exists_for_auth(auth):
+        return _map_venue_scope_error("admin_forbidden")
+
+    result, code, details = search_venue_claim_candidates(
+        auth,
+        name=request.GET.get("name"),
+        locality_id=request.GET.get("locality_id"),
+        q=request.GET.get("q"),
+        address_line_1=request.GET.get("address_line_1"),
+    )
+    if code == "ok" and result is not None:
+        return JsonResponse({"data": result}, status=200)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code == "admin_forbidden":
+        return _map_venue_scope_error("admin_forbidden")
+    if code == "forbidden":
+        return error_response(
+            code="forbidden",
+            message="Owner account is not provisioned for this identity.",
+            status=403,
+        )
+    return error_response(
+        code="owner_claim_search_error",
+        message="Could not search venue candidates.",
+        status=500,
+    )
+
+
+@require_http_methods(["POST"])
+@require_owner_portal_auth
+def owner_venue_claim_requests(request: HttpRequest) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+    if admin_account_exists_for_auth(auth):
+        return _map_venue_scope_error("admin_forbidden")
+
+    body, err_resp = _parse_json_object_body(request)
+    if err_resp is not None:
+        return err_resp
+    assert body is not None
+
+    result, code, details = submit_venue_claim_request(auth, body)
+    if code in ("ok", "duplicate_open") and result:
+        status = 200 if code == "duplicate_open" else 201
+        return JsonResponse({"data": result}, status=status)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code == "not_found":
+        return error_response(
+            code="not_found",
+            message="Venue not found.",
+            status=404,
+        )
+    if code == "admin_forbidden":
+        return _map_venue_scope_error("admin_forbidden")
+    if code == "forbidden":
+        return error_response(
+            code="forbidden",
+            message="Owner account is not provisioned for this identity.",
+            status=403,
+        )
+    return error_response(
+        code="owner_claim_request_error",
+        message="Could not submit your claim request.",
+        status=500,
+    )
 
 
 @require_http_methods(["GET", "HEAD"])
