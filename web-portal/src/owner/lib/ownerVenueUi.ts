@@ -6,9 +6,9 @@ import type {
 
 export const OWNER_HUB_HEADLINE = "Complete your listing";
 export const OWNER_HUB_SUBHEAD =
-  "Confirm the basics now. Add more detail whenever you can.";
+  "Update descriptions and hours instantly. Request approval for name or address changes.";
 export const OWNER_HUB_REVIEW_NOTE =
-  "Changes are reviewed before they appear publicly.";
+  "Name and address changes are reviewed before they appear on your listing.";
 
 const ONBOARDING_STATUS_LABELS: Record<OwnerOnboardingStatus, string> = {
   not_started: "Not started",
@@ -37,13 +37,10 @@ export function venueHubStatusMessage(detail: OwnerVenueDetail): string | null {
   }
   if (
     detail.pending_review.proposal_id &&
-    (detail.pending_review.lifecycle_status === "in_review" ||
-      detail.pending_review.submitted_at)
+    detail.pending_review.lifecycle_status === "in_review" &&
+    detail.pending_review.submitted_at
   ) {
-    return "Submitted for review. Your changes will be reviewed before they appear publicly.";
-  }
-  if (detail.draft.proposal_id && detail.draft.lifecycle_status === "staged") {
-    return "Saved as draft. You can come back anytime.";
+    return "Name/address change pending review.";
   }
   if (detail.completeness.required_basics_complete) {
     return "Your basics are complete.";

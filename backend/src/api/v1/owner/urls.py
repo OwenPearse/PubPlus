@@ -7,6 +7,7 @@ from api.v1.owner.views import (
     owner_venue_hours_patch,
     owner_venue_operational_profile_patch,
     owner_venue_proposals,
+    owner_venue_restricted_change_request,
     owner_venues_list,
 )
 
@@ -29,5 +30,10 @@ urlpatterns = [
         "venues/<uuid:venue_id>/hours",
         owner_venue_hours_patch,
         name="owner-venue-hours-patch",
+    ),
+    path(
+        "venues/<uuid:venue_id>/restricted-change-requests",
+        owner_venue_restricted_change_request,
+        name="owner-venue-restricted-change-request",
     ),
 ]

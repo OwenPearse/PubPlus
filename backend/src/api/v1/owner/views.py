@@ -15,6 +15,7 @@ from apps.owner.services.owner_access_service import (
 )
 from apps.owner.services.owner_venue_service import (
     create_or_update_owner_core_details_proposal,
+    create_owner_restricted_change_request,
     get_owner_venue_detail,
     list_owner_venues,
     patch_owner_operational_profile,
@@ -56,6 +57,15 @@ def _map_venue_scope_error(code: str) -> JsonResponse:
             code="forbidden",
             message=(
                 "Direct listing edits are not enabled for your account. "
+                "Contact support if you manage this venue."
+            ),
+            status=403,
+        )
+    if code == "missing_restricted_capability":
+        return error_response(
+            code="forbidden",
+            message=(
+                "Change requests are not enabled for your account. "
                 "Contact support if you manage this venue."
             ),
             status=403,
@@ -259,5 +269,54 @@ def owner_venue_hours_patch(request: HttpRequest, venue_id) -> JsonResponse:
     return error_response(
         code="owner_direct_edit_error",
         message="Could not save opening hours.",
+        status=500,
+    )
+
+
+@require_http_methods(["POST"])
+@require_owner_portal_auth
+def owner_venue_restricted_change_request(
+    request: HttpRequest, venue_id
+) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+    body, err_resp = _parse_json_object_body(request)
+    if err_resp is not None:
+        return err_resp
+    assert body is not None
+
+    section = body.get("section")
+    payload = body.get("payload")
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        return _validation_error(
+            details={"payload": ["payload must be a JSON object."]}
+        )
+
+    result, code, details = create_owner_restricted_change_request(
+        auth,
+        str(venue_id),
+        section=str(section) if section is not None else "",
+        payload=payload,
+    )
+    if code == "ok" and result:
+        return JsonResponse({"data": result}, status=201)
+    if code == "already_in_review" and result:
+        return JsonResponse({"data": result}, status=200)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code in (
+        "forbidden",
+        "not_found",
+        "admin_forbidden",
+        "missing_restricted_capability",
+    ):
+        return _map_venue_scope_error(code)
+    return error_response(
+        code="owner_restricted_change_error",
+        message="Could not submit your change request.",
         status=500,
     )

@@ -11,6 +11,9 @@ vi.mock("@/shared/lib/env", () => ({
 }));
 
 import {
+  ownerPatchHours,
+  ownerPatchOperationalProfile,
+  ownerRestrictedChangeRequest,
   ownerVenueDetail,
   ownerVenueList,
   ownerVenueProposal,
@@ -69,6 +72,7 @@ const detailEnvelope = {
       lifecycle_status: null,
       last_saved_at: null,
       payload_preview: { display_name: null, address_line_1: null, locality_id: null },
+      core_details_payload: null,
     },
     pending_review: {
       proposal_id: null,
@@ -287,5 +291,100 @@ describe("owner venue API wrappers", () => {
       expect.any(Object),
     );
     expect(result.data.localities[0].name).toBe("Fitzroy");
+  });
+
+  it("ownerPatchOperationalProfile sends PATCH to operational-profile", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            updated: { short_description: "New", long_description: null },
+            message: "Changes saved.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const result = await ownerPatchOperationalProfile("v-1", {
+      short_description: "New",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/operational-profile",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ short_description: "New" }),
+      }),
+    );
+    expect(result.data.updated.short_description).toBe("New");
+  });
+
+  it("ownerPatchHours sends PATCH to hours", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            hours: {
+              uncertainty_level: "resolved_confident",
+              regular: [],
+              exceptions: [],
+              notes: null,
+            },
+            message: "Opening hours saved.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const body = {
+      regular_hours_json: [{ day_of_week: 1, opens_at: "10:00", closes_at: "22:00" }],
+      exceptions_json: [],
+    };
+    await ownerPatchHours("v-1", body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/hours",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    );
+  });
+
+  it("ownerRestrictedChangeRequest sends POST to restricted-change-requests", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            proposal_id: "prop-r",
+            venue_id: "v-1",
+            section: "identity_location",
+            lifecycle_status: "in_review",
+            submitted_at: "2026-06-01T00:00:00Z",
+            message: "Change request submitted.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const body = {
+      section: "identity_location" as const,
+      payload: { display_name: "New Pub Name" },
+    };
+    const result = await ownerRestrictedChangeRequest("v-1", body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/restricted-change-requests",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(result.data.section).toBe("identity_location");
   });
 });

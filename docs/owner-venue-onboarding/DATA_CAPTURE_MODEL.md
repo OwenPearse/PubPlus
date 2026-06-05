@@ -6,7 +6,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 
 ## Current stage
 
-**Stage 4.1 complete.** Descriptions and hours write published tables directly; restricted fields still use staging.
+**Stage 4.2 complete.** Descriptions and hours write published tables directly via owner PATCH; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
 
 ## Decisions
 
@@ -48,7 +48,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 
 ## Next downstream use
 
-Stage 4.1 intake mappers; Stage 4.2 form field zones; contact migration ticket.
+Stage 4.2 form field zones shipped (`OwnerVenueBasicsPage`); contact migration ticket next.
 
 ---
 

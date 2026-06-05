@@ -6,7 +6,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 
 ## Current stage
 
-**Stage 4.1 complete (backend).** Next: **Stage 4.2** frontend Step 1 split.
+**Stage 4.2 complete (frontend split + restricted requests).** Next: **Stage 4.3** hardening or **Stage 7** features page.
 
 ## Decisions
 
@@ -20,7 +20,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 | 3.5 Proposal hardening | ✅ Done | Draft hydration + in_review guard |
 | **4 Edit policy reframe** | ✅ Done | Docs only — `OWNER_EDIT_POLICY.md` |
 | **4.1 Direct-edit backend** | ✅ Done | PATCH operational-profile + hours + audit |
-| **4.2 Step 1 UI split** | Blocked on 4.1 | Save vs Request change |
+| **4.2 Step 1 UI split** | ✅ Done | Save vs Request change + restricted POST |
 | **4.3 Hardening** | Planned | Row history, contact schema, deprecate proposal shim |
 | 5 Meal specials | Ready after 4.1 | Direct-edit page |
 | 6 Tap list | Ready after 4.1 | Direct-edit page |

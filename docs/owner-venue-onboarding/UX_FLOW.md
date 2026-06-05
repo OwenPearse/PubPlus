@@ -6,7 +6,7 @@ Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md`
 
 ## Current stage
 
-**Stage 4 — policy reframe.** Stages 2–3 shipped interim “Save progress / Submit for review” for all fields. Stage 4.2 splits Step 1 UI.
+**Stage 4.2 complete.** Step 1 splits operational **Save changes** (PATCH) from restricted **Request change** (POST). Legacy single “Submit for review” flow removed from basics page.
 
 ## Decisions
 
@@ -43,7 +43,7 @@ Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md`
 
 ## Next downstream use
 
-`stages/STAGE_04_2_step1_split.md` (to be authored in 4.2); Stage 5–7 section pages.
+Stage 5–7 direct-edit section pages.
 
 ---
 
@@ -128,8 +128,8 @@ flowchart TD
 
 | Button | Scope | API | Success copy |
 |--------|-------|-----|--------------|
-| **Save changes** | Operational zone | PATCH endpoints | “Your updates are live on your public listing.” |
-| **Request change** | Restricted zone | POST restricted-change-requests | “We’ll review your name/address change request.” |
+| **Save changes** | Operational zone | PATCH endpoints | “Saved. These updates are now reflected on your listing.” |
+| **Request change** | Restricted zone | POST restricted-change-requests | “Change request submitted. We'll review it before updating your listing.” |
 
 ### States
 

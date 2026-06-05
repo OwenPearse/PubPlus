@@ -8,7 +8,7 @@ Implementation-ready contract for owner venue onboarding APIs. Backend and front
 
 ## Current stage
 
-**Stage 4.1 — direct PATCH implemented.** Phase A list/detail/proposals remain. Stage 4.2 splits frontend. Phase A proposal behaviour for operational fields is **superseded** but remains until 4.3.
+**Stage 4.2 complete.** Direct PATCH + restricted POST implemented; frontend Step 1 split shipped. Phase A `POST .../proposals` remains as legacy shim until 4.3.
 
 ## Decisions
 
@@ -548,8 +548,8 @@ Validation errors: `400` `validation_error` with `details: { field: ["message"] 
 
 ### Copy tone (Stage 4.2)
 
-- Operational saved: “Your updates are live on your public listing.”
-- Restricted requested: “We'll review your name/address change request.”
+- Operational saved: “Saved. These updates are now reflected on your listing.”
+- Restricted requested: “Change request submitted. We'll review it before updating your listing.”
 - Restricted pending: banner on restricted zone only
 - No venue access: `NoVenueAccessState` + support link if `VITE_PORTAL_SUPPORT_URL` set
 
@@ -676,7 +676,7 @@ Same rules as Phase A `_validate_opening_hours` with `submit=true` (hours must b
 
 ---
 
-## Stage 4.1 — Endpoint 6: `POST /api/v1/owner/venues/{venue_id}/restricted-change-requests`
+## Stage 4.2 — Endpoint 6: `POST /api/v1/owner/venues/{venue_id}/restricted-change-requests`
 
 **Guard:** `require_owner_portal_auth` + venue scope + `submit_restricted_changes_for_review`
 
@@ -684,7 +684,7 @@ Same rules as Phase A `_validate_opening_hours` with `submit=true` (hours must b
 
 ```json
 {
-  "intent": "submit",
+  "section": "identity_location",
   "payload": {
     "display_name": "The Example Hotel",
     "address_line_1": "1 Example St",
@@ -693,34 +693,31 @@ Same rules as Phase A `_validate_opening_hours` with `submit=true` (hours must b
     "locality_id": "uuid",
     "country_code": "AU",
     "latitude": null,
-    "longitude": null,
-    "owner_confirms_management": true
+    "longitude": null
   }
 }
 ```
 
-| `intent` | Behaviour |
-|----------|-----------|
-| `submit` | `lifecycle_status = in_review`, `submitted_at = now()` |
-| `draft` | `lifecycle_status = staged` (optional; restricted zone only) |
+**Must not** include `short_description`, `long_description`, `opening_hours`, contact fields, or `google_place_id` — return `400` if present.
 
-**Must not** include `short_description`, `long_description`, or `opening_hours` — return `400` if present.
+At least one restricted field must be supplied and changed from published values.
 
-### Response `201`
+### Response `201` (new proposal) or `200` (duplicate in-review)
 
 ```json
 {
   "data": {
     "proposal_id": "uuid",
     "venue_id": "uuid",
-    "section": "restricted_identity",
-    "intent": "submit",
+    "section": "identity_location",
     "lifecycle_status": "in_review",
     "submitted_at": "ISO-8601",
-    "message": "We'll review your name/address change request."
+    "message": "Change request submitted. We'll review it before updating your listing."
   }
 }
 ```
+
+Duplicate in-review (`200`): same shape; `message`: “Your change request is already waiting for review.”
 
 ### Internal mapping
 

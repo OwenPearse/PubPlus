@@ -1,11 +1,10 @@
 import type { BasicsFormValues } from "@/owner/lib/ownerVenueBasicsForm";
 
-export type BasicsValidationIntent = "draft" | "submit";
-
 export type BasicsFieldErrors = Record<string, string>;
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const POSTAL_RE = /^[A-Za-z0-9 \-]+$/;
+const HOURS_NOTES_MAX = 1000;
 
 function setError(errors: BasicsFieldErrors, key: string, message: string) {
   if (!errors[key]) {
@@ -57,60 +56,24 @@ function hoursAreSatisfied(values: BasicsFormValues): boolean {
   return values.hoursNotes.trim().length >= 10;
 }
 
-export function validateBasicsForm(
-  values: BasicsFormValues,
-  intent: BasicsValidationIntent,
-): BasicsFieldErrors {
-  const submit = intent === "submit";
+export function validateOperationalForm(values: BasicsFormValues): BasicsFieldErrors {
   const errors: BasicsFieldErrors = {};
 
-  validateRequiredString(errors, "displayName", values.displayName, {
-    minLen: 2,
-    maxLen: 120,
-    required: submit,
-  });
-  if (values.displayName.trim() && !submit) {
-    validateRequiredString(errors, "displayName", values.displayName, {
-      minLen: 2,
-      maxLen: 120,
-      required: false,
-    });
-  }
+  const hasDescription =
+    values.shortDescription.trim().length > 0 || values.longDescription.trim().length > 0;
+  const hasHours = hoursAreSatisfied(values);
 
-  validateRequiredString(errors, "addressLine1", values.addressLine1, {
-    minLen: 3,
-    maxLen: 200,
-    required: submit,
-  });
-  if (values.addressLine1.trim() && !submit) {
-    validateRequiredString(errors, "addressLine1", values.addressLine1, {
-      minLen: 3,
-      maxLen: 200,
-      required: false,
-    });
-  }
-
-  validateOptionalString(errors, "addressLine2", values.addressLine2, { maxLen: 200 });
-  validateOptionalString(errors, "postalCode", values.postalCode, {
-    maxLen: 12,
-    pattern: POSTAL_RE,
-    patternMessage:
-      "Must be at most 12 characters (letters, digits, spaces, hyphens).",
-  });
-
-  if (!values.localityId.trim()) {
-    if (submit) {
-      setError(errors, "localityId", "This field is required.");
-    }
+  if (!hasDescription && !hasHours) {
+    setError(
+      errors,
+      "operational",
+      "Update a description or opening hours before saving.",
+    );
   }
 
   validateOptionalString(errors, "shortDescription", values.shortDescription, {
     maxLen: 500,
   });
-  if (submit && !values.shortDescription.trim()) {
-    setError(errors, "shortDescription", "This field is required.");
-  }
-
   validateOptionalString(errors, "longDescription", values.longDescription, {
     maxLen: 2000,
   });
@@ -126,7 +89,11 @@ export function validateBasicsForm(
     }
   });
 
-  if (submit && !hoursAreSatisfied(values)) {
+  if (values.hoursNotes.trim().length > HOURS_NOTES_MAX) {
+    setError(errors, "hoursNotes", `Must be at most ${HOURS_NOTES_MAX} characters.`);
+  }
+
+  if (!hasHours && (hasDescription || values.hoursNotes.trim())) {
     setError(
       errors,
       "openingHours",
@@ -134,12 +101,49 @@ export function validateBasicsForm(
     );
   }
 
-  if (submit && !values.ownerConfirmsManagement) {
-    setError(
-      errors,
-      "ownerConfirmsManagement",
-      "You must confirm you manage this venue.",
-    );
+  return errors;
+}
+
+export function validateRestrictedForm(values: BasicsFormValues): BasicsFieldErrors {
+  const errors: BasicsFieldErrors = {};
+
+  const hasIdentity =
+    values.displayName.trim() ||
+    values.addressLine1.trim() ||
+    values.addressLine2.trim() ||
+    values.postalCode.trim() ||
+    values.localityId.trim();
+
+  if (!hasIdentity) {
+    setError(errors, "restricted", "Change at least one name or address field.");
+  }
+
+  if (values.displayName.trim()) {
+    validateRequiredString(errors, "displayName", values.displayName, {
+      minLen: 2,
+      maxLen: 120,
+      required: false,
+    });
+  }
+
+  if (values.addressLine1.trim()) {
+    validateRequiredString(errors, "addressLine1", values.addressLine1, {
+      minLen: 3,
+      maxLen: 200,
+      required: false,
+    });
+  }
+
+  validateOptionalString(errors, "addressLine2", values.addressLine2, { maxLen: 200 });
+  validateOptionalString(errors, "postalCode", values.postalCode, {
+    maxLen: 12,
+    pattern: POSTAL_RE,
+    patternMessage:
+      "Must be at most 12 characters (letters, digits, spaces, hyphens).",
+  });
+
+  if (values.localityId.trim() && !values.localityId) {
+    setError(errors, "localityId", "Select a valid locality.");
   }
 
   return errors;
@@ -157,8 +161,8 @@ export function mapServerValidationToFormErrors(
     locality_id: "localityId",
     short_description: "shortDescription",
     long_description: "longDescription",
-    owner_confirms_management: "ownerConfirmsManagement",
     opening_hours: "openingHours",
+    notes: "hoursNotes",
   };
 
   for (const [serverKey, messages] of Object.entries(serverDetails)) {
@@ -181,7 +185,17 @@ export function mapServerValidationToFormErrors(
       continue;
     }
 
-    if (serverKey.startsWith("opening_hours")) {
+    const flatHoursMatch = serverKey.match(
+      /^regular_hours_json\[(\d+)\]\.(opens_at|closes_at)$/,
+    );
+    if (flatHoursMatch) {
+      const index = Number(flatHoursMatch[1]);
+      const field = flatHoursMatch[2] === "opens_at" ? "opensAt" : "closesAt";
+      errors[`hours.${index}.${field}`] = message;
+      continue;
+    }
+
+    if (serverKey.startsWith("opening_hours") || serverKey === "regular_hours_json") {
       errors.openingHours = message;
     }
   }

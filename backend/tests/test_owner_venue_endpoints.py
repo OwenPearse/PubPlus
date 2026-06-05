@@ -946,6 +946,198 @@ class OwnerVenueEndpointE2ETests(TestCase):
                     rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_DIRECT_EDIT
                 )
 
+    def test_restricted_change_request_stages_proposal_without_published_mutation(
+        self,
+    ) -> None:
+        self._skip_if_no_db()
+        with connection.cursor() as c:
+            c.execute(
+                "DELETE FROM public.venue_change_proposal WHERE venue_id = %s::uuid",
+                [self.e2e.venue_id],
+            )
+            c.execute(
+                """
+                SELECT proposed_display_name
+                FROM public.venue_published_profile
+                WHERE venue_id = %s::uuid
+                """,
+                [self.e2e.venue_id],
+            )
+            pub_name_before = c.fetchone()[0]
+
+        body = {
+            "section": "identity_location",
+            "payload": {
+                "display_name": "E2E Restricted Name Request",
+                "address_line_1": "100 Restricted Ave",
+                "locality_id": self.e2e.locality_id,
+            },
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/restricted-change-requests",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 201)
+        data = r.json()["data"]
+        self.assertEqual(data["section"], "identity_location")
+        self.assertEqual(data["lifecycle_status"], "in_review")
+        proposal_id = data["proposal_id"]
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT lifecycle_status::text, submitted_at IS NOT NULL
+                FROM public.venue_change_proposal WHERE id = %s::uuid
+                """,
+                [proposal_id],
+            )
+            row = c.fetchone()
+            c.execute(
+                """
+                SELECT proposed_display_name
+                FROM public.venue_proposal_staging_profile
+                WHERE venue_change_proposal_id = %s::uuid
+                """,
+                [proposal_id],
+            )
+            staged_name = c.fetchone()[0]
+            c.execute(
+                """
+                SELECT COUNT(*)::int
+                FROM public.venue_proposal_target
+                WHERE venue_change_proposal_id = %s::uuid
+                  AND target_family = 'hours'
+                """,
+                [proposal_id],
+            )
+            hours_target = c.fetchone()[0]
+            c.execute(
+                """
+                SELECT proposed_display_name
+                FROM public.venue_published_profile
+                WHERE venue_id = %s::uuid
+                """,
+                [self.e2e.venue_id],
+            )
+            pub_name_after = c.fetchone()[0]
+
+        self.assertEqual(row[0], "in_review")
+        self.assertTrue(row[1])
+        self.assertEqual(staged_name, "E2E Restricted Name Request")
+        self.assertEqual(hours_target, 0)
+        self.assertEqual(pub_name_after, pub_name_before)
+
+    def test_restricted_change_rejects_operational_fields(self) -> None:
+        self._skip_if_no_db()
+        body = {
+            "section": "identity_location",
+            "payload": {"short_description": "Sneaky desc"},
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/restricted-change-requests",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("short_description", r.json()["error"]["details"])
+
+    def test_restricted_change_rejects_google_place_id(self) -> None:
+        self._skip_if_no_db()
+        body = {
+            "section": "identity_location",
+            "payload": {
+                "display_name": "Test",
+                "google_place_id": "ChIJxxxx",
+            },
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/restricted-change-requests",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("google_place_id", r.json()["error"]["details"])
+
+    def test_restricted_change_missing_capability_returns_403(self) -> None:
+        self._skip_if_no_db()
+        _revoke_owner_capability(
+            self.e2e.venue_id,
+            self.e2e.owner_account_id,
+            E2E_CAPABILITY_SUBMIT,
+        )
+        body = {
+            "section": "identity_location",
+            "payload": {"display_name": "Blocked Name"},
+        }
+        try:
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                r = self.client.post(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/restricted-change-requests",
+                    data=json.dumps(body),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            self.assertEqual(r.status_code, 403)
+        finally:
+            with connection.cursor() as c:
+                c.execute(
+                    """
+                    SELECT bvmr.id::text
+                    FROM public.business_venue_management_relationship bvmr
+                    WHERE bvmr.venue_id = %s::uuid
+                    LIMIT 1
+                    """,
+                    [self.e2e.venue_id],
+                )
+                rel = c.fetchone()
+            if rel:
+                _restore_owner_capability(
+                    rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_SUBMIT
+                )
+
+    def test_restricted_duplicate_in_review_returns_existing_proposal(self) -> None:
+        self._skip_if_no_db()
+        with connection.cursor() as c:
+            c.execute(
+                "DELETE FROM public.venue_change_proposal WHERE venue_id = %s::uuid",
+                [self.e2e.venue_id],
+            )
+        body = {
+            "section": "identity_location",
+            "payload": {
+                "display_name": "Duplicate Restricted Name",
+                "address_line_1": "200 Restricted St",
+                "locality_id": self.e2e.locality_id,
+            },
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            first = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/restricted-change-requests",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            self.assertEqual(first.status_code, 201)
+            first_id = first.json()["data"]["proposal_id"]
+            second = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/restricted-change-requests",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["data"]["proposal_id"], first_id)
+        self.assertIn("already waiting", second.json()["data"]["message"].lower())
+
     def test_proposal_still_works_after_direct_edit_endpoints(self) -> None:
         self._skip_if_no_db()
         body = {

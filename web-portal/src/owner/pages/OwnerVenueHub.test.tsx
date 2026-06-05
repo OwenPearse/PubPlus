@@ -45,6 +45,7 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
       lifecycle_status: null,
       last_saved_at: null,
       payload_preview: { display_name: null, address_line_1: null, locality_id: null },
+      core_details_payload: null,
     },
     pending_review: {
       proposal_id: null,
@@ -111,7 +112,7 @@ describe("OwnerVenueHub", () => {
     });
     expect(screen.getByText(/Docklands, VIC/)).toBeInTheDocument();
     expect(screen.getByText("40%")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Confirm pub details" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Edit pub details" })).toHaveAttribute(
       "href",
       "/owner/venues/v-1/basics",
     );
@@ -152,7 +153,7 @@ describe("OwnerVenueHub", () => {
     );
     await waitFor(() => {
       expect(
-        screen.getByText(/Submitted for review/i),
+        screen.getByText(/Name\/address change pending review/i),
       ).toBeInTheDocument();
     });
   });

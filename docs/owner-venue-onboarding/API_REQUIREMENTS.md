@@ -6,7 +6,7 @@ Specify backend endpoints for owner venue onboarding. **Normative edit policy:**
 
 ## Current stage
 
-**Stage 4.1 complete.** Direct PATCH endpoints implemented. Restricted `POST restricted-change-requests` planned for 4.2.
+**Stage 4.2 complete.** Direct PATCH + restricted `POST restricted-change-requests` implemented. Legacy `POST .../proposals` retained.
 
 ## Decisions
 
@@ -72,16 +72,15 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 
 **Guard:** `manage_published_venue_operations` required (enforce in 4.1).
 
-## Restricted change requests (Stage 4.1–4.2)
+## Restricted change requests (Stage 4.2 — implemented)
 
 | Method | Path | Summary |
 |--------|------|---------|
-| POST | `/api/v1/owner/venues/{venue_id}/restricted-change-requests` | Identity/location proposal → `in_review` |
-| POST | `/api/v1/owner/venues/{venue_id}/restricted-change-requests` with `intent: draft` | Staged restricted draft (optional) |
+| POST | `/api/v1/owner/venues/{venue_id}/restricted-change-requests` | `section: identity_location` → proposal `in_review` |
 
 **Guard:** `submit_restricted_changes_for_review` required.
 
-**Payload:** `display_name`, address fields, `locality_id`, `latitude`/`longitude` only.
+**Payload:** `display_name`, address fields, `locality_id`, `latitude`/`longitude` only. Rejects descriptions/hours/contact.
 
 ## Legacy (deprecate)
 

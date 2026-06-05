@@ -44,6 +44,22 @@ _UNSUPPORTED_PAYLOAD_KEYS = frozenset(
 )
 _CORE_TARGETS = ("profile", "geo", "hours")
 _DIRECT_EDIT_CAPABILITY = "manage_published_venue_operations"
+_RESTRICTED_SUBMIT_CAPABILITY = "submit_restricted_changes_for_review"
+_RESTRICTED_IDENTITY_TARGETS = ("profile", "geo")
+_RESTRICTED_FORBIDDEN_PAYLOAD_KEYS = frozenset(
+    {
+        "short_description",
+        "long_description",
+        "opening_hours",
+        "phone",
+        "email",
+        "website",
+        "contact_person_name",
+        "contact_person_role",
+        "google_place_id",
+        "owner_confirms_management",
+    }
+)
 _HOURS_NOTES_MAX_LEN = 1000
 _OPERATIONAL_PROFILE_ALLOWED_KEYS = frozenset(
     {"short_description", "long_description"}
@@ -210,6 +226,21 @@ def _has_active_capability(
             [str(relationship_id), str(owner_account_id), capability_code],
         )
         return c.fetchone() is not None
+
+
+def assert_owner_can_submit_restricted_change(
+    auth: AuthContext, venue_id: str
+) -> tuple[ResolvedVenueAccess | None, str]:
+    access, err = assert_owner_manages_venue(auth, venue_id)
+    if access is None:
+        return None, err
+    if not _has_active_capability(
+        access.relationship_id,
+        access.owner_account_id,
+        _RESTRICTED_SUBMIT_CAPABILITY,
+    ):
+        return None, "missing_restricted_capability"
+    return access, "ok"
 
 
 def assert_owner_can_direct_edit(
@@ -1937,4 +1968,329 @@ def patch_owner_venue_hours(
         "venue_id": venue_id,
         "hours": after_block,
         "message": "Opening hours saved.",
+    }, "ok", None
+
+
+def _find_open_in_review_restricted_proposal(
+    venue_id: str, owner_account_id: UUID
+) -> dict[str, Any] | None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT p.id::text, p.submitted_at
+            FROM public.venue_change_proposal p
+            WHERE p.venue_id = %s::uuid
+              AND p.actor_type = 'owner'
+              AND p.channel = 'owner_portal'
+              AND p.actor_owner_account_id = %s::uuid
+              AND p.lifecycle_status = 'in_review'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM public.venue_proposal_target t
+                WHERE t.venue_change_proposal_id = p.id
+                  AND t.target_family = 'hours'
+              )
+            ORDER BY p.submitted_at DESC NULLS LAST, p.created_at DESC
+            LIMIT 1
+            """,
+            [venue_id, str(owner_account_id)],
+        )
+        row = c.fetchone()
+    if not row:
+        return None
+    submitted_at = row[1]
+    return {
+        "proposal_id": row[0],
+        "lifecycle_status": "in_review",
+        "submitted_at": submitted_at.isoformat() if submitted_at else None,
+    }
+
+
+def _validate_restricted_identity_payload(
+    payload: Any,
+) -> tuple[dict[str, Any] | None, dict[str, list[str]] | None]:
+    if not isinstance(payload, dict):
+        return None, {"payload": ["payload must be a JSON object."]}
+
+    details: dict[str, list[str]] = {}
+    forbidden = sorted(_RESTRICTED_FORBIDDEN_PAYLOAD_KEYS.intersection(payload.keys()))
+    for key in forbidden:
+        details[key] = ["This field cannot be included in a restricted change request."]
+
+    unsupported = sorted(_UNSUPPORTED_PAYLOAD_KEYS.intersection(payload.keys()))
+    for key in unsupported:
+        details[key] = ["This field is not supported."]
+
+    if details:
+        return None, details
+
+    out: dict[str, Any] = {}
+
+    dn = payload.get("display_name")
+    if dn is not None:
+        if not isinstance(dn, str):
+            details["display_name"] = ["Must be a string."]
+        else:
+            val = dn.strip()
+            if val and (len(val) < 2 or len(val) > 120):
+                details["display_name"] = ["Must be between 2 and 120 characters."]
+            elif val:
+                out["display_name"] = val
+
+    raw_addr = payload.get("address_line_1")
+    if raw_addr is not None:
+        if not isinstance(raw_addr, str):
+            details["address_line_1"] = ["Must be a string."]
+        else:
+            val = raw_addr.strip()
+            if val and (len(val) < 3 or len(val) > 200):
+                details["address_line_1"] = ["Must be between 3 and 200 characters."]
+            elif val:
+                out["address_line_1"] = val
+
+    line_2 = payload.get("address_line_2")
+    if line_2 is not None:
+        if not isinstance(line_2, str):
+            details["address_line_2"] = ["Must be a string or null."]
+        else:
+            v2 = line_2.strip()
+            if len(v2) > 200:
+                details["address_line_2"] = ["Must be at most 200 characters."]
+            else:
+                out["address_line_2"] = v2 or None
+
+    pc = payload.get("postal_code")
+    if pc is not None:
+        if not isinstance(pc, str):
+            details["postal_code"] = ["Must be a string."]
+        else:
+            pv = pc.strip()
+            if pv and (len(pv) > 12 or not _POSTAL_RE.fullmatch(pv)):
+                details["postal_code"] = [
+                    "Must be at most 12 characters (letters, digits, spaces, hyphens)."
+                ]
+            elif pv:
+                out["postal_code"] = pv
+
+    loc = payload.get("locality_id")
+    if loc is not None:
+        if _bad_uuid(loc):
+            details["locality_id"] = ["Must be a valid UUID."]
+        else:
+            loc_s = str(loc)
+            if not _locality_exists(loc_s):
+                details["locality_id"] = [
+                    "locality_id does not reference an existing locality."
+                ]
+            else:
+                out["locality_id"] = loc_s
+
+    cc = payload.get("country_code")
+    if cc is None and any(
+        k in out for k in ("address_line_1", "address_line_2", "postal_code", "locality_id")
+    ):
+        out["country_code"] = "AU"
+    elif cc is not None:
+        if not isinstance(cc, str) or not re.fullmatch(r"[A-Za-z]{2}", cc):
+            details["country_code"] = ["Must be a two-letter ISO country code."]
+        else:
+            out["country_code"] = cc.upper()
+
+    lat = payload.get("latitude")
+    lng = payload.get("longitude")
+    if (lat is None) != (lng is None):
+        details["latitude"] = ["latitude and longitude must be provided together."]
+        details["longitude"] = ["latitude and longitude must be provided together."]
+    else:
+        for key, val in (("latitude", lat), ("longitude", lng)):
+            if val is None:
+                continue
+            if not isinstance(val, (int, float)):
+                details[key] = ["Must be a number or null."]
+            elif key == "latitude" and not (-90 <= float(val) <= 90):
+                details["latitude"] = ["Must be between -90 and 90."]
+            elif key == "longitude" and not (-180 <= float(val) <= 180):
+                details["longitude"] = ["Must be between -180 and 180."]
+            else:
+                out[key] = float(val)
+
+    if not out:
+        details.setdefault("payload", []).append(
+            "At least one restricted field must be provided."
+        )
+
+    if details:
+        return None, details
+    return out, None
+
+
+def _upsert_restricted_staging_rows(
+    proposal_id: str, venue_id: str, fields: dict[str, Any]
+) -> None:
+    with connection.cursor() as c:
+        if "display_name" in fields:
+            c.execute(
+                """
+                INSERT INTO public.venue_proposal_staging_profile (
+                    venue_change_proposal_id, venue_id, proposed_display_name
+                ) VALUES (%s::uuid, %s::uuid, %s)
+                ON CONFLICT (venue_change_proposal_id) DO UPDATE SET
+                    proposed_display_name = EXCLUDED.proposed_display_name
+                """,
+                [proposal_id, venue_id, fields.get("display_name")],
+            )
+
+        geo_keys = (
+            "address_line_1",
+            "address_line_2",
+            "postal_code",
+            "locality_id",
+            "country_code",
+            "latitude",
+            "longitude",
+        )
+        if any(k in fields for k in geo_keys):
+            c.execute(
+                """
+                INSERT INTO public.venue_proposal_staging_location (
+                    venue_change_proposal_id, venue_id,
+                    proposed_locality_id, proposed_address_line_1, proposed_address_line_2,
+                    proposed_postal_code, proposed_country_code,
+                    proposed_latitude, proposed_longitude
+                ) VALUES (
+                    %s::uuid, %s::uuid,
+                    %s::uuid, %s, %s, %s, %s, %s, %s
+                )
+                ON CONFLICT (venue_change_proposal_id) DO UPDATE SET
+                    proposed_locality_id = EXCLUDED.proposed_locality_id,
+                    proposed_address_line_1 = EXCLUDED.proposed_address_line_1,
+                    proposed_address_line_2 = EXCLUDED.proposed_address_line_2,
+                    proposed_postal_code = EXCLUDED.proposed_postal_code,
+                    proposed_country_code = EXCLUDED.proposed_country_code,
+                    proposed_latitude = EXCLUDED.proposed_latitude,
+                    proposed_longitude = EXCLUDED.proposed_longitude
+                """,
+                [
+                    proposal_id,
+                    venue_id,
+                    fields.get("locality_id"),
+                    fields.get("address_line_1"),
+                    fields.get("address_line_2"),
+                    fields.get("postal_code"),
+                    fields.get("country_code", "AU"),
+                    fields.get("latitude"),
+                    fields.get("longitude"),
+                ],
+            )
+
+
+def _upsert_restricted_proposal_targets(
+    proposal_id: str, fields: dict[str, Any]
+) -> None:
+    targets: list[str] = []
+    if "display_name" in fields:
+        targets.append("profile")
+    if any(
+        k in fields
+        for k in (
+            "address_line_1",
+            "address_line_2",
+            "postal_code",
+            "locality_id",
+            "country_code",
+            "latitude",
+            "longitude",
+        )
+    ):
+        targets.append("geo")
+    with connection.cursor() as c:
+        for tf in targets:
+            c.execute(
+                """
+                INSERT INTO public.venue_proposal_target (venue_change_proposal_id, target_family)
+                VALUES (%s::uuid, %s)
+                ON CONFLICT (venue_change_proposal_id, target_family) DO NOTHING
+                """,
+                [proposal_id, tf],
+            )
+
+
+@transaction.atomic
+def create_owner_restricted_change_request(
+    auth: AuthContext,
+    venue_id: str,
+    *,
+    section: str,
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_submit_restricted_change(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    if section != "identity_location":
+        return None, "validation_error", {
+            "section": ["Only section 'identity_location' is supported."]
+        }
+
+    fields, val_err = _validate_restricted_identity_payload(payload)
+    if val_err:
+        return None, "validation_error", val_err
+
+    existing = _find_open_in_review_restricted_proposal(
+        venue_id, access.owner_account_id
+    )
+    if existing is not None:
+        return {
+            "proposal_id": existing["proposal_id"],
+            "venue_id": venue_id,
+            "section": "identity_location",
+            "lifecycle_status": "in_review",
+            "submitted_at": existing["submitted_at"],
+            "message": "Your change request is already waiting for review.",
+        }, "already_in_review", None
+
+    now = datetime.now(timezone.utc)
+    profile_before = _count_published_profile_rows(venue_id)
+
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.venue_change_proposal (
+                venue_id,
+                actor_type,
+                actor_owner_account_id,
+                channel,
+                proposal_kind,
+                lifecycle_status,
+                submitted_at
+            ) VALUES (
+                %s::uuid, 'owner', %s::uuid, 'owner_portal', 'field_family',
+                'in_review', %s
+            )
+            RETURNING id::text
+            """,
+            [venue_id, str(access.owner_account_id), now],
+        )
+        proposal_id = c.fetchone()[0]
+
+    assert fields is not None
+    _upsert_restricted_proposal_targets(proposal_id, fields)
+    _upsert_restricted_staging_rows(proposal_id, venue_id, fields)
+
+    profile_after = _count_published_profile_rows(venue_id)
+    if profile_after != profile_before:
+        logger.error(
+            "Restricted change request unexpectedly changed published profile count for venue %s",
+            venue_id,
+        )
+
+    return {
+        "proposal_id": proposal_id,
+        "venue_id": venue_id,
+        "section": "identity_location",
+        "lifecycle_status": "in_review",
+        "submitted_at": now.isoformat(),
+        "message": (
+            "Change request submitted. We'll review it before updating your listing."
+        ),
     }, "ok", None

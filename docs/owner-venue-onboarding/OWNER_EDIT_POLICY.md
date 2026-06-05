@@ -14,7 +14,7 @@ This document supersedes the Phase A assumption that **every** `core_details` fi
 
 ## Current stage
 
-**Stage 4.1 — backend direct-edit implemented** for descriptions and hours (`PATCH operational-profile`, `PATCH hours`). Stage 4.2 (frontend split) is next. Legacy `POST .../proposals` remains for compatibility.
+**Stage 4.2 complete.** Backend direct PATCH + restricted `POST restricted-change-requests`; frontend Step 1 split (Save changes / Request change). Legacy `POST .../proposals` remains for compatibility.
 
 ## Decisions
 
@@ -269,7 +269,7 @@ flowchart TB
 | Stage | Work |
 |-------|------|
 | **4.1** | ✅ Backend `PATCH operational-profile`, `PATCH hours`, audit writes, grant enforcement |
-| **4.2** | Frontend Step 1 split; `POST restricted-change-requests` client |
+| **4.2** | ✅ Frontend Step 1 split; `POST restricted-change-requests` |
 | **4.3** | History snapshots; contact schema; remove operational proposal shim |
 | **5–7** | Direct-edit pages for specials, taps, features |
 | **Admin** | Restricted publish worker; moderation filter polish |
@@ -297,7 +297,7 @@ Phase A `POST .../proposals` **remains** until Stage 4.2/4.3 migrate frontend an
 | Capability `manage_published_venue_operations` | ✅ Enforced; `403` if missing |
 | `audit_event` (`owner_direct_edit`) | ✅ Before/after in `detail` JSON |
 | `venue_published_row_history` | Deferred 4.1b |
-| `POST .../restricted-change-requests` | Planned 4.2 backend |
+| `POST .../restricted-change-requests` | ✅ `create_owner_restricted_change_request` |
 | Hour `exceptions_json` non-empty | Rejected `400` until mapping defined |
 
 **Restricted migration path:** Add `POST .../restricted-change-requests` in 4.2; narrow legacy `POST .../proposals` to reject operational-only payloads; frontend uses restricted POST for name/address zone.

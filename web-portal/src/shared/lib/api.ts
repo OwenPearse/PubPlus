@@ -279,6 +279,39 @@ export type OwnerVenueCompletenessSection = {
   available: boolean;
 };
 
+export type OwnerOpeningHoursPayload = {
+  uncertainty_level?:
+    | "unknown"
+    | "partial"
+    | "weak_stale"
+    | "disputed"
+    | "resolved_confident";
+  regular_hours_json?: Array<{
+    day_of_week: number;
+    opens_at: string;
+    closes_at: string;
+    crosses_midnight?: boolean;
+    sort_order?: number;
+  }>;
+  exceptions_json?: Array<Record<string, unknown>>;
+  notes?: string | null;
+};
+
+export type OwnerCoreDetailsPayload = {
+  display_name?: string;
+  address_line_1?: string;
+  address_line_2?: string | null;
+  postal_code?: string;
+  locality_id?: string;
+  country_code?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  short_description?: string;
+  long_description?: string | null;
+  opening_hours?: OwnerOpeningHoursPayload;
+  owner_confirms_management?: boolean;
+};
+
 export type OwnerVenueDetail = {
   venue_id: string;
   display_name: string;
@@ -328,6 +361,7 @@ export type OwnerVenueDetail = {
       address_line_1: string | null;
       locality_id: string | null;
     };
+    core_details_payload: OwnerCoreDetailsPayload | null;
   };
   pending_review: {
     proposal_id: string | null;
@@ -363,39 +397,6 @@ export function ownerVenueDetail(venueId: string) {
   );
 }
 
-export type OwnerOpeningHoursPayload = {
-  uncertainty_level?:
-    | "unknown"
-    | "partial"
-    | "weak_stale"
-    | "disputed"
-    | "resolved_confident";
-  regular_hours_json?: Array<{
-    day_of_week: number;
-    opens_at: string;
-    closes_at: string;
-    crosses_midnight?: boolean;
-    sort_order?: number;
-  }>;
-  exceptions_json?: Array<Record<string, unknown>>;
-  notes?: string | null;
-};
-
-export type OwnerCoreDetailsPayload = {
-  display_name?: string;
-  address_line_1?: string;
-  address_line_2?: string | null;
-  postal_code?: string;
-  locality_id?: string;
-  country_code?: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  short_description?: string;
-  long_description?: string | null;
-  opening_hours?: OwnerOpeningHoursPayload;
-  owner_confirms_management?: boolean;
-};
-
 export type OwnerVenueProposalRequest = {
   section: "core_details";
   intent: "draft" | "submit";
@@ -415,6 +416,85 @@ export type OwnerVenueProposalResponse = {
 export function ownerVenueProposal(venueId: string, body: OwnerVenueProposalRequest) {
   return apiRequest<ApiResponse<OwnerVenueProposalResponse>>(
     `/api/v1/owner/venues/${encodeURIComponent(venueId)}/proposals`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export type OwnerOperationalProfilePatchRequest = {
+  short_description?: string | null;
+  long_description?: string | null;
+};
+
+export type OwnerOperationalProfilePatchResponse = {
+  venue_id: string;
+  updated: {
+    short_description: string | null;
+    long_description: string | null;
+  };
+  message: string;
+};
+
+export function ownerPatchOperationalProfile(
+  venueId: string,
+  body: OwnerOperationalProfilePatchRequest,
+) {
+  return apiRequest<ApiResponse<OwnerOperationalProfilePatchResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/operational-profile`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
+export type OwnerHoursPatchRequest = OwnerOpeningHoursPayload;
+
+export type OwnerHoursPatchResponse = {
+  venue_id: string;
+  hours: {
+    uncertainty_level: string;
+    regular: OwnerVenueHoursRegular[];
+    exceptions: unknown[];
+    notes: string | null;
+  };
+  message: string;
+};
+
+export function ownerPatchHours(venueId: string, body: OwnerHoursPatchRequest) {
+  return apiRequest<ApiResponse<OwnerHoursPatchResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/hours`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
+export type OwnerRestrictedIdentityPayload = {
+  display_name?: string;
+  address_line_1?: string;
+  address_line_2?: string | null;
+  postal_code?: string;
+  locality_id?: string;
+  country_code?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export type OwnerRestrictedChangeRequest = {
+  section: "identity_location";
+  payload: OwnerRestrictedIdentityPayload;
+};
+
+export type OwnerRestrictedChangeResponse = {
+  proposal_id: string;
+  venue_id: string;
+  section: "identity_location";
+  lifecycle_status: "in_review";
+  submitted_at: string | null;
+  message: string;
+};
+
+export function ownerRestrictedChangeRequest(
+  venueId: string,
+  body: OwnerRestrictedChangeRequest,
+) {
+  return apiRequest<ApiResponse<OwnerRestrictedChangeResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/restricted-change-requests`,
     { method: "POST", body: JSON.stringify(body) },
   );
 }
