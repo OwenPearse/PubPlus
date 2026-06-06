@@ -20,6 +20,9 @@ vi.mock("@/shared/lib/supabase", () => ({
 
 vi.mock("@/shared/lib/api", () => ({
   internalAuthProbe: () => internalAuthProbe(),
+  getOwnerClaimsSummary: vi.fn().mockResolvedValue({
+    data: { open_count: 0, submitted_count: 0, under_review_count: 0 },
+  }),
   formatApiError: (err: unknown) => String(err),
 }));
 

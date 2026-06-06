@@ -1,6 +1,68 @@
+import { useEffect, useState } from "react";
+
+import { OwnerClaimStatusState } from "@/owner/pages/OwnerClaimStatusState";
 import { OwnerVenueClaimEntry } from "@/owner/pages/OwnerVenueClaimEntry";
+import { ErrorBanner } from "@/shared/components/ErrorBanner";
+import {
+  formatApiError,
+  ownerCurrentVenueClaim,
+  type OwnerClaimStatus,
+} from "@/shared/lib/api";
+
+function shouldShowClaimStatus(claim: OwnerClaimStatus): boolean {
+  const status = claim.claim_lifecycle_status;
+  return (
+    status === "draft" ||
+    status === "submitted" ||
+    status === "under_review" ||
+    status === "needs_more_info" ||
+    status === "denied"
+  );
+}
 
 export function NoVenueAccessState() {
+  const [claim, setClaim] = useState<OwnerClaimStatus | null | undefined>(undefined);
+  const [error, setError] = useState("");
+  const [showNewRequestForm, setShowNewRequestForm] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setError("");
+    void ownerCurrentVenueClaim()
+      .then(({ data }) => {
+        if (!active) return;
+        setClaim(data);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setClaim(null);
+        setError(formatApiError(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (claim === undefined) {
+    return <p className="text-sm text-slate-600">Loading your venue request…</p>;
+  }
+
+  if (claim && shouldShowClaimStatus(claim) && !showNewRequestForm) {
+    return (
+      <div className="space-y-4">
+        <ErrorBanner message={error} onDismiss={error ? () => setError("") : undefined} />
+        <OwnerClaimStatusState
+          claim={claim}
+          onSubmitNew={
+            claim.claim_lifecycle_status === "denied"
+              ? () => setShowNewRequestForm(true)
+              : undefined
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -10,6 +72,7 @@ export function NoVenueAccessState() {
           and review that you&apos;re authorised to manage it.
         </p>
       </div>
+      <ErrorBanner message={error} onDismiss={error ? () => setError("") : undefined} />
       <div className="rounded-lg border border-slate-200 bg-white p-6">
         <OwnerVenueClaimEntry />
       </div>

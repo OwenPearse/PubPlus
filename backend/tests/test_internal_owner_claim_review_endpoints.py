@@ -47,6 +47,10 @@ class InternalOwnerClaimReviewAuthTests(SimpleTestCase):
         response = self.client.get("/api/v1/internal/owner-claims/")
         self.assertEqual(response.status_code, 401)
 
+    def test_summary_requires_auth(self) -> None:
+        response = self.client.get("/api/v1/internal/owner-claims/summary")
+        self.assertEqual(response.status_code, 401)
+
     def test_non_admin_cannot_list_claims(self) -> None:
         with patch(
             "common.auth.guards.verify_supabase_jwt",
@@ -131,6 +135,28 @@ class InternalOwnerClaimReviewEndpointTests(TestCase):
         items = response.json()["data"]["items"]
         self.assertTrue(
             any(item["claim_request_id"] == self.e2e.claim_request_id for item in items)
+        )
+
+    def test_admin_summary_returns_open_claim_count(self) -> None:
+        self._skip_if_no_schema()
+        assert self.e2e is not None
+        with patch(
+            "common.auth.guards.verify_supabase_jwt",
+            return_value=_internal_ctx(self.e2e.admin_auth_user_id),
+        ):
+            response = self.client.get(
+                "/api/v1/internal/owner-claims/summary",
+                **_auth_headers(),
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertIn("open_count", data)
+        self.assertIn("submitted_count", data)
+        self.assertIn("under_review_count", data)
+        self.assertGreaterEqual(data["open_count"], 1)
+        self.assertEqual(
+            data["open_count"],
+            data["submitted_count"] + data["under_review_count"],
         )
 
     def test_detail_includes_duplicate_candidates_from_summary(self) -> None:

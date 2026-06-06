@@ -13,6 +13,7 @@ vi.mock("@/shared/lib/env", () => ({
 import {
   approveOwnerClaimExisting,
   getOwnerClaim,
+  getOwnerClaimsSummary,
   listOwnerClaims,
   rejectOwnerClaim,
 } from "@/shared/lib/api";
@@ -21,6 +22,29 @@ describe("owner claims API client", () => {
   beforeEach(() => {
     waitForAccessToken.mockResolvedValue("test-token");
     vi.stubGlobal("fetch", vi.fn());
+  });
+
+  it("getOwnerClaimsSummary fetches open claim counts", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            open_count: 3,
+            submitted_count: 2,
+            under_review_count: 1,
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const result = await getOwnerClaimsSummary();
+    expect(result.data.open_count).toBe(3);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/internal/owner-claims/summary",
+      expect.any(Object),
+    );
   });
 
   it("listOwnerClaims sends GET with status filter", async () => {

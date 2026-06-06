@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 
 import { PortalShell } from "@/shared/components/PortalShell";
+import { AdminInternalNav } from "@/admin/components/AdminInternalNav";
 import { formatApiError, internalAuthProbe } from "@/shared/lib/api";
 import { hasSupabaseAuthConfig } from "@/shared/lib/env";
 import {
@@ -98,6 +99,7 @@ export function AdminRouteGuard({ children }: Props) {
 
   return (
     <PortalShell email={session.user.email} onSignOut={handleSignOut}>
+      <AdminInternalNav />
       {children}
     </PortalShell>
   );

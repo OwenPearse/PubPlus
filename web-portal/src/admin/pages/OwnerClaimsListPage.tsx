@@ -27,7 +27,7 @@ function formatLocation(item: OwnerClaimListItem) {
 }
 
 export function OwnerClaimsListPage() {
-  const [statusFilter, setStatusFilter] = useState(STATUS_FILTERS[0].value);
+  const [statusFilter, setStatusFilter] = useState<string>(STATUS_FILTERS[0].value);
   const [items, setItems] = useState<OwnerClaimListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

@@ -191,6 +191,34 @@ def _claim_list_row(row: tuple[Any, ...]) -> dict[str, Any]:
     }
 
 
+def get_owner_claims_summary() -> dict[str, int]:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT claim_lifecycle_status, COUNT(*)::int
+            FROM public.venue_claim_request
+            WHERE claim_lifecycle_status = ANY(%s)
+            GROUP BY claim_lifecycle_status
+            """,
+            [list(OPEN_CLAIM_STATUSES)],
+        )
+        rows = c.fetchall()
+
+    submitted_count = 0
+    under_review_count = 0
+    for status, count in rows:
+        if status == "submitted":
+            submitted_count = int(count)
+        elif status == "under_review":
+            under_review_count = int(count)
+    open_count = submitted_count + under_review_count
+    return {
+        "open_count": open_count,
+        "submitted_count": submitted_count,
+        "under_review_count": under_review_count,
+    }
+
+
 def list_owner_claim_queue(filters: VenueClaimQueueFilters) -> dict[str, Any]:
     with connection.cursor() as c:
         c.execute(

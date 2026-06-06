@@ -203,4 +203,45 @@ describe("OwnerVenueHub", () => {
       expect(screen.getByRole("heading", { name: "Access denied" })).toBeInTheDocument();
     });
   });
+
+  it("renders sparse approve-new venue without crashing", async () => {
+    ownerVenueDetail.mockResolvedValue({
+      data: baseDetail({
+        display_name: "Sparse Pub",
+        published: {
+          profile: {
+            display_name: "Sparse Pub",
+            slug: "sparse-pub",
+            operational_status: null,
+          },
+          location: {
+            locality_id: "loc-1",
+            locality_name: "Carlton",
+            state_code: "VIC",
+            address_line_1: "1 Sparse St",
+            address_line_2: null,
+            postal_code: null,
+            country_code: "AU",
+            latitude: null,
+            longitude: null,
+          },
+          descriptions: { short_description: null, long_description: null },
+          hours: { uncertainty_level: "resolved_confident", regular: [], exceptions: [] },
+          contact: { supported: false, phone: null, email: null, website: null },
+        },
+      }),
+    });
+    render(
+      <MemoryRouter initialEntries={["/owner/venues/v-sparse"]}>
+        <Routes>
+          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Sparse Pub" })).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Carlton, VIC/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit pub details" })).toBeInTheDocument();
+  });
 });

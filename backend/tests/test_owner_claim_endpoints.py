@@ -45,6 +45,10 @@ class OwnerClaimEndpointAuthTests(SimpleTestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    def test_claim_status_get_without_token_returns_401(self) -> None:
+        response = self.client.get("/api/v1/owner/venue-claim-requests")
+        self.assertEqual(response.status_code, 401)
+
     def test_candidates_with_invalid_token_returns_401(self) -> None:
         with patch(
             "common.auth.guards.verify_supabase_jwt",
@@ -246,3 +250,128 @@ class OwnerClaimEndpointIntegrationTests(TestCase):
                 **_auth_headers(),
             )
         self.assertEqual(response.status_code, 403)
+
+    def test_owner_can_read_own_open_claim_status(self) -> None:
+        self._skip_if_no_schema()
+        assert self.e2e is not None
+        ctx = _ctx(self.e2e.owner_auth_user_id, email="e2e-owner-claim@pubplus.test")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=ctx):
+            submit = self.client.post(
+                "/api/v1/owner/venue-claim-requests",
+                data=json.dumps(
+                    {
+                        "mode": "submit_new_or_claim",
+                        "venue_name": "Status Check Pub",
+                        "address_line_1": "44 Status Street",
+                        "locality_id": self.e2e.locality_id,
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            status = self.client.get(
+                "/api/v1/owner/venue-claim-requests",
+                **_auth_headers(),
+            )
+        self.assertEqual(submit.status_code, 201)
+        self.assertEqual(status.status_code, 200)
+        data = status.json()["data"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["submitted_venue_name"], "Status Check Pub")
+        self.assertIn(
+            data["claim_lifecycle_status"],
+            ("submitted", "under_review", "draft"),
+        )
+        self.assertNotIn("duplicate_candidates", data)
+        self.assertNotIn("possible_duplicate_venue_ids", data)
+
+    def test_owner_with_no_claims_gets_null_status(self) -> None:
+        self._skip_if_no_schema()
+        assert self.e2e is not None
+        other_owner_id = str(uuid4())
+        with connection.cursor() as c:
+            c.execute(
+                """
+                INSERT INTO auth.users (id, email)
+                VALUES (%s::uuid, %s)
+                ON CONFLICT (id) DO NOTHING
+                """,
+                [other_owner_id, "other-owner-status@pubplus.test"],
+            )
+            c.execute(
+                """
+                INSERT INTO public.owner_account (auth_user_id, account_status)
+                VALUES (%s::uuid, 'active')
+                RETURNING id::text
+                """,
+                [other_owner_id],
+            )
+            other_account_id = c.fetchone()[0]
+        ctx = _ctx(other_owner_id, email="other-owner-status@pubplus.test")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=ctx):
+            response = self.client.get(
+                "/api/v1/owner/venue-claim-requests",
+                **_auth_headers(),
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["data"])
+        with connection.cursor() as c:
+            c.execute(
+                "DELETE FROM public.owner_account WHERE id = %s::uuid",
+                [other_account_id],
+            )
+            c.execute("DELETE FROM auth.users WHERE id = %s::uuid", [other_owner_id])
+
+    def test_owner_cannot_read_another_owners_claim(self) -> None:
+        self._skip_if_no_schema()
+        assert self.e2e is not None
+        owner_ctx = _ctx(self.e2e.owner_auth_user_id, email="e2e-owner-claim@pubplus.test")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=owner_ctx):
+            submit = self.client.post(
+                "/api/v1/owner/venue-claim-requests",
+                data=json.dumps(
+                    {
+                        "mode": "claim_existing",
+                        "venue_id": self.e2e.venue_id,
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        claim_id = submit.json()["data"]["claim_request_id"]
+
+        other_owner_id = str(uuid4())
+        with connection.cursor() as c:
+            c.execute(
+                """
+                INSERT INTO auth.users (id, email)
+                VALUES (%s::uuid, %s)
+                ON CONFLICT (id) DO NOTHING
+                """,
+                [other_owner_id, "other-owner-claim@pubplus.test"],
+            )
+            c.execute(
+                """
+                INSERT INTO public.owner_account (auth_user_id, account_status)
+                VALUES (%s::uuid, 'active')
+                RETURNING id::text
+                """,
+                [other_owner_id],
+            )
+            other_account_id = c.fetchone()[0]
+        other_ctx = _ctx(other_owner_id, email="other-owner-claim@pubplus.test")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=other_ctx):
+            response = self.client.get(
+                "/api/v1/owner/venue-claim-requests",
+                **_auth_headers(),
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        if data is not None:
+            self.assertNotEqual(data["claim_request_id"], claim_id)
+        with connection.cursor() as c:
+            c.execute(
+                "DELETE FROM public.owner_account WHERE id = %s::uuid",
+                [other_account_id],
+            )
+            c.execute("DELETE FROM auth.users WHERE id = %s::uuid", [other_owner_id])

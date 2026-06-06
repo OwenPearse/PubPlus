@@ -6,17 +6,33 @@ Specify backend endpoints for owner venue onboarding. **Normative edit policy:**
 
 ## Current stage
 
-**Stage 4.2 complete.** Direct PATCH + restricted `POST restricted-change-requests` implemented. Legacy `POST .../proposals` retained.
+**Stage 4.2 complete.** Direct PATCH + restricted `POST restricted-change-requests` implemented. **Admin claims polish:** owner claim status GET + internal summary count for admin nav badge.
 
 ## Decisions
 
 - **Read APIs unchanged:** `GET /api/v1/owner/venues`, `GET /api/v1/owner/venues/{venue_id}`
+- **Owner claim status:** `GET /api/v1/owner/venue-claim-requests` returns the authenticated owner's most recent open (or denied) claim; `null` when none. No duplicate-candidate metadata.
+- **Admin claim summary:** `GET /api/v1/internal/owner-claims/summary` returns open counts for nav badge (`submitted` + `under_review`).
 - **Direct writes (new):** `PATCH` operational endpoints write published tables after capability check
 - **Restricted writes:** `POST .../restricted-change-requests` (proposal/staging only for identity/location)
 - **`POST .../proposals`:** Deprecated for operational fields; compatibility shim until 4.3
 - `require_owner_portal_auth` on all owner venue routes
 - Response envelope: `{ "data": ... }`
 - Claim API: **deferred** (admin-assigned venues for MVP)
+
+### Owner venue claim intake (implemented)
+
+| Method | Path | Summary |
+|--------|------|---------|
+| GET | `/api/v1/owner/venue-claim-candidates` | Search published venues (no membership required) |
+| POST | `/api/v1/owner/venue-claim-requests` | Submit claim request |
+| GET | `/api/v1/owner/venue-claim-requests` | Current owner's open/denied claim status (`data: null` if none) |
+
+**Guard:** `require_owner_portal_auth`. Does not grant venue access. Does not expose duplicate candidates.
+
+### Superseded note
+
+> Claim API: **deferred** — superseded for intake; status GET added in admin claims polish stage.
 
 ### Superseded (pre–Stage 4)
 
@@ -99,6 +115,8 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 | Path | Use |
 |------|-----|
 | `/api/v1/internal/moderation/*` | Review **restricted** owner proposals |
+| `/api/v1/internal/owner-claims/` | List owner venue claim queue |
+| `/api/v1/internal/owner-claims/summary` | Open claim counts for admin nav badge |
 | Publish worker (TBD) | Apply approved restricted staging → published profile/geo |
 
 ## Guards

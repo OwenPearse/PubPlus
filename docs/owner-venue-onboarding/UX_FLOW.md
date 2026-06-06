@@ -6,7 +6,7 @@ Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md`
 
 ## Current stage
 
-**Stage 4.2 complete.** Step 1 splits operational **Save changes** (PATCH) from restricted **Request change** (POST). Legacy single “Submit for review” flow removed from basics page.
+**Stage 4.2 complete.** Step 1 splits operational **Save changes** (PATCH) from restricted **Request change** (POST). **Admin claims polish:** owner waiting state shows claim status after submission; admin internal nav links to owner claims queue.
 
 ## Decisions
 
@@ -17,7 +17,8 @@ Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md`
 | Step 1 route | `/owner/venues/:venueId/basics` — **two zones** (operational + restricted) |
 | Operational save | **Save changes** → PATCH APIs; live immediately |
 | Restricted save | **Request change** → restricted proposal; pending until admin publish |
-| No venue API | `NoVenueAccessState`; no claim form in MVP |
+| No venue API | `NoVenueAccessState` loads claim status; form only when no open/denied claim |
+| Approve-new sparse venue | Owner hub/basics tolerate missing descriptions, hours rows, map point |
 | Future sections | Mostly direct-edit pages (specials, taps, features) |
 
 ### Superseded (pre–Stage 4)
@@ -52,13 +53,33 @@ Stage 5–7 direct-edit section pages.
 ```mermaid
 flowchart TD
   A[ownerAuthProbe] --> B{next_step}
-  B -->|waiting membership/venue| C[NoVenueAccessState]
-  B -->|portal_home| D[GET /owner/venues]
-  D --> E{total}
-  E -->|0| C
-  E -->|1| F["/owner/venues/:id hub"]
-  E -->|>1| G[Picker then hub]
+  B -->|waiting membership/venue| C[GET claim status]
+  C --> D{open/denied claim?}
+  D -->|yes| E[OwnerClaimStatusState]
+  D -->|no| F[Tell us about your pub form]
+  B -->|portal_home| G[GET /owner/venues]
+  G --> H{total}
+  H -->|0| I[No venues assigned]
+  H -->|1| J["/owner/venues/:id hub"]
+  H -->|>1| K[Picker then hub]
 ```
+
+### Owner waiting copy
+
+| Claim status | Headline |
+|--------------|----------|
+| `submitted` / `under_review` / `draft` | Your venue request is under review |
+| `needs_more_info` | We need a bit more information |
+| `denied` | Your venue request wasn't approved |
+
+Duplicate candidates are never shown to owners.
+
+### Admin internal nav
+
+| Label | Route |
+|-------|-------|
+| Founder venues | `/internal/founder-venues` |
+| Owner claims (+ open count badge) | `/internal/owner-claims` |
 
 ## Owner home / hub (Stage 2 — adjust copy Stage 4.2)
 

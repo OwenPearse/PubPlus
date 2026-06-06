@@ -16,6 +16,7 @@ import {
   ownerRestrictedChangeRequest,
   ownerVenueClaimCandidates,
   ownerVenueClaimRequest,
+  ownerCurrentVenueClaim,
   ownerVenueDetail,
   ownerVenueList,
   ownerVenueProposal,
@@ -421,6 +422,33 @@ describe("owner venue API wrappers", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "http://api.test/api/v1/owner/venue-claim-candidates?name=Royal+Hotel&locality_id=loc-1",
+      expect.any(Object),
+    );
+  });
+
+  it("ownerCurrentVenueClaim fetches current claim status", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            claim_request_id: "claim-1",
+            claim_lifecycle_status: "submitted",
+            submitted_venue_name: "Royal Hotel",
+            submitted_address_line_1: "1 Main St",
+            locality_name: "Fitzroy",
+            submitted_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const result = await ownerCurrentVenueClaim();
+    expect(result.data?.submitted_venue_name).toBe("Royal Hotel");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venue-claim-requests",
       expect.any(Object),
     );
   });

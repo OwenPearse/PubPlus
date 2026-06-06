@@ -19,6 +19,8 @@ from common.owner_account import admin_account_exists_for_auth, get_owner_accoun
 
 MAX_CLAIMANT_NOTE_LEN = 2000
 _OPEN_CLAIM_STATUSES = frozenset({"draft", "submitted", "under_review"})
+_OWNER_VISIBLE_OPEN_STATUSES = ("draft", "submitted", "under_review")
+_OWNER_VISIBLE_DENIED_STATUSES = ("denied",)
 _GOOD_MATCH_SCORE = 55
 _MAX_CANDIDATES = 10
 
@@ -515,3 +517,167 @@ def submit_venue_claim_request(
         "ok",
         None,
     )
+
+
+def _locality_label(locality_id: str | None) -> str | None:
+    if not locality_id:
+        return None
+    if _bad_uuid(locality_id):
+        return None
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT l.name
+            FROM public.locality l
+            WHERE l.id = %s::uuid
+            """,
+            [locality_id],
+        )
+        row = c.fetchone()
+    return row[0] if row else None
+
+
+def _published_venue_display_name(venue_id: str) -> str | None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT display_name
+            FROM public.venue_published_profile
+            WHERE venue_id = %s::uuid
+            """,
+            [venue_id],
+        )
+        row = c.fetchone()
+    return row[0] if row else None
+
+
+def _owner_facing_lifecycle_status(
+    db_status: str, latest_decision_outcome: str | None
+) -> str:
+    if db_status == "under_review" and latest_decision_outcome == "needs_more_info":
+        return "needs_more_info"
+    if db_status == "denied":
+        return "denied"
+    return db_status
+
+
+def _build_owner_claim_status_row(row: tuple[Any, ...]) -> dict[str, Any]:
+    (
+        claim_id,
+        db_status,
+        created_at,
+        updated_at,
+        summary_text,
+        venue_id,
+    ) = row
+    summary = {}
+    if summary_text:
+        try:
+            parsed = json.loads(summary_text)
+            if isinstance(parsed, dict):
+                summary = parsed
+        except json.JSONDecodeError:
+            summary = {}
+
+    venue_name = summary.get("venue_name")
+    if not isinstance(venue_name, str) or not venue_name.strip():
+        venue_name = _published_venue_display_name(str(venue_id))
+
+    locality_id = summary.get("locality_id")
+    locality_name = _locality_label(str(locality_id) if locality_id else None)
+    address_line_1 = summary.get("address_line_1")
+    if address_line_1 is not None and not isinstance(address_line_1, str):
+        address_line_1 = None
+
+    admin_message: str | None = None
+    latest_decision: str | None = None
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT decision_outcome, rationale
+            FROM public.venue_authority_decision
+            WHERE venue_claim_request_id = %s::uuid
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            [str(claim_id)],
+        )
+        decision_row = c.fetchone()
+    if decision_row:
+        latest_decision = str(decision_row[0]) if decision_row[0] else None
+        if decision_row[1]:
+            admin_message = str(decision_row[1])
+
+    lifecycle_status = _owner_facing_lifecycle_status(str(db_status), latest_decision)
+
+    return {
+        "claim_request_id": str(claim_id),
+        "claim_lifecycle_status": lifecycle_status,
+        "submitted_venue_name": venue_name,
+        "submitted_address_line_1": address_line_1,
+        "locality_name": locality_name,
+        "submitted_at": created_at.isoformat() if created_at else None,
+        "updated_at": updated_at.isoformat() if updated_at else None,
+        "admin_message": admin_message,
+    }
+
+
+def get_current_owner_claim_status(
+    auth: AuthContext,
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    if admin_account_exists_for_auth(auth):
+        return None, "admin_forbidden", None
+
+    owner_id = get_owner_account_id(auth)
+    if owner_id is None:
+        return None, "forbidden", None
+
+    owner_account_id = str(owner_id)
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT
+                vcr.id,
+                vcr.claim_lifecycle_status,
+                vcr.created_at,
+                vcr.updated_at,
+                vcr.summary,
+                vcr.venue_id::text
+            FROM public.venue_claim_request vcr
+            WHERE vcr.initiated_by_owner_account_id = %s::uuid
+              AND vcr.claim_lifecycle_status = ANY(%s)
+            ORDER BY vcr.created_at DESC
+            LIMIT 1
+            """,
+            [owner_account_id, list(_OWNER_VISIBLE_OPEN_STATUSES)],
+        )
+        row = c.fetchone()
+
+    if not row:
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT
+                    vcr.id,
+                    vcr.claim_lifecycle_status,
+                    vcr.created_at,
+                    vcr.updated_at,
+                    vcr.summary,
+                    vcr.venue_id::text
+                FROM public.venue_claim_request vcr
+                WHERE vcr.initiated_by_owner_account_id = %s::uuid
+                  AND vcr.claim_lifecycle_status = ANY(%s)
+                ORDER BY vcr.updated_at DESC
+                LIMIT 1
+                """,
+                [owner_account_id, list(_OWNER_VISIBLE_DENIED_STATUSES)],
+            )
+            row = c.fetchone()
+
+    if not row:
+        return None, "ok", None
+
+    payload = _build_owner_claim_status_row(row)
+    for key in ("duplicate_candidates", "possible_duplicate_venue_ids", "match_score"):
+        payload.pop(key, None)
+    return payload, "ok", None

@@ -13,6 +13,7 @@ from apps.internal_tools.services.venue_claim_read_service import (
     VenueClaimNotFoundError,
     VenueClaimReadValidationError,
     get_owner_claim_detail,
+    get_owner_claims_summary,
     list_owner_claim_queue,
     parse_claim_queue_filters,
 )
@@ -44,6 +45,15 @@ def _parse_json_object_body(request):
     if not isinstance(data, dict):
         raise VenueClaimWriteValidationError("Request body must be a JSON object.")
     return data
+
+
+@require_http_methods(["GET", "HEAD"])
+@require_internal_admin_auth
+def owner_claims_summary(request):
+    if request.method == "HEAD":
+        return JsonResponse({}, status=200)
+    payload = get_owner_claims_summary()
+    return JsonResponse({"data": payload}, status=200)
 
 
 @require_http_methods(["GET", "HEAD"])

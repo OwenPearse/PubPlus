@@ -7,9 +7,11 @@ from api.v1.internal.owner_claims.views import (
     owner_claim_needs_more_info,
     owner_claim_reject,
     owner_claims_list,
+    owner_claims_summary,
 )
 
 urlpatterns = [
+    path("summary", owner_claims_summary, name="internal-owner-claims-summary"),
     path("", owner_claims_list, name="internal-owner-claims-list"),
     path(
         "<str:claim_request_id>",

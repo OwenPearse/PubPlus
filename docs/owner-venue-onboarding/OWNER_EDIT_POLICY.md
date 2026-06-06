@@ -270,6 +270,7 @@ flowchart TB
 |-------|------|
 | **4.1** | ✅ Backend `PATCH operational-profile`, `PATCH hours`, audit writes, grant enforcement |
 | **4.2** | ✅ Frontend Step 1 split; `POST restricted-change-requests` |
+| **Admin claims polish** | ✅ Owner claim status GET; admin nav; sparse approve-new hub tolerance |
 | **4.3** | History snapshots; contact schema; remove operational proposal shim |
 | **5–7** | Direct-edit pages for specials, taps, features |
 | **Admin** | Restricted publish worker; moderation filter polish |
@@ -285,6 +286,14 @@ The following docs/sections assumed **review-all** and are superseded by this po
 - `STAGING_REVIEW_PUBLISH_AUDIT.md` — owner MVP lifecycle treating hours/descriptions as staged-only
 
 Phase A `POST .../proposals` **remains** until Stage 4.2/4.3 migrate frontend and narrow shim.
+
+### Approve-new sparse listings
+
+Admin **approve-new** creates minimum `venue_published_profile` + `venue_published_location` rows only. Owner portal read APIs and hub/basics UI must tolerate missing descriptive copy, hours rows, and map coordinates until the owner completes Step 1.
+
+### Owner claim status (waiting state)
+
+Owners without approved venue access may submit a claim via `POST /api/v1/owner/venue-claim-requests`. While a claim is open (`submitted`, `under_review`, `draft`) or recently `denied`, `GET` on the same path returns owner-safe status only — no duplicate-candidate metadata. Access is granted only after admin approval creates `business_venue_management_relationship` + capability grants.
 
 ---
 

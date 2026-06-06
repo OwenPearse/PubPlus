@@ -232,6 +232,18 @@ export type OwnerClaimActionResponse = {
   message: string;
 };
 
+export type OwnerClaimsSummary = {
+  open_count: number;
+  submitted_count: number;
+  under_review_count: number;
+};
+
+export function getOwnerClaimsSummary() {
+  return apiRequest<ApiResponse<OwnerClaimsSummary>>(
+    "/api/v1/internal/owner-claims/summary",
+  );
+}
+
 export function listOwnerClaims(query?: { status?: string }) {
   const params: Record<string, string> = {};
   if (query?.status) params.status = query.status;
@@ -676,6 +688,32 @@ export type VenueClaimRequestResponse = {
   status: "submitted" | "under_review";
   message: string;
 };
+
+export type OwnerClaimLifecycleStatus =
+  | "draft"
+  | "submitted"
+  | "under_review"
+  | "approved"
+  | "denied"
+  | "needs_more_info"
+  | "cancelled";
+
+export type OwnerClaimStatus = {
+  claim_request_id: string;
+  claim_lifecycle_status: OwnerClaimLifecycleStatus;
+  submitted_venue_name: string | null;
+  submitted_address_line_1: string | null;
+  locality_name: string | null;
+  submitted_at: string | null;
+  updated_at: string | null;
+  admin_message?: string | null;
+};
+
+export function ownerCurrentVenueClaim() {
+  return apiRequest<ApiResponse<OwnerClaimStatus | null>>(
+    "/api/v1/owner/venue-claim-requests",
+  );
+}
 
 export function ownerVenueClaimCandidates(query: {
   name?: string;

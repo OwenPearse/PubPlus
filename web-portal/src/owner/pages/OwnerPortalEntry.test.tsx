@@ -7,11 +7,13 @@ import { OwnerPortalEntry } from "@/owner/pages/OwnerPortalEntry";
 const ownerAuthProbe = vi.fn();
 const ownerProvision = vi.fn();
 const ownerVenueList = vi.fn();
+const ownerCurrentVenueClaim = vi.fn();
 
 vi.mock("@/shared/lib/api", () => ({
   ownerAuthProbe: () => ownerAuthProbe(),
   ownerProvision: () => ownerProvision(),
   ownerVenueList: () => ownerVenueList(),
+  ownerCurrentVenueClaim: () => ownerCurrentVenueClaim(),
   referenceLocalities: vi.fn().mockResolvedValue({ data: { localities: [] } }),
   formatApiError: (err: unknown) => String(err),
   isApiRequestError: () => false,
@@ -55,9 +57,10 @@ describe("OwnerPortalEntry", () => {
     ownerAuthProbe.mockReset();
     ownerProvision.mockReset();
     ownerVenueList.mockReset();
+    ownerCurrentVenueClaim.mockResolvedValue({ data: null });
   });
 
-  it("shows signup form immediately for awaiting membership state", async () => {
+  it("shows signup form immediately for awaiting membership state when no claim", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
       body: { ...baseProbe, next_step: "owner_waiting_for_membership" },
@@ -72,7 +75,7 @@ describe("OwnerPortalEntry", () => {
     expect(ownerVenueList).not.toHaveBeenCalled();
   });
 
-  it("shows signup form immediately for awaiting venue access state", async () => {
+  it("shows signup form immediately for awaiting venue access state when no claim", async () => {
     ownerAuthProbe.mockResolvedValue({
       status: 200,
       body: {
@@ -88,6 +91,32 @@ describe("OwnerPortalEntry", () => {
     });
     expect(screen.getByLabelText(/Pub name/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add or claim a venue" })).not.toBeInTheDocument();
+    expect(ownerVenueList).not.toHaveBeenCalled();
+  });
+
+  it("shows claim status for awaiting membership when open claim exists", async () => {
+    ownerAuthProbe.mockResolvedValue({
+      status: 200,
+      body: { ...baseProbe, next_step: "owner_waiting_for_membership" },
+    });
+    ownerCurrentVenueClaim.mockResolvedValue({
+      data: {
+        claim_request_id: "claim-1",
+        claim_lifecycle_status: "submitted",
+        submitted_venue_name: "Royal Hotel",
+        submitted_address_line_1: "1 Main St",
+        locality_name: "Fitzroy",
+        submitted_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    });
+    renderEntry();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Your venue request is under review" }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/Pub name/i)).not.toBeInTheDocument();
     expect(ownerVenueList).not.toHaveBeenCalled();
   });
 

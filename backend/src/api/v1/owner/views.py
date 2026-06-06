@@ -14,6 +14,7 @@ from apps.owner.services.owner_access_service import (
     resolve_owner_auth_probe,
 )
 from apps.owner.services.owner_claim_service import (
+    get_current_owner_claim_status,
     search_venue_claim_candidates,
     submit_venue_claim_request,
 )
@@ -163,13 +164,33 @@ def owner_venue_claim_candidates(request: HttpRequest) -> JsonResponse:
     )
 
 
-@require_http_methods(["POST"])
+@require_http_methods(["GET", "HEAD", "POST"])
 @require_owner_portal_auth
 def owner_venue_claim_requests(request: HttpRequest) -> JsonResponse:
     auth = get_auth_context(request)
     assert auth is not None
     if admin_account_exists_for_auth(auth):
         return _map_venue_scope_error("admin_forbidden")
+
+    if request.method in ("GET", "HEAD"):
+        if request.method == "HEAD":
+            return JsonResponse({}, status=200)
+        result, code, details = get_current_owner_claim_status(auth)
+        if code == "ok":
+            return JsonResponse({"data": result}, status=200)
+        if code == "admin_forbidden":
+            return _map_venue_scope_error("admin_forbidden")
+        if code == "forbidden":
+            return error_response(
+                code="forbidden",
+                message="Owner account is not provisioned for this identity.",
+                status=403,
+            )
+        return error_response(
+            code="owner_claim_status_error",
+            message="Could not load your claim request status.",
+            status=500,
+        )
 
     body, err_resp = _parse_json_object_body(request)
     if err_resp is not None:
