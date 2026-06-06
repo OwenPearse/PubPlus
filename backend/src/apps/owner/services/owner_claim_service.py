@@ -215,7 +215,10 @@ def search_venue_claim_candidates(
                 v.id::text,
                 vpp.display_name,
                 l.name,
-                gr.state_code,
+                COALESCE(
+                    CASE WHEN gr.region_level = 'state' THEN gr.region_code END,
+                    pgr.region_code
+                ),
                 vpl.address_line_1,
                 vpl.locality_id::text
             FROM public.venue v
@@ -223,6 +226,7 @@ def search_venue_claim_candidates(
             INNER JOIN public.venue_published_location vpl ON vpl.venue_id = v.id
             LEFT JOIN public.locality l ON l.id = vpl.locality_id
             LEFT JOIN public.geographic_region gr ON gr.id = l.geographic_region_id
+            LEFT JOIN public.geographic_region pgr ON pgr.id = gr.parent_region_id
             WHERE vpp.display_name ILIKE %s
             {locality_filter}
             ORDER BY vpp.display_name ASC
@@ -597,7 +601,7 @@ def _build_owner_claim_status_row(row: tuple[Any, ...]) -> dict[str, Any]:
             SELECT decision_outcome, rationale
             FROM public.venue_authority_decision
             WHERE venue_claim_request_id = %s::uuid
-            ORDER BY created_at DESC
+            ORDER BY decided_at DESC
             LIMIT 1
             """,
             [str(claim_id)],

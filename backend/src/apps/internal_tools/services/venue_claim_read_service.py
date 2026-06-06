@@ -101,12 +101,16 @@ def _enrich_duplicate_candidates(
                 vpp.display_name,
                 vpl.address_line_1,
                 l.name,
-                gr.state_code
+                COALESCE(
+                    CASE WHEN gr.region_level = 'state' THEN gr.region_code END,
+                    pgr.region_code
+                )
             FROM public.venue v
             LEFT JOIN public.venue_published_profile vpp ON vpp.venue_id = v.id
             LEFT JOIN public.venue_published_location vpl ON vpl.venue_id = v.id
             LEFT JOIN public.locality l ON l.id = vpl.locality_id
             LEFT JOIN public.geographic_region gr ON gr.id = l.geographic_region_id
+            LEFT JOIN public.geographic_region pgr ON pgr.id = gr.parent_region_id
             WHERE v.id = ANY(%s::uuid[])
             """,
             [venue_ids],
@@ -144,9 +148,13 @@ def _locality_labels(locality_id: str | None) -> tuple[str | None, str | None]:
     with connection.cursor() as c:
         c.execute(
             """
-            SELECT l.name, gr.state_code
+            SELECT l.name, COALESCE(
+                CASE WHEN gr.region_level = 'state' THEN gr.region_code END,
+                pgr.region_code
+            )
             FROM public.locality l
             LEFT JOIN public.geographic_region gr ON gr.id = l.geographic_region_id
+            LEFT JOIN public.geographic_region pgr ON pgr.id = gr.parent_region_id
             WHERE l.id = %s::uuid
             """,
             [parsed_id],
