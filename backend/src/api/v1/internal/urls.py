@@ -32,4 +32,8 @@ urlpatterns = [
         "founder-venues/",
         include("api.v1.internal.founder_venues.urls"),
     ),
+    path(
+        "owner-claims/",
+        include("api.v1.internal.owner_claims.urls"),
+    ),
 ]

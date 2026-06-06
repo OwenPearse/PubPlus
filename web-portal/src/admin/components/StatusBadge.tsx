@@ -7,6 +7,11 @@ const STATUS_STYLES: Record<string, string> = {
   signed_up: "bg-violet-100 text-violet-900",
   rejected: "bg-slate-200 text-slate-700",
   do_not_contact: "bg-red-100 text-red-900",
+  submitted: "bg-sky-100 text-sky-900",
+  under_review: "bg-amber-100 text-amber-900",
+  closed: "bg-emerald-100 text-emerald-900",
+  denied: "bg-red-100 text-red-900",
+  draft: "bg-slate-100 text-slate-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {

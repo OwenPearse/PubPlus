@@ -174,6 +174,119 @@ export function internalAuthProbe() {
   );
 }
 
+export type OwnerClaimListItem = {
+  claim_request_id: string;
+  status: string;
+  submitted_at: string | null;
+  owner_account_id: string;
+  claimant_email: string | null;
+  venue_name: string | null;
+  address_line_1: string | null;
+  locality_id: string | null;
+  locality_name: string | null;
+  state_code: string | null;
+  claimant_note: string | null;
+  duplicate_candidate_count: number;
+};
+
+export type OwnerClaimDuplicateCandidate = {
+  venue_id: string;
+  display_name: string | null;
+  address_line_1: string | null;
+  locality_name: string | null;
+  state_code: string | null;
+  match_score: number | null;
+  match_reason: string | null;
+};
+
+export type OwnerClaimDetail = {
+  claim_request_id: string;
+  status: string;
+  submitted_at: string | null;
+  updated_at: string | null;
+  venue_id: string;
+  business_id: string;
+  owner_account_id: string;
+  resulting_relationship_id: string | null;
+  claimant_email: string | null;
+  business_display_name: string | null;
+  submitted: {
+    mode: string | null;
+    venue_name: string | null;
+    address_line_1: string | null;
+    locality_id: string | null;
+    locality_name: string | null;
+    state_code: string | null;
+    claimant_note: string | null;
+  };
+  possible_duplicate_venue_ids: string[];
+  duplicate_candidates: OwnerClaimDuplicateCandidate[];
+};
+
+export type OwnerClaimActionResponse = {
+  claim_request_id: string;
+  status: string;
+  venue_id?: string;
+  relationship_id?: string;
+  updated_at: string | null;
+  message: string;
+};
+
+export function listOwnerClaims(query?: { status?: string }) {
+  const params: Record<string, string> = {};
+  if (query?.status) params.status = query.status;
+  return apiRequest<ApiResponse<{ items: OwnerClaimListItem[]; meta: { total: number } }>>(
+    "/api/v1/internal/owner-claims/",
+    { query: params },
+  );
+}
+
+export function getOwnerClaim(claimRequestId: string) {
+  return apiRequest<ApiResponse<OwnerClaimDetail>>(
+    `/api/v1/internal/owner-claims/${claimRequestId}`,
+  );
+}
+
+export function approveOwnerClaimExisting(
+  claimRequestId: string,
+  body: { venue_id: string; admin_note?: string },
+) {
+  return apiRequest<ApiResponse<OwnerClaimActionResponse>>(
+    `/api/v1/internal/owner-claims/${claimRequestId}/approve-existing`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export function approveOwnerClaimNew(
+  claimRequestId: string,
+  body?: { admin_note?: string },
+) {
+  return apiRequest<ApiResponse<OwnerClaimActionResponse>>(
+    `/api/v1/internal/owner-claims/${claimRequestId}/approve-new`,
+    { method: "POST", body: JSON.stringify(body ?? {}) },
+  );
+}
+
+export function rejectOwnerClaim(
+  claimRequestId: string,
+  body?: { admin_note?: string },
+) {
+  return apiRequest<ApiResponse<OwnerClaimActionResponse>>(
+    `/api/v1/internal/owner-claims/${claimRequestId}/reject`,
+    { method: "POST", body: JSON.stringify(body ?? {}) },
+  );
+}
+
+export function markOwnerClaimNeedsMoreInfo(
+  claimRequestId: string,
+  body: { admin_note: string },
+) {
+  return apiRequest<ApiResponse<OwnerClaimActionResponse>>(
+    `/api/v1/internal/owner-claims/${claimRequestId}/needs-more-info`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
 export type OwnerNextStep =
   | "complete_owner_provisioning"
   | "enroll_mfa"

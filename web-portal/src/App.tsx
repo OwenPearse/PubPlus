@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AdminRouteGuard } from "@/admin/components/AdminRouteGuard";
 import { FounderVenueDetailPage } from "@/admin/pages/FounderVenueDetailPage";
 import { FounderVenuesListPage } from "@/admin/pages/FounderVenuesListPage";
+import { OwnerClaimDetailPage } from "@/admin/pages/OwnerClaimDetailPage";
+import { OwnerClaimsListPage } from "@/admin/pages/OwnerClaimsListPage";
 import { AccessDeniedPage } from "@/owner/pages/AccessDeniedPage";
 import { OwnerPortalEntry } from "@/owner/pages/OwnerPortalEntry";
 import { OwnerVenueBasicsPage } from "@/owner/pages/OwnerVenueBasicsPage";
@@ -17,6 +19,8 @@ function AdminAppRoutes() {
       <Route index element={<Navigate to="founder-venues" replace />} />
       <Route path="founder-venues" element={<FounderVenuesListPage />} />
       <Route path="founder-venues/:leadId" element={<FounderVenueDetailPage />} />
+      <Route path="owner-claims" element={<OwnerClaimsListPage />} />
+      <Route path="owner-claims/:claimRequestId" element={<OwnerClaimDetailPage />} />
       <Route path="*" element={<Navigate to="founder-venues" replace />} />
     </Routes>
   );
