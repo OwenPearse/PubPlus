@@ -589,6 +589,44 @@ export function ownerPatchHours(venueId: string, body: OwnerHoursPatchRequest) {
   );
 }
 
+export type OwnerVenueFeatureItem = {
+  attribute_definition_id: string;
+  stable_key: string;
+  label: string;
+  value_shape: "boolean";
+  group?: string | null;
+  value: boolean;
+};
+
+export type OwnerVenueFeaturesResponse = {
+  venue_id: string;
+  features: OwnerVenueFeatureItem[];
+  message?: string;
+};
+
+export type OwnerVenueFeaturesPatchRequest = {
+  features: Array<{
+    attribute_definition_id: string;
+    value_boolean: boolean;
+  }>;
+};
+
+export function ownerVenueFeatures(venueId: string) {
+  return apiRequest<ApiResponse<OwnerVenueFeaturesResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/features`,
+  );
+}
+
+export function ownerPatchVenueFeatures(
+  venueId: string,
+  body: OwnerVenueFeaturesPatchRequest,
+) {
+  return apiRequest<ApiResponse<OwnerVenueFeaturesResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/features`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
 export type OwnerRestrictedIdentityPayload = {
   display_name?: string;
   address_line_1?: string;

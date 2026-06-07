@@ -104,7 +104,7 @@ Remove hub/form copy: “All changes are reviewed before they appear publicly.�
 |--------|------|---------------|-------|
 | `PATCH` | `/api/v1/owner/venues/{venue_id}/operational-profile` | descriptions (+ contact when migrated) | Upsert `venue_published_descriptive_copy` |
 | `PATCH` | `/api/v1/owner/venues/{venue_id}/hours` | opening hours bundle | Replace rows in `venue_hours_*` transactionally |
-| `PATCH` | `/api/v1/owner/venues/{venue_id}/attributes` | feature toggles | Stage 7 |
+| `PATCH` | `/api/v1/owner/venues/{venue_id}/features` | MVP boolean feature toggles | ✅ Stage 7 |
 | `PUT` | `/api/v1/owner/venues/{venue_id}/specials` | meal specials list | Stage 5 — replace-set semantics |
 | `PUT` | `/api/v1/owner/venues/{venue_id}/tap-list` | tap offerings | Stage 6 |
 

@@ -6,7 +6,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 
 ## Current stage
 
-**Stage 4.2 complete (frontend split + restricted requests).** **Admin claims polish** complete: owner claim status, admin nav, sparse approve-new tolerance. Next: **Stage 4.3** hardening or **Stage 7** features page.
+**Stage 7 complete (features direct-edit).** Next: **Stage 5** meal specials or **Stage 4.3** hardening.
 
 ## Decisions
 
@@ -25,7 +25,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 | **4.3 Hardening** | Planned | Row history, contact schema, deprecate proposal shim |
 | 5 Meal specials | Ready after 4.1 | Direct-edit page |
 | 6 Tap list | Ready after 4.1 | Direct-edit page |
-| 7 Features | Ready after 4.1 | Direct-edit page |
+| 7 Features | ✅ Done | Direct-edit boolean toggles |
 | Admin restricted publish | Parallel | Publish worker for approved restricted proposals |
 | 8 Photos | Plan only | Schema + moderation |
 | 9 Review UX polish | Updated scope | Restricted pending states only |

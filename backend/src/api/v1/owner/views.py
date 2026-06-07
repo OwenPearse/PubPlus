@@ -22,8 +22,10 @@ from apps.owner.services.owner_venue_service import (
     create_or_update_owner_core_details_proposal,
     create_owner_restricted_change_request,
     get_owner_venue_detail,
+    get_owner_venue_features,
     list_owner_venues,
     patch_owner_operational_profile,
+    patch_owner_venue_features,
     patch_owner_venue_hours,
 )
 from common.auth.guards import require_consumer_auth_api, require_owner_portal_auth
@@ -374,6 +376,41 @@ def owner_venue_hours_patch(request: HttpRequest, venue_id) -> JsonResponse:
     return error_response(
         code="owner_direct_edit_error",
         message="Could not save opening hours.",
+        status=500,
+    )
+
+
+@require_http_methods(["GET", "HEAD", "PATCH"])
+@require_owner_portal_auth
+def owner_venue_features(request: HttpRequest, venue_id) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+
+    if request.method in ("GET", "HEAD"):
+        if request.method == "HEAD":
+            return JsonResponse({}, status=200)
+        result, code = get_owner_venue_features(auth, str(venue_id))
+        if result is None:
+            return _map_venue_scope_error(code)
+        return JsonResponse({"data": result}, status=200)
+
+    body, err_resp = _parse_json_object_body(request)
+    if err_resp is not None:
+        return err_resp
+    assert body is not None
+
+    result, code, details = patch_owner_venue_features(auth, str(venue_id), body)
+    if code == "ok" and result:
+        return JsonResponse({"data": result}, status=200)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code in ("forbidden", "not_found", "admin_forbidden", "missing_capability"):
+        return _map_venue_scope_error(code)
+    return error_response(
+        code="owner_direct_edit_error",
+        message="Could not save venue features.",
         status=500,
     )
 

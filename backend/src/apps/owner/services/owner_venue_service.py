@@ -61,6 +61,28 @@ _RESTRICTED_FORBIDDEN_PAYLOAD_KEYS = frozenset(
     }
 )
 _HOURS_NOTES_MAX_LEN = 1000
+_MVP_OWNER_EDITABLE_FEATURE_KEYS = frozenset(
+    {
+        "beer_garden",
+        "rooftop",
+        "live_music",
+        "dog_friendly",
+        "sports_screens",
+        "pool_table",
+        "late_night",
+        "vegan_options",
+    }
+)
+_FEATURE_UI_GROUPS: dict[str, str] = {
+    "beer_garden": "spaces",
+    "rooftop": "spaces",
+    "live_music": "entertainment",
+    "dog_friendly": "pets",
+    "sports_screens": "entertainment",
+    "pool_table": "entertainment",
+    "late_night": "food",
+    "vegan_options": "food",
+}
 _OPERATIONAL_PROFILE_ALLOWED_KEYS = frozenset(
     {"short_description", "long_description"}
 )
@@ -355,7 +377,28 @@ def _core_section_status(basics: dict[str, Any]) -> str:
     return "missing"
 
 
-def _completeness_sections(basics: dict[str, Any]) -> list[dict[str, Any]]:
+def _features_section_status(venue_id: str) -> str:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.venue_published_attribute_value pav
+            INNER JOIN public.venue_attribute_definition ad
+              ON ad.id = pav.attribute_definition_id
+            WHERE pav.venue_id = %s::uuid
+              AND ad.stable_key = ANY(%s::text[])
+              AND ad.value_shape = 'boolean'
+              AND pav.value_boolean IS TRUE
+            """,
+            [venue_id, list(_MVP_OWNER_EDITABLE_FEATURE_KEYS)],
+        )
+        row = c.fetchone()
+    return "complete" if row and int(row[0]) > 0 else "missing"
+
+
+def _completeness_sections(
+    basics: dict[str, Any], *, features_status: str = "missing"
+) -> list[dict[str, Any]]:
     core_status = _core_section_status(basics)
     return [
         {
@@ -389,9 +432,9 @@ def _completeness_sections(basics: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "key": "features",
             "label": "Features",
-            "status": "missing",
+            "status": features_status,
             "required": False,
-            "available": False,
+            "available": True,
         },
         {
             "key": "photos",
@@ -998,6 +1041,7 @@ def get_owner_venue_detail(
     )
     required_complete = _compute_required_basics(basics)
     caps = _load_capabilities(access.relationship_id, access.owner_account_id)
+    features_status = _features_section_status(venue_id)
 
     display_name = (
         published["profile"].get("display_name")
@@ -1026,14 +1070,14 @@ def get_owner_venue_detail(
         "completeness": {
             "percent": _completeness_percent(basics),
             "required_basics_complete": required_complete,
-            "sections": _completeness_sections(basics),
+            "sections": _completeness_sections(basics, features_status=features_status),
         },
         "sections_available": {
             "core_details": True,
             "events": False,
             "meal_specials": False,
             "tap_list": False,
-            "features": False,
+            "features": True,
             "photos": False,
         },
     }, "ok"
@@ -2294,3 +2338,243 @@ def create_owner_restricted_change_request(
             "Change request submitted. We'll review it before updating your listing."
         ),
     }, "ok", None
+
+
+def _load_mvp_feature_definitions() -> list[dict[str, Any]]:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT id::text, stable_key, display_label, value_shape
+            FROM public.venue_attribute_definition
+            WHERE stable_key = ANY(%s::text[])
+              AND value_shape = 'boolean'
+              AND is_discovery_driving = true
+            ORDER BY display_label ASC, stable_key ASC
+            """,
+            [list(_MVP_OWNER_EDITABLE_FEATURE_KEYS)],
+        )
+        rows = c.fetchall()
+    return [
+        {
+            "attribute_definition_id": row[0],
+            "stable_key": row[1],
+            "label": row[2],
+            "value_shape": row[3],
+            "group": _FEATURE_UI_GROUPS.get(row[1]),
+        }
+        for row in rows
+    ]
+
+
+def _load_venue_boolean_feature_values(venue_id: str) -> dict[str, bool]:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT ad.stable_key, pav.value_boolean
+            FROM public.venue_published_attribute_value pav
+            INNER JOIN public.venue_attribute_definition ad
+              ON ad.id = pav.attribute_definition_id
+            WHERE pav.venue_id = %s::uuid
+              AND ad.stable_key = ANY(%s::text[])
+              AND ad.value_shape = 'boolean'
+              AND pav.allowed_value_id IS NULL
+            """,
+            [venue_id, list(_MVP_OWNER_EDITABLE_FEATURE_KEYS)],
+        )
+        rows = c.fetchall()
+    return {str(row[0]): bool(row[1]) for row in rows if row[1] is not None}
+
+
+def _build_features_response(venue_id: str) -> dict[str, Any]:
+    definitions = _load_mvp_feature_definitions()
+    values = _load_venue_boolean_feature_values(venue_id)
+    features = [
+        {
+            "attribute_definition_id": d["attribute_definition_id"],
+            "stable_key": d["stable_key"],
+            "label": d["label"],
+            "value_shape": d["value_shape"],
+            "group": d.get("group"),
+            "value": values.get(d["stable_key"], False),
+        }
+        for d in definitions
+    ]
+    return {"venue_id": venue_id, "features": features}
+
+
+def _snapshot_features_for_audit(venue_id: str) -> dict[str, bool]:
+    return _load_venue_boolean_feature_values(venue_id)
+
+
+def get_owner_venue_features(
+    auth: AuthContext, venue_id: str
+) -> tuple[dict[str, Any] | None, str]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err
+    return _build_features_response(venue_id), "ok"
+
+
+def _validate_features_patch_body(
+    body: Any,
+) -> tuple[list[dict[str, Any]] | None, dict[str, list[str]] | None]:
+    if not isinstance(body, dict):
+        return None, {"body": ["Request body must be a JSON object."]}
+
+    features = body.get("features")
+    if features is None:
+        return None, {"features": ["features array is required."]}
+    if not isinstance(features, list):
+        return None, {"features": ["features must be an array."]}
+    if not features:
+        return None, {"features": ["At least one feature must be provided."]}
+
+    details: dict[str, list[str]] = {}
+    seen_ids: set[str] = set()
+    out: list[dict[str, Any]] = []
+
+    for i, item in enumerate(features):
+        prefix = f"features[{i}]"
+        if not isinstance(item, dict):
+            details[prefix] = ["Each feature must be an object."]
+            continue
+        def_id = item.get("attribute_definition_id")
+        if def_id is None:
+            details[f"{prefix}.attribute_definition_id"] = ["This field is required."]
+            continue
+        if _bad_uuid(def_id):
+            details[f"{prefix}.attribute_definition_id"] = ["Must be a valid UUID."]
+            continue
+        def_id_s = str(def_id)
+        if def_id_s in seen_ids:
+            details[f"{prefix}.attribute_definition_id"] = ["Duplicate attribute ID."]
+            continue
+        seen_ids.add(def_id_s)
+
+        val = item.get("value_boolean")
+        if not isinstance(val, bool):
+            details[f"{prefix}.value_boolean"] = ["Must be a boolean."]
+            continue
+        out.append({"attribute_definition_id": def_id_s, "value_boolean": val})
+
+    if details:
+        return None, details
+    return out, None
+
+
+def _resolve_owner_editable_feature_definition(
+    attribute_definition_id: str,
+) -> dict[str, Any] | None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT id::text, stable_key, display_label, value_shape
+            FROM public.venue_attribute_definition
+            WHERE id = %s::uuid
+              AND stable_key = ANY(%s::text[])
+              AND value_shape = 'boolean'
+              AND is_discovery_driving = true
+            """,
+            [attribute_definition_id, list(_MVP_OWNER_EDITABLE_FEATURE_KEYS)],
+        )
+        row = c.fetchone()
+    if not row:
+        return None
+    return {
+        "attribute_definition_id": row[0],
+        "stable_key": row[1],
+        "label": row[2],
+        "value_shape": row[3],
+    }
+
+
+def _upsert_published_boolean_feature(
+    venue_id: str, attribute_definition_id: str, value_boolean: bool
+) -> None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT id::text
+            FROM public.venue_published_attribute_value
+            WHERE venue_id = %s::uuid
+              AND attribute_definition_id = %s::uuid
+              AND allowed_value_id IS NULL
+            LIMIT 1
+            """,
+            [venue_id, attribute_definition_id],
+        )
+        row = c.fetchone()
+        if row:
+            c.execute(
+                """
+                UPDATE public.venue_published_attribute_value
+                SET value_boolean = %s, updated_at = now()
+                WHERE id = %s::uuid
+                """,
+                [value_boolean, row[0]],
+            )
+        else:
+            c.execute(
+                """
+                INSERT INTO public.venue_published_attribute_value (
+                    venue_id, attribute_definition_id, value_boolean, updated_at
+                ) VALUES (%s::uuid, %s::uuid, %s, now())
+                """,
+                [venue_id, attribute_definition_id, value_boolean],
+            )
+
+
+@transaction.atomic
+def patch_owner_venue_features(
+    auth: AuthContext,
+    venue_id: str,
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    items, val_err = _validate_features_patch_body(body)
+    if val_err:
+        return None, "validation_error", val_err
+    assert items is not None
+
+    details: dict[str, list[str]] = {}
+    for i, item in enumerate(items):
+        definition = _resolve_owner_editable_feature_definition(
+            item["attribute_definition_id"]
+        )
+        if definition is None:
+            details[f"features[{i}].attribute_definition_id"] = [
+                "Unknown or non-editable attribute definition."
+            ]
+
+    if details:
+        return None, "validation_error", details
+
+    before = _snapshot_features_for_audit(venue_id)
+
+    for item in items:
+        _upsert_published_boolean_feature(
+            venue_id,
+            item["attribute_definition_id"],
+            item["value_boolean"],
+        )
+
+    after = _snapshot_features_for_audit(venue_id)
+
+    _write_owner_direct_edit_audit(
+        owner_account_id=access.owner_account_id,
+        venue_id=venue_id,
+        entity_table="venue_published_attribute_value",
+        field_family="attributes",
+        endpoint=f"/api/v1/owner/venues/{venue_id}/features",
+        before=before,
+        after=after,
+    )
+
+    response = _build_features_response(venue_id)
+    response["message"] = (
+        "Features saved. These updates are now reflected on your listing."
+    )
+    return response, "ok", None

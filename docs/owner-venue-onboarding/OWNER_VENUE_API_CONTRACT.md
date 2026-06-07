@@ -8,7 +8,7 @@ Implementation-ready contract for owner venue onboarding APIs. Backend and front
 
 ## Current stage
 
-**Stage 4.2 complete.** Direct PATCH + restricted POST implemented; frontend Step 1 split shipped. Phase A `POST .../proposals` remains as legacy shim until 4.3.
+**Stage 7 complete.** Direct PATCH + restricted POST implemented; features GET/PATCH shipped. Phase A `POST .../proposals` remains as legacy shim until 4.3.
 
 ## Decisions
 
@@ -311,7 +311,7 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
       "events": false,
       "meal_specials": false,
       "tap_list": false,
-      "features": false,
+      "features": true,
       "photos": false
     }
   }
@@ -673,6 +673,60 @@ Reuses `OwnerOpeningHoursPayload` shape from Phase A.
 ### Validation
 
 Same rules as Phase A `_validate_opening_hours` with `submit=true` (hours must be materially present).
+
+---
+
+## Stage 7 — Endpoint 7: `GET/PATCH /api/v1/owner/venues/{venue_id}/features`
+
+**Guard:** `require_owner_portal_auth` + venue scope + `manage_published_venue_operations`
+
+### GET response
+
+```json
+{
+  "data": {
+    "venue_id": "uuid",
+    "features": [
+      {
+        "attribute_definition_id": "uuid",
+        "stable_key": "beer_garden",
+        "label": "Beer garden",
+        "value_shape": "boolean",
+        "group": "spaces",
+        "value": true
+      }
+    ]
+  }
+}
+```
+
+Only MVP boolean definitions from `dev_seed_mvp_filter_taxonomy.sql` are exposed. Missing published rows return `value: false`.
+
+### PATCH request
+
+```json
+{
+  "features": [
+    { "attribute_definition_id": "uuid", "value_boolean": true },
+    { "attribute_definition_id": "uuid", "value_boolean": false }
+  ]
+}
+```
+
+### PATCH response
+
+Same shape as GET plus `message`: “Features saved. These updates are now reflected on your listing.”
+
+### Side effects
+
+1. Upsert `venue_published_attribute_value` (`value_boolean`) — no proposal/staging rows
+2. `audit_event` with `action = owner_direct_edit`, `field_family = attributes`
+
+### Validation
+
+- Reject unknown or non-allowlisted `attribute_definition_id`
+- Reject non-boolean definitions
+- At least one feature object required
 
 ---
 

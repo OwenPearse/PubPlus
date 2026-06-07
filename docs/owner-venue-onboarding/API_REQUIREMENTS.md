@@ -82,7 +82,8 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 |--------|------|---------|-------|
 | PATCH | `/api/v1/owner/venues/{venue_id}/operational-profile` | Descriptions (+ contact when schema exists) | ✅ 4.1 |
 | PATCH | `/api/v1/owner/venues/{venue_id}/hours` | Opening hours bundle | ✅ 4.1 |
-| PATCH | `/api/v1/owner/venues/{venue_id}/attributes` | Feature toggles | 7 |
+| GET | `/api/v1/owner/venues/{venue_id}/features` | MVP boolean feature definitions + current values | ✅ 7 |
+| PATCH | `/api/v1/owner/venues/{venue_id}/features` | MVP boolean feature toggles | ✅ 7 |
 | PUT | `/api/v1/owner/venues/{venue_id}/specials` | Meal specials replace-set | 5 |
 | PUT | `/api/v1/owner/venues/{venue_id}/tap-list` | Tap offerings replace-set | 6 |
 

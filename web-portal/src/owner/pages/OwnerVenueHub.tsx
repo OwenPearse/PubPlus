@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
+  FEATURES_HUB_DESCRIPTION,
+} from "@/owner/lib/ownerVenueFeaturesUi";
+import {
   formatVenueLocation,
   OWNER_HUB_HEADLINE,
   OWNER_HUB_REVIEW_NOTE,
@@ -51,6 +54,7 @@ function ChecklistRow({
 }) {
   const deferred = sectionIsDeferred(section);
   const isCore = section.key === "core_details" && section.available;
+  const isFeatures = section.key === "features" && section.available;
 
   return (
     <li
@@ -74,6 +78,8 @@ function ChecklistRow({
             <p className="mt-2 text-sm text-slate-600">
               Coming later — you can skip this for now.
             </p>
+          ) : isFeatures ? (
+            <p className="mt-2 text-sm text-slate-600">{FEATURES_HUB_DESCRIPTION}</p>
           ) : (
             <p className="mt-1 text-xs capitalize text-slate-500">{section.status}</p>
           )}
@@ -84,6 +90,13 @@ function ChecklistRow({
             className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
           >
             Edit pub details
+          </Link>
+        ) : isFeatures ? (
+          <Link
+            to={`/owner/venues/${venueId}/features`}
+            className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Edit features
           </Link>
         ) : (
           <span

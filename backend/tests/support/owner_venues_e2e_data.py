@@ -25,6 +25,8 @@ E2E_BUSINESS_ID = "bada0004-0000-4000-8000-0000000000b1"
 E2E_OTHER_VENUE_ID = "bada0005-0000-4000-8000-0000000000b2"
 E2E_CAPABILITY_SUBMIT = "submit_restricted_changes_for_review"
 E2E_CAPABILITY_DIRECT_EDIT = "manage_published_venue_operations"
+E2E_MVP_BEER_GARDEN_ATTR_ID = "33333333-3333-4333-8333-333333333401"
+E2E_MVP_DOG_FRIENDLY_ATTR_ID = "33333333-3333-4333-8333-333333333404"
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +228,30 @@ def try_install_owner_venues_e2e_fixtures() -> OwnerVenuesE2EInstall | None:
             """,
             [E2E_VENUE_ID],
         )
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'venue_attribute_definition'
+            """
+        )
+        if c.fetchone():
+            c.execute(
+                """
+                INSERT INTO public.venue_attribute_definition (
+                  id, stable_key, display_label, value_shape, cardinality,
+                  is_discovery_driving, publishability_risk_hint
+                ) VALUES
+                  ('33333333-3333-4333-8333-333333333401', 'beer_garden', 'Beer garden', 'boolean', 'single', true, 'low'),
+                  ('33333333-3333-4333-8333-333333333402', 'rooftop', 'Rooftop', 'boolean', 'single', true, 'low'),
+                  ('33333333-3333-4333-8333-333333333403', 'live_music', 'Live music', 'boolean', 'single', true, 'low'),
+                  ('33333333-3333-4333-8333-333333333404', 'dog_friendly', 'Dog friendly', 'boolean', 'single', true, 'low'),
+                  ('33333333-3333-4333-8333-333333333405', 'sports_screens', 'Sports screens', 'boolean', 'single', true, 'low'),
+                  ('33333333-3333-4333-8333-333333333406', 'pool_table', 'Pool table', 'boolean', 'single', true, 'low'),
+                  ('33333333-3333-4333-8333-333333333407', 'late_night', 'Late night', 'boolean', 'single', true, 'low'),
+                  ('33333333-3333-4333-8333-333333333408', 'vegan_options', 'Vegan options', 'boolean', 'single', true, 'low')
+                ON CONFLICT (stable_key) DO NOTHING
+                """
+            )
     except DatabaseError as exc:  # noqa: BLE001
         logger.info("owner venues e2e install failed: %s", exc)
         return None

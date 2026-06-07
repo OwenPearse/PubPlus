@@ -8,6 +8,7 @@ import { OwnerClaimsListPage } from "@/admin/pages/OwnerClaimsListPage";
 import { AccessDeniedPage } from "@/owner/pages/AccessDeniedPage";
 import { OwnerPortalEntry } from "@/owner/pages/OwnerPortalEntry";
 import { OwnerVenueBasicsPage } from "@/owner/pages/OwnerVenueBasicsPage";
+import { OwnerVenueFeaturesPage } from "@/owner/pages/OwnerVenueFeaturesPage";
 import { OwnerVenueHub } from "@/owner/pages/OwnerVenueHub";
 import { PortalEntryPage } from "@/owner/pages/PortalEntryPage";
 import { OwnerRouteGuard } from "@/owner/components/OwnerRouteGuard";
@@ -32,6 +33,7 @@ function OwnerAppRoutes() {
       <Route index element={<OwnerPortalEntry />} />
       <Route path="venues/:venueId" element={<OwnerVenueHub />} />
       <Route path="venues/:venueId/basics" element={<OwnerVenueBasicsPage />} />
+      <Route path="venues/:venueId/features" element={<OwnerVenueFeaturesPage />} />
       <Route path="*" element={<Navigate to="/owner" replace />} />
     </Routes>
   );

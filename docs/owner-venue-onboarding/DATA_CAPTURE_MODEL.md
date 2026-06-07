@@ -6,7 +6,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 
 ## Current stage
 
-**Stage 4.2 complete.** Descriptions and hours write published tables directly via owner PATCH; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
+**Stage 7 complete.** Descriptions, hours, and MVP boolean features write published tables directly via owner PATCH; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
 
 ## Decisions
 

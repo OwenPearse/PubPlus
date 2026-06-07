@@ -13,11 +13,13 @@ vi.mock("@/shared/lib/env", () => ({
 import {
   ownerPatchHours,
   ownerPatchOperationalProfile,
+  ownerPatchVenueFeatures,
   ownerRestrictedChangeRequest,
   ownerVenueClaimCandidates,
   ownerVenueClaimRequest,
   ownerCurrentVenueClaim,
   ownerVenueDetail,
+  ownerVenueFeatures,
   ownerVenueList,
   ownerVenueProposal,
   parseApiValidationDetails,
@@ -102,9 +104,25 @@ const detailEnvelope = {
       events: false,
       meal_specials: false,
       tap_list: false,
-      features: false,
+      features: true,
       photos: false,
     },
+  },
+};
+
+const featuresEnvelope = {
+  data: {
+    venue_id: "v-1",
+    features: [
+      {
+        attribute_definition_id: "attr-beer",
+        stable_key: "beer_garden",
+        label: "Beer garden",
+        value_shape: "boolean",
+        group: "spaces",
+        value: false,
+      },
+    ],
   },
 };
 
@@ -322,6 +340,50 @@ describe("owner venue API wrappers", () => {
       }),
     );
     expect(result.data.updated.short_description).toBe("New");
+  });
+
+  it("ownerVenueFeatures parses GET envelope", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(featuresEnvelope), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const result = await ownerVenueFeatures("v-1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/features",
+      expect.any(Object),
+    );
+    expect(result.data.features[0].stable_key).toBe("beer_garden");
+  });
+
+  it("ownerPatchVenueFeatures sends PATCH to features", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            ...featuresEnvelope.data,
+            message: "Features saved. These updates are now reflected on your listing.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const body = {
+      features: [{ attribute_definition_id: "attr-beer", value_boolean: true }],
+    };
+    await ownerPatchVenueFeatures("v-1", body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/features",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    );
   });
 
   it("ownerPatchHours sends PATCH to hours", async () => {

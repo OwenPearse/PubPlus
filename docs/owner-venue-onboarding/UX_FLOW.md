@@ -104,7 +104,7 @@ Duplicate candidates are never shown to owners.
 | `core_details` | Pub details | Yes | Mixed (Step 1) |
 | `meal_specials` | Meal specials | No | Direct (Stage 5) |
 | `tap_list` | Tap list | No | Direct (Stage 6) |
-| `features` | Features | No | Direct (Stage 7) |
+| `features` | Features | No | Direct (Stage 7) — **active in hub** |
 | `events` | Events | No | Deferred |
 | `photos` | Photos | No | Deferred + moderation |
 
@@ -191,7 +191,7 @@ No “Submit for review” on these pages unless a field is later reclassified a
   index → OwnerPortalEntry
   venues/:venueId → OwnerVenueHub
   venues/:venueId/basics → OwnerVenueBasicsPage
-  venues/:venueId/features → (Stage 7)
+  venues/:venueId/features → OwnerVenueFeaturesPage (Stage 7)
   venues/:venueId/specials → (Stage 5)
   venues/:venueId/taps → (Stage 6)
 ```

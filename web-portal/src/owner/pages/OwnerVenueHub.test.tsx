@@ -66,6 +66,13 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
           available: true,
         },
         {
+          key: "features",
+          label: "Features",
+          status: "missing",
+          required: false,
+          available: true,
+        },
+        {
           key: "events",
           label: "Events",
           status: "deferred",
@@ -86,7 +93,7 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
       events: false,
       meal_specials: false,
       tap_list: false,
-      features: false,
+      features: true,
       photos: false,
     },
     ...overrides,
@@ -116,6 +123,26 @@ describe("OwnerVenueHub", () => {
       "href",
       "/owner/venues/v-1/basics",
     );
+    expect(screen.getByRole("link", { name: "Edit features" })).toHaveAttribute(
+      "href",
+      "/owner/venues/v-1/features",
+    );
+  });
+
+  it("keeps deferred sections disabled", async () => {
+    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
+    render(
+      <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
+        <Routes>
+          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Edit features" })).toBeInTheDocument();
+    });
+    expect(screen.getAllByText(/Coming later/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: /meal specials/i })).not.toBeInTheDocument();
   });
 
   it("shows deferred sections as disabled", async () => {

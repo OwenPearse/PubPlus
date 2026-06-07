@@ -13,6 +13,8 @@ from common.auth.errors import InvalidTokenError
 from tests.support.owner_venues_e2e_data import (
     E2E_CAPABILITY_DIRECT_EDIT,
     E2E_CAPABILITY_SUBMIT,
+    E2E_MVP_BEER_GARDEN_ATTR_ID,
+    E2E_MVP_DOG_FRIENDLY_ATTR_ID,
     try_install_owner_venues_e2e_fixtures,
 )
 
@@ -138,6 +140,38 @@ def _count_in_review_proposals(venue_id: str, owner_account_id: str) -> int:
     return int(row[0]) if row else 0
 
 
+def _count_staging_attribute_rows(venue_id: str) -> int:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.venue_proposal_staging_attribute sa
+            INNER JOIN public.venue_change_proposal p
+              ON p.id = sa.venue_change_proposal_id
+            WHERE p.venue_id = %s::uuid
+              AND p.actor_type = 'owner'
+              AND p.channel = 'owner_portal'
+            """,
+            [venue_id],
+        )
+        row = c.fetchone()
+    return int(row[0]) if row else 0
+
+
+def _mvp_feature_definitions_available() -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.venue_attribute_definition
+            WHERE stable_key = 'beer_garden'
+              AND value_shape = 'boolean'
+            """
+        )
+        row = c.fetchone()
+    return bool(row and int(row[0]) > 0)
+
+
 @override_settings(SUPABASE_JWT_JWKS_URL="https://example.supabase.co/auth/v1/keys")
 class OwnerVenueEndpointAuthTests(SimpleTestCase):
     def setUp(self) -> None:
@@ -171,6 +205,18 @@ class OwnerVenueEndpointAuthTests(SimpleTestCase):
         r = self.client.patch(
             f"/api/v1/owner/venues/{uuid4()}/hours",
             data="{}",
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_features_get_without_token_returns_401(self) -> None:
+        r = self.client.get(f"/api/v1/owner/venues/{uuid4()}/features")
+        self.assertEqual(r.status_code, 401)
+
+    def test_features_patch_without_token_returns_401(self) -> None:
+        r = self.client.patch(
+            f"/api/v1/owner/venues/{uuid4()}/features",
+            data='{"features":[]}',
             content_type="application/json",
         )
         self.assertEqual(r.status_code, 401)
@@ -342,6 +388,7 @@ class OwnerVenueEndpointE2ETests(TestCase):
         self.assertEqual(data["published"]["contact"]["supported"], False)
         self.assertIsNone(data["published"]["contact"]["phone"])
         self.assertTrue(data["sections_available"]["core_details"])
+        self.assertTrue(data["sections_available"]["features"])
         dumped = json.dumps(data)
         self.assertNotIn("google_place_id", dumped)
 
@@ -1137,6 +1184,212 @@ class OwnerVenueEndpointE2ETests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(second.json()["data"]["proposal_id"], first_id)
         self.assertIn("already waiting", second.json()["data"]["message"].lower())
+
+    def test_get_features_returns_mvp_boolean_definitions(self) -> None:
+        self._skip_if_no_db()
+        if not _mvp_feature_definitions_available():
+            self.skipTest("MVP feature attribute definitions not seeded in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/features",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()["data"]
+        self.assertEqual(data["venue_id"], self.e2e.venue_id)
+        features = data["features"]
+        self.assertGreaterEqual(len(features), 8)
+        keys = {f["stable_key"] for f in features}
+        self.assertIn("beer_garden", keys)
+        self.assertIn("dog_friendly", keys)
+        for feature in features:
+            self.assertEqual(feature["value_shape"], "boolean")
+            self.assertIsInstance(feature["value"], bool)
+        dumped = json.dumps(data)
+        self.assertNotIn("google_place_id", dumped)
+
+    def test_patch_features_updates_published_values_and_audit(self) -> None:
+        self._skip_if_no_db()
+        if not _mvp_feature_definitions_available():
+            self.skipTest("MVP feature attribute definitions not seeded in test DB.")
+        staging_before = _count_staging_attribute_rows(self.e2e.venue_id)
+        audits_before = _count_owner_direct_edit_audits(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        body = {
+            "features": [
+                {
+                    "attribute_definition_id": E2E_MVP_BEER_GARDEN_ATTR_ID,
+                    "value_boolean": True,
+                },
+                {
+                    "attribute_definition_id": E2E_MVP_DOG_FRIENDLY_ATTR_ID,
+                    "value_boolean": False,
+                },
+            ]
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/features",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()["data"]
+        self.assertIn("Features saved", data["message"])
+        beer = next(f for f in data["features"] if f["stable_key"] == "beer_garden")
+        dog = next(f for f in data["features"] if f["stable_key"] == "dog_friendly")
+        self.assertTrue(beer["value"])
+        self.assertFalse(dog["value"])
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT value_boolean
+                FROM public.venue_published_attribute_value pav
+                INNER JOIN public.venue_attribute_definition ad
+                  ON ad.id = pav.attribute_definition_id
+                WHERE pav.venue_id = %s::uuid AND ad.stable_key = 'beer_garden'
+                """,
+                [self.e2e.venue_id],
+            )
+            row = c.fetchone()
+        self.assertIsNotNone(row)
+        self.assertTrue(row[0])
+
+        self.assertEqual(
+            _count_owner_direct_edit_audits(
+                self.e2e.venue_id, self.e2e.owner_account_id
+            ),
+            audits_before + 1,
+        )
+        self.assertEqual(
+            _count_staging_attribute_rows(self.e2e.venue_id), staging_before
+        )
+
+    def test_patch_features_rejects_unknown_attribute_id(self) -> None:
+        self._skip_if_no_db()
+        if not _mvp_feature_definitions_available():
+            self.skipTest("MVP feature attribute definitions not seeded in test DB.")
+        body = {
+            "features": [
+                {"attribute_definition_id": str(uuid4()), "value_boolean": True},
+            ]
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/features",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_patch_features_rejects_non_boolean_attribute(self) -> None:
+        self._skip_if_no_db()
+        if not _mvp_feature_definitions_available():
+            self.skipTest("MVP feature attribute definitions not seeded in test DB.")
+        with connection.cursor() as c:
+            c.execute(
+                """
+                INSERT INTO public.venue_attribute_definition (
+                  id, stable_key, display_label, value_shape, cardinality, is_discovery_driving
+                ) VALUES (
+                  'bada9999-0000-4000-8000-0000000000f1',
+                  'e2e_text_attr_owner',
+                  'E2E text',
+                  'text_non_discovery',
+                  'single',
+                  false
+                ) ON CONFLICT (stable_key) DO NOTHING
+                """
+            )
+        body = {
+            "features": [
+                {
+                    "attribute_definition_id": "bada9999-0000-4000-8000-0000000000f1",
+                    "value_boolean": True,
+                },
+            ]
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/features",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_patch_features_missing_capability_returns_403(self) -> None:
+        self._skip_if_no_db()
+        if not _mvp_feature_definitions_available():
+            self.skipTest("MVP feature attribute definitions not seeded in test DB.")
+        _revoke_owner_capability(
+            self.e2e.venue_id,
+            self.e2e.owner_account_id,
+            E2E_CAPABILITY_DIRECT_EDIT,
+        )
+        body = {
+            "features": [
+                {
+                    "attribute_definition_id": E2E_MVP_BEER_GARDEN_ATTR_ID,
+                    "value_boolean": True,
+                },
+            ]
+        }
+        try:
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                r = self.client.patch(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/features",
+                    data=json.dumps(body),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            self.assertEqual(r.status_code, 403)
+            self.assertEqual(r.json()["error"]["code"], "forbidden")
+        finally:
+            with connection.cursor() as c:
+                c.execute(
+                    """
+                    SELECT bvmr.id::text
+                    FROM public.business_venue_management_relationship bvmr
+                    WHERE bvmr.venue_id = %s::uuid
+                    LIMIT 1
+                    """,
+                    [self.e2e.venue_id],
+                )
+                rel = c.fetchone()
+            if rel:
+                _restore_owner_capability(
+                    rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_DIRECT_EDIT
+                )
+
+    def test_patch_features_forbidden_for_unscoped_venue(self) -> None:
+        self._skip_if_no_db()
+        if not _mvp_feature_definitions_available():
+            self.skipTest("MVP feature attribute definitions not seeded in test DB.")
+        body = {
+            "features": [
+                {
+                    "attribute_definition_id": E2E_MVP_BEER_GARDEN_ATTR_ID,
+                    "value_boolean": True,
+                },
+            ]
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.other_venue_id}/features",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 403)
 
     def test_proposal_still_works_after_direct_edit_endpoints(self) -> None:
         self._skip_if_no_db()
