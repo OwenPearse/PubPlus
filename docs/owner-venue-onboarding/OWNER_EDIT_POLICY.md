@@ -14,7 +14,7 @@ This document supersedes the Phase A assumption that **every** `core_details` fi
 
 ## Current stage
 
-**Stage 5 complete.** Meal specials direct-edit CRUD added. Stage 4.2 operational PATCH + restricted POST unchanged. Legacy `POST .../proposals` remains for compatibility.
+**Stage 6 complete.** Tap list direct-edit CRUD added. Meal specials (Stage 5) and features (Stage 7) unchanged. Stage 4.2 operational PATCH + restricted POST unchanged.
 
 ## Decisions
 
@@ -106,7 +106,7 @@ Remove hub/form copy: “All changes are reviewed before they appear publicly.�
 | `PATCH` | `/api/v1/owner/venues/{venue_id}/hours` | opening hours bundle | Replace rows in `venue_hours_*` transactionally |
 | `PATCH` | `/api/v1/owner/venues/{venue_id}/features` | MVP boolean feature toggles | ✅ Stage 7 |
 | `GET/POST/PATCH/DELETE` | `/api/v1/owner/venues/{venue_id}/meal-specials` | meal specials CRUD | ✅ Stage 5 |
-| `PUT` | `/api/v1/owner/venues/{venue_id}/tap-list` | tap offerings | Stage 6 |
+| `GET/POST/PATCH/DELETE` | `/api/v1/owner/venues/{venue_id}/tap-list` | tap offerings CRUD | ✅ Stage 6 |
 
 **Restricted:**
 

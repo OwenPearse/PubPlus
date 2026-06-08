@@ -131,6 +131,31 @@ _MEAL_SPECIAL_INPUT_ALLOWED_KEYS = frozenset(
     }
 )
 _SORT_ORDER_TIER_NOTES_PREFIX = "owner_sort_order="
+_TAP_LIST_DRINK_NAME_MIN = 2
+_TAP_LIST_DRINK_NAME_MAX = 120
+_TAP_LIST_BREWERY_MAX = 120
+_TAP_LIST_TYPE_MAX = 80
+_TAP_LIST_ABV_MAX = 20
+_TAP_LIST_PRICE_TEXT_MAX = 80
+_TAP_LIST_NOTES_MAX = 300
+_TAP_LIST_SORT_ORDER_MIN = 0
+_TAP_LIST_SORT_ORDER_MAX = 999
+_TAP_LIST_AVAILABILITY = frozenset({"permanent", "rotating", "seasonal", "limited"})
+_TAP_LIST_INPUT_ALLOWED_KEYS = frozenset(
+    {
+        "drink_name",
+        "brewery_or_brand",
+        "drink_type",
+        "abv",
+        "price_text",
+        "availability",
+        "notes",
+        "active",
+        "sort_order",
+    }
+)
+_TAP_OWNER_META_PREFIX = "owner_meta="
+_MARKUP_RE = re.compile(r"<\s*(script|iframe|object|embed|svg|/script)", re.I)
 _HOURS_PATCH_FORBIDDEN_KEYS = frozenset(
     {
         "display_name",
@@ -446,6 +471,25 @@ def _meal_specials_section_status(venue_id: str) -> str:
     return "complete" if row and int(row[0]) > 0 else "missing"
 
 
+def _contains_markup(value: str) -> bool:
+    return bool(_MARKUP_RE.search(value))
+
+
+def _tap_list_section_status(venue_id: str) -> str:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.venue_published_tap_offering
+            WHERE venue_id = %s::uuid
+              AND catalog_record_status = 'active'
+            """,
+            [venue_id],
+        )
+        row = c.fetchone()
+    return "complete" if row and int(row[0]) > 0 else "missing"
+
+
 def _features_section_status(venue_id: str) -> str:
     with connection.cursor() as c:
         c.execute(
@@ -470,6 +514,7 @@ def _completeness_sections(
     *,
     features_status: str = "missing",
     meal_specials_status: str = "missing",
+    tap_list_status: str = "missing",
 ) -> list[dict[str, Any]]:
     core_status = _core_section_status(basics)
     return [
@@ -497,9 +542,9 @@ def _completeness_sections(
         {
             "key": "tap_list",
             "label": "Tap list",
-            "status": "missing",
+            "status": tap_list_status,
             "required": False,
-            "available": False,
+            "available": True,
         },
         {
             "key": "features",
@@ -1115,6 +1160,7 @@ def get_owner_venue_detail(
     caps = _load_capabilities(access.relationship_id, access.owner_account_id)
     features_status = _features_section_status(venue_id)
     meal_specials_status = _meal_specials_section_status(venue_id)
+    tap_list_status = _tap_list_section_status(venue_id)
 
     display_name = (
         published["profile"].get("display_name")
@@ -1147,13 +1193,14 @@ def get_owner_venue_detail(
                 basics,
                 features_status=features_status,
                 meal_specials_status=meal_specials_status,
+                tap_list_status=tap_list_status,
             ),
         },
         "sections_available": {
             "core_details": True,
             "events": False,
             "meal_specials": True,
-            "tap_list": False,
+            "tap_list": True,
             "features": True,
             "photos": False,
         },
@@ -3208,5 +3255,557 @@ def deactivate_owner_venue_meal_special(
         auth,
         venue_id,
         special_id,
+        {"active": False},
+    )
+
+
+def _parse_owner_tap_meta_from_tier_notes(tier_notes: str | None) -> dict[str, Any]:
+    if not tier_notes:
+        return {}
+    for part in str(tier_notes).split("|"):
+        part = part.strip()
+        if part.startswith(_TAP_OWNER_META_PREFIX):
+            payload = part[len(_TAP_OWNER_META_PREFIX) :]
+            try:
+                parsed = json.loads(payload)
+            except json.JSONDecodeError:
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _format_owner_tap_tier_notes(
+    *,
+    brewery_or_brand: str | None,
+    drink_type: str | None,
+    abv: str | None,
+    price_text: str | None,
+    notes: str | None,
+    availability: str | None,
+    sort_order: int,
+) -> str:
+    meta: dict[str, str] = {}
+    if brewery_or_brand:
+        meta["brewery_or_brand"] = brewery_or_brand
+    if drink_type:
+        meta["drink_type"] = drink_type
+    if abv:
+        meta["abv"] = abv
+    if price_text:
+        meta["price_text"] = price_text
+    if notes:
+        meta["notes"] = notes
+    if availability:
+        meta["availability"] = availability
+    parts = [f"{_SORT_ORDER_TIER_NOTES_PREFIX}{sort_order}"]
+    if meta:
+        parts.append(f"{_TAP_OWNER_META_PREFIX}{json.dumps(meta, separators=(',', ':'))}")
+    return "|".join(parts)
+
+
+def _availability_to_traits(availability: str | None) -> tuple[bool, bool]:
+    avail = availability or "permanent"
+    if avail == "rotating":
+        return True, False
+    if avail in ("seasonal", "limited"):
+        return False, True
+    return False, False
+
+
+def _traits_to_availability(
+    *,
+    is_rotating: bool,
+    is_limited_run: bool,
+    meta: dict[str, Any],
+) -> str:
+    stored = meta.get("availability")
+    if isinstance(stored, str) and stored in _TAP_LIST_AVAILABILITY:
+        return stored
+    if is_rotating:
+        return "rotating"
+    if is_limited_run:
+        return "limited"
+    return "permanent"
+
+
+def _validate_tap_list_input(
+    body: Any,
+    *,
+    require_drink_name: bool,
+    partial: bool,
+) -> tuple[dict[str, Any] | None, dict[str, list[str]] | None]:
+    if not isinstance(body, dict):
+        return None, {"body": ["Request body must be a JSON object."]}
+
+    details: dict[str, list[str]] = {}
+    unknown = sorted(set(body.keys()) - _TAP_LIST_INPUT_ALLOWED_KEYS)
+    for key in unknown:
+        details[key] = ["Unsupported field."]
+
+    if require_drink_name and "drink_name" not in body:
+        details.setdefault("drink_name", []).append("This field is required.")
+
+    if not partial and not _TAP_LIST_INPUT_ALLOWED_KEYS.intersection(body.keys()):
+        details.setdefault("body", []).append("At least one field must be provided.")
+
+    drink_name = body.get("drink_name")
+    if drink_name is not None:
+        if not isinstance(drink_name, str):
+            details.setdefault("drink_name", []).append("Must be a string.")
+        else:
+            drink_name = drink_name.strip()
+            if len(drink_name) < _TAP_LIST_DRINK_NAME_MIN:
+                details.setdefault("drink_name", []).append(
+                    f"Must be at least {_TAP_LIST_DRINK_NAME_MIN} characters."
+                )
+            elif len(drink_name) > _TAP_LIST_DRINK_NAME_MAX:
+                details.setdefault("drink_name", []).append(
+                    f"Must be at most {_TAP_LIST_DRINK_NAME_MAX} characters."
+                )
+            elif _contains_markup(drink_name):
+                details.setdefault("drink_name", []).append(
+                    "Must not contain HTML or script-like markup."
+                )
+
+    _MISSING = object()
+
+    def _validate_optional_text(key: str, max_len: int) -> tuple[str | None | object, bool]:
+        val = body.get(key)
+        if key not in body:
+            return _MISSING, False
+        if val is None:
+            return None, True
+        if not isinstance(val, str):
+            details.setdefault(key, []).append("Must be a string or null.")
+            return _MISSING, True
+        trimmed = val.strip()
+        if len(trimmed) > max_len:
+            details.setdefault(key, []).append(
+                f"Must be at most {max_len} characters."
+            )
+            return _MISSING, True
+        if trimmed and _contains_markup(trimmed):
+            details.setdefault(key, []).append(
+                "Must not contain HTML or script-like markup."
+            )
+            return _MISSING, True
+        return trimmed or None, True
+
+    brewery_or_brand, _ = _validate_optional_text("brewery_or_brand", _TAP_LIST_BREWERY_MAX)
+    drink_type, _ = _validate_optional_text("drink_type", _TAP_LIST_TYPE_MAX)
+    abv, _ = _validate_optional_text("abv", _TAP_LIST_ABV_MAX)
+    price_text, _ = _validate_optional_text("price_text", _TAP_LIST_PRICE_TEXT_MAX)
+    notes, _ = _validate_optional_text("notes", _TAP_LIST_NOTES_MAX)
+
+    availability = body.get("availability")
+    if availability is not None:
+        if availability == "":
+            availability = None
+        elif not isinstance(availability, str):
+            details.setdefault("availability", []).append("Must be a string or null.")
+        elif availability not in _TAP_LIST_AVAILABILITY:
+            details.setdefault("availability", []).append(
+                "Must be one of: permanent, rotating, seasonal, limited."
+            )
+
+    active = body.get("active")
+    if active is not None and not isinstance(active, bool):
+        details.setdefault("active", []).append("Must be a boolean.")
+
+    parsed_sort: int | None = None
+    sort_order = body.get("sort_order")
+    if sort_order is not None:
+        if not isinstance(sort_order, int):
+            details.setdefault("sort_order", []).append("Must be an integer.")
+        elif sort_order < _TAP_LIST_SORT_ORDER_MIN or sort_order > _TAP_LIST_SORT_ORDER_MAX:
+            details.setdefault("sort_order", []).append(
+                f"Must be between {_TAP_LIST_SORT_ORDER_MIN} and {_TAP_LIST_SORT_ORDER_MAX}."
+            )
+        else:
+            parsed_sort = sort_order
+
+    if details:
+        return None, details
+
+    out: dict[str, Any] = {}
+    if drink_name is not None and isinstance(drink_name, str):
+        out["drink_name"] = drink_name.strip()
+    for key, val in (
+        ("brewery_or_brand", brewery_or_brand),
+        ("drink_type", drink_type),
+        ("abv", abv),
+        ("price_text", price_text),
+        ("notes", notes),
+    ):
+        if val is not _MISSING:
+            out[key] = val
+    if "availability" in body:
+        out["availability"] = availability
+    if active is not None:
+        out["active"] = active
+    if parsed_sort is not None:
+        out["sort_order"] = parsed_sort
+    return out, None
+
+
+def _load_owner_tap_list_rows(venue_id: str) -> list[dict[str, Any]]:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT
+              t.id::text,
+              t.unstructured_line_label,
+              t.catalog_record_status,
+              t.is_rotating,
+              t.is_limited_run,
+              t.sort_order,
+              t.created_at,
+              p.display_name,
+              br.display_name,
+              st.display_name,
+              de.tier_notes
+            FROM public.venue_published_tap_offering t
+            LEFT JOIN public.beverage_product p
+              ON p.id = t.beverage_product_id
+            LEFT JOIN public.beverage_brewery br
+              ON br.id = p.brewery_id
+            LEFT JOIN public.beverage_style st
+              ON st.id = p.style_id
+            LEFT JOIN public.venue_published_tap_offering_discovery_eligibility de
+              ON de.tap_offering_id = t.id
+            WHERE t.venue_id = %s::uuid
+            ORDER BY t.created_at ASC, t.id ASC
+            """,
+            [venue_id],
+        )
+        rows = c.fetchall()
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        tier_notes = row[10]
+        meta = _parse_owner_tap_meta_from_tier_notes(tier_notes)
+        parsed_sort = _parse_owner_sort_order_from_tier_notes(tier_notes)
+        sort_order = (
+            parsed_sort
+            if parsed_sort != _MEAL_SPECIAL_SORT_ORDER_MAX
+            else (int(row[5]) if row[5] is not None else _MEAL_SPECIAL_SORT_ORDER_MAX)
+        )
+        drink_name = (row[1] or row[7] or "").strip()
+        items.append(
+            {
+                "id": row[0],
+                "drink_name": drink_name,
+                "brewery_or_brand": meta.get("brewery_or_brand") or row[8],
+                "drink_type": meta.get("drink_type") or row[9],
+                "abv": meta.get("abv"),
+                "price_text": meta.get("price_text"),
+                "notes": meta.get("notes"),
+                "availability": _traits_to_availability(
+                    is_rotating=bool(row[3]),
+                    is_limited_run=bool(row[4]),
+                    meta=meta,
+                ),
+                "active": row[2] == "active",
+                "sort_order": sort_order,
+                "_created_at": row[6],
+            }
+        )
+
+    items.sort(
+        key=lambda item: (
+            item["sort_order"],
+            item.get("_created_at") or datetime.min.replace(tzinfo=timezone.utc),
+            item["drink_name"] or "",
+        )
+    )
+    for index, item in enumerate(items):
+        if item["sort_order"] == _MEAL_SPECIAL_SORT_ORDER_MAX:
+            item["sort_order"] = index
+        item.pop("_created_at", None)
+    return items
+
+
+def _tap_list_row_to_public(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": item["id"],
+        "drink_name": item["drink_name"],
+        "brewery_or_brand": item.get("brewery_or_brand"),
+        "drink_type": item.get("drink_type"),
+        "abv": item.get("abv"),
+        "price_text": item.get("price_text"),
+        "availability": item.get("availability"),
+        "notes": item.get("notes"),
+        "active": item.get("active", True),
+        "sort_order": item.get("sort_order", 0),
+    }
+
+
+def _build_tap_list_response(venue_id: str) -> dict[str, Any]:
+    rows = _load_owner_tap_list_rows(venue_id)
+    return {
+        "venue_id": venue_id,
+        "tap_list": [_tap_list_row_to_public(row) for row in rows],
+    }
+
+
+def _snapshot_tap_list_for_audit(venue_id: str) -> list[dict[str, Any]]:
+    return [_tap_list_row_to_public(row) for row in _load_owner_tap_list_rows(venue_id)]
+
+
+def _owner_tap_item_belongs_to_venue(venue_id: str, item_id: str) -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1
+            FROM public.venue_published_tap_offering
+            WHERE id = %s::uuid AND venue_id = %s::uuid
+            """,
+            [item_id, venue_id],
+        )
+        return c.fetchone() is not None
+
+
+def _insert_tap_offering_satellites(
+    *,
+    tap_offering_id: str,
+    brewery_or_brand: str | None,
+    drink_type: str | None,
+    abv: str | None,
+    price_text: str | None,
+    notes: str | None,
+    availability: str | None,
+    sort_order: int,
+) -> None:
+    tier_notes = _format_owner_tap_tier_notes(
+        brewery_or_brand=brewery_or_brand,
+        drink_type=drink_type,
+        abv=abv,
+        price_text=price_text,
+        notes=notes,
+        availability=availability,
+        sort_order=sort_order,
+    )
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.venue_published_tap_offering_validity (
+                tap_offering_id,
+                freshness_signal_strength,
+                availability_truth_state,
+                suppress_strong_current_tap_claim
+            ) VALUES (%s::uuid, 'weak', 'uncertain', true)
+            ON CONFLICT (tap_offering_id) DO UPDATE SET
+                updated_at = now()
+            """,
+            [tap_offering_id],
+        )
+        c.execute(
+            """
+            INSERT INTO public.venue_published_tap_offering_discovery_eligibility (
+                tap_offering_id,
+                safe_for_detail_display,
+                safe_for_card_or_list_row,
+                safe_for_filter_search,
+                safe_for_strong_current_tap_claim,
+                tier_notes
+            ) VALUES (%s::uuid, true, true, false, false, %s)
+            ON CONFLICT (tap_offering_id) DO UPDATE SET
+                tier_notes = EXCLUDED.tier_notes,
+                safe_for_detail_display = EXCLUDED.safe_for_detail_display,
+                safe_for_card_or_list_row = EXCLUDED.safe_for_card_or_list_row,
+                updated_at = now()
+            """,
+            [tap_offering_id, tier_notes],
+        )
+
+
+def get_owner_venue_tap_list(
+    auth: AuthContext, venue_id: str
+) -> tuple[dict[str, Any] | None, str]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err
+    return _build_tap_list_response(venue_id), "ok"
+
+
+@transaction.atomic
+def create_owner_venue_tap_list_item(
+    auth: AuthContext,
+    venue_id: str,
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    parsed, val_err = _validate_tap_list_input(
+        body, require_drink_name=True, partial=False
+    )
+    if val_err:
+        return None, "validation_error", val_err
+    assert parsed is not None
+
+    before = _snapshot_tap_list_for_audit(venue_id)
+    sort_order = parsed.get("sort_order", len(before))
+    active = parsed.get("active", True)
+    catalog_status = "active" if active else "retired"
+    availability = parsed.get("availability") or "permanent"
+    is_rotating, is_limited_run = _availability_to_traits(availability)
+
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.venue_published_tap_offering (
+                venue_id,
+                beverage_product_id,
+                catalog_record_status,
+                is_rotating,
+                is_guest_tap,
+                is_limited_run,
+                unstructured_line_label,
+                sort_order
+            ) VALUES (%s::uuid, NULL, %s, %s, false, %s, %s, %s)
+            RETURNING id::text
+            """,
+            [
+                venue_id,
+                catalog_status,
+                is_rotating,
+                is_limited_run,
+                parsed["drink_name"],
+                sort_order,
+            ],
+        )
+        row = c.fetchone()
+    assert row is not None
+    item_id = row[0]
+
+    _insert_tap_offering_satellites(
+        tap_offering_id=item_id,
+        brewery_or_brand=parsed.get("brewery_or_brand"),
+        drink_type=parsed.get("drink_type"),
+        abv=parsed.get("abv"),
+        price_text=parsed.get("price_text"),
+        notes=parsed.get("notes"),
+        availability=availability,
+        sort_order=sort_order,
+    )
+
+    after = _snapshot_tap_list_for_audit(venue_id)
+    saved = next(item for item in after if item["id"] == item_id)
+
+    _write_owner_direct_edit_audit(
+        owner_account_id=access.owner_account_id,
+        venue_id=venue_id,
+        entity_table="venue_published_tap_offering",
+        field_family="tap_list",
+        endpoint=f"/api/v1/owner/venues/{venue_id}/tap-list",
+        before={"tap_list": before},
+        after={"tap_list": after},
+    )
+
+    return {
+        "venue_id": venue_id,
+        "tap_item": saved,
+        "message": "Drink list saved. These updates are now reflected on your listing.",
+    }, "ok", None
+
+
+@transaction.atomic
+def patch_owner_venue_tap_list_item(
+    auth: AuthContext,
+    venue_id: str,
+    item_id: str,
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    if not _owner_tap_item_belongs_to_venue(venue_id, item_id):
+        return None, "not_found", None
+
+    parsed, val_err = _validate_tap_list_input(
+        body, require_drink_name=False, partial=True
+    )
+    if val_err:
+        return None, "validation_error", val_err
+    assert parsed is not None
+
+    before = _snapshot_tap_list_for_audit(venue_id)
+    current = next((r for r in before if r["id"] == item_id), None)
+    if current is None:
+        return None, "not_found", None
+
+    merged = {**current, **parsed}
+    catalog_status = "active" if merged.get("active", True) else "retired"
+    availability = merged.get("availability") or "permanent"
+    is_rotating, is_limited_run = _availability_to_traits(availability)
+    sort_order = merged.get("sort_order", current.get("sort_order", 0))
+
+    with connection.cursor() as c:
+        c.execute(
+            """
+            UPDATE public.venue_published_tap_offering
+            SET catalog_record_status = %s,
+                is_rotating = %s,
+                is_limited_run = %s,
+                unstructured_line_label = %s,
+                sort_order = %s,
+                updated_at = now()
+            WHERE id = %s::uuid AND venue_id = %s::uuid
+            """,
+            [
+                catalog_status,
+                is_rotating,
+                is_limited_run,
+                merged["drink_name"],
+                sort_order,
+                item_id,
+                venue_id,
+            ],
+        )
+
+    _insert_tap_offering_satellites(
+        tap_offering_id=item_id,
+        brewery_or_brand=merged.get("brewery_or_brand"),
+        drink_type=merged.get("drink_type"),
+        abv=merged.get("abv"),
+        price_text=merged.get("price_text"),
+        notes=merged.get("notes"),
+        availability=availability,
+        sort_order=sort_order,
+    )
+
+    after = _snapshot_tap_list_for_audit(venue_id)
+    saved = next(item for item in after if item["id"] == item_id)
+
+    _write_owner_direct_edit_audit(
+        owner_account_id=access.owner_account_id,
+        venue_id=venue_id,
+        entity_table="venue_published_tap_offering",
+        field_family="tap_list",
+        endpoint=f"/api/v1/owner/venues/{venue_id}/tap-list/{item_id}",
+        before={"tap_list": before},
+        after={"tap_list": after},
+    )
+
+    return {
+        "venue_id": venue_id,
+        "tap_item": saved,
+        "message": "Drink list saved. These updates are now reflected on your listing.",
+    }, "ok", None
+
+
+@transaction.atomic
+def deactivate_owner_venue_tap_list_item(
+    auth: AuthContext,
+    venue_id: str,
+    item_id: str,
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    return patch_owner_venue_tap_list_item(
+        auth,
+        venue_id,
+        item_id,
         {"active": False},
     )

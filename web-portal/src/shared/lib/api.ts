@@ -697,6 +697,76 @@ export function ownerDeactivateMealSpecial(venueId: string, specialId: string) {
   );
 }
 
+export type OwnerTapListItem = {
+  id: string;
+  drink_name: string;
+  brewery_or_brand?: string | null;
+  drink_type?: string | null;
+  abv?: string | null;
+  price_text?: string | null;
+  availability?: "permanent" | "rotating" | "seasonal" | "limited" | null;
+  notes?: string | null;
+  active: boolean;
+  sort_order: number;
+};
+
+export type OwnerTapListItemInput = {
+  drink_name: string;
+  brewery_or_brand?: string | null;
+  drink_type?: string | null;
+  abv?: string | null;
+  price_text?: string | null;
+  availability?: "permanent" | "rotating" | "seasonal" | "limited" | null;
+  notes?: string | null;
+  active?: boolean;
+  sort_order?: number;
+};
+
+export type OwnerTapListResponse = {
+  venue_id: string;
+  tap_list: OwnerTapListItem[];
+};
+
+export type OwnerTapListMutationResponse = {
+  venue_id: string;
+  tap_item: OwnerTapListItem;
+  message: string;
+};
+
+export function ownerVenueTapList(venueId: string) {
+  return apiRequest<ApiResponse<OwnerTapListResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/tap-list`,
+  );
+}
+
+export function ownerCreateTapListItem(
+  venueId: string,
+  body: OwnerTapListItemInput,
+) {
+  return apiRequest<ApiResponse<OwnerTapListMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/tap-list`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export function ownerPatchTapListItem(
+  venueId: string,
+  itemId: string,
+  body: Partial<OwnerTapListItemInput>,
+) {
+  return apiRequest<ApiResponse<OwnerTapListMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/tap-list/${encodeURIComponent(itemId)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
+export function ownerDeactivateTapListItem(venueId: string, itemId: string) {
+  return apiRequest<ApiResponse<OwnerTapListMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/tap-list/${encodeURIComponent(itemId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export type OwnerRestrictedIdentityPayload = {
   display_name?: string;
   address_line_1?: string;

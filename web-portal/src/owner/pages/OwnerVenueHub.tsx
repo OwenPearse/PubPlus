@@ -5,6 +5,7 @@ import {
   FEATURES_HUB_DESCRIPTION,
 } from "@/owner/lib/ownerVenueFeaturesUi";
 import { MEAL_SPECIALS_HUB_DESCRIPTION } from "@/owner/lib/ownerVenueMealSpecialsUi";
+import { TAP_LIST_HUB_DESCRIPTION } from "@/owner/lib/ownerVenueTapListUi";
 import {
   formatVenueLocation,
   OWNER_HUB_HEADLINE,
@@ -56,6 +57,7 @@ function ChecklistRow({
   const deferred = sectionIsDeferred(section);
   const isCore = section.key === "core_details" && section.available;
   const isMealSpecials = section.key === "meal_specials" && section.available;
+  const isTapList = section.key === "tap_list" && section.available;
   const isFeatures = section.key === "features" && section.available;
 
   return (
@@ -82,6 +84,8 @@ function ChecklistRow({
             </p>
           ) : isMealSpecials ? (
             <p className="mt-2 text-sm text-slate-600">{MEAL_SPECIALS_HUB_DESCRIPTION}</p>
+          ) : isTapList ? (
+            <p className="mt-2 text-sm text-slate-600">{TAP_LIST_HUB_DESCRIPTION}</p>
           ) : isFeatures ? (
             <p className="mt-2 text-sm text-slate-600">{FEATURES_HUB_DESCRIPTION}</p>
           ) : (
@@ -101,6 +105,13 @@ function ChecklistRow({
             className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
           >
             Edit meal specials
+          </Link>
+        ) : isTapList ? (
+          <Link
+            to={`/owner/venues/${venueId}/tap-list`}
+            className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Edit tap list
           </Link>
         ) : isFeatures ? (
           <Link

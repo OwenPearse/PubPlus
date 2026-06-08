@@ -6,7 +6,7 @@ Specify backend endpoints for owner venue onboarding. **Normative edit policy:**
 
 ## Current stage
 
-**Stage 5 complete.** Meal specials GET/POST/PATCH/DELETE direct-edit endpoints shipped. Stage 4.2 direct PATCH + restricted POST remain unchanged.
+**Stage 6 complete.** Tap list GET/POST/PATCH/DELETE direct-edit endpoints shipped. Stage 5 meal specials and Stage 7 features unchanged.
 
 ## Decisions
 
@@ -88,7 +88,10 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 | POST | `/api/v1/owner/venues/{venue_id}/meal-specials` | Create meal special | ✅ 5 |
 | PATCH | `/api/v1/owner/venues/{venue_id}/meal-specials/{special_id}` | Update / deactivate | ✅ 5 |
 | DELETE | `/api/v1/owner/venues/{venue_id}/meal-specials/{special_id}` | Soft deactivate | ✅ 5 |
-| PUT | `/api/v1/owner/venues/{venue_id}/tap-list` | Tap offerings replace-set | 6 |
+| GET | `/api/v1/owner/venues/{venue_id}/tap-list` | List tap/drink items | ✅ 6 |
+| POST | `/api/v1/owner/venues/{venue_id}/tap-list` | Create tap/drink item | ✅ 6 |
+| PATCH | `/api/v1/owner/venues/{venue_id}/tap-list/{item_id}` | Update / deactivate | ✅ 6 |
+| DELETE | `/api/v1/owner/venues/{venue_id}/tap-list/{item_id}` | Soft deactivate | ✅ 6 |
 
 **Guard:** `manage_published_venue_operations` required (enforce in 4.1).
 

@@ -212,6 +212,60 @@ def _count_owner_meal_special_audits(venue_id: str, owner_account_id: str) -> in
     return int(row[0]) if row else 0
 
 
+def _tap_offering_tables_available() -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_tap_offering'
+            """
+        )
+        if not c.fetchone():
+            return False
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_tap_offering_discovery_eligibility'
+            """
+        )
+        return c.fetchone() is not None
+
+
+def _tap_list_payload(**overrides) -> dict:
+    body = {
+        "drink_name": "Stone & Wood Pacific Ale",
+        "brewery_or_brand": "Stone & Wood",
+        "drink_type": "Pale ale",
+        "abv": "4.4%",
+        "price_text": "$12 schooner",
+        "availability": "permanent",
+        "notes": "House favourite",
+        "active": True,
+    }
+    body.update(overrides)
+    return body
+
+
+def _count_owner_tap_list_audits(venue_id: str, owner_account_id: str) -> int:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.audit_event
+            WHERE actor_type = 'owner'
+              AND actor_owner_account_id = %s::uuid
+              AND entity_id = %s::uuid
+              AND action = 'owner_direct_edit'
+              AND detail->>'field_family' = 'tap_list'
+            """,
+            [owner_account_id, venue_id],
+        )
+        row = c.fetchone()
+    return int(row[0]) if row else 0
+
+
 def _mvp_feature_definitions_available() -> bool:
     with connection.cursor() as c:
         c.execute(
@@ -282,6 +336,18 @@ class OwnerVenueEndpointAuthTests(SimpleTestCase):
     def test_meal_specials_post_without_token_returns_401(self) -> None:
         r = self.client.post(
             f"/api/v1/owner/venues/{uuid4()}/meal-specials",
+            data="{}",
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_tap_list_get_without_token_returns_401(self) -> None:
+        r = self.client.get(f"/api/v1/owner/venues/{uuid4()}/tap-list")
+        self.assertEqual(r.status_code, 401)
+
+    def test_tap_list_post_without_token_returns_401(self) -> None:
+        r = self.client.post(
+            f"/api/v1/owner/venues/{uuid4()}/tap-list",
             data="{}",
             content_type="application/json",
         )
@@ -456,6 +522,7 @@ class OwnerVenueEndpointE2ETests(TestCase):
         self.assertTrue(data["sections_available"]["core_details"])
         self.assertTrue(data["sections_available"]["features"])
         self.assertTrue(data["sections_available"]["meal_specials"])
+        self.assertTrue(data["sections_available"]["tap_list"])
         dumped = json.dumps(data)
         self.assertNotIn("google_place_id", dumped)
 
@@ -1691,6 +1758,211 @@ class OwnerVenueEndpointE2ETests(TestCase):
         with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
             r = self.client.get(
                 f"/api/v1/owner/venues/{self.e2e.other_venue_id}/meal-specials",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 403)
+
+    def test_get_tap_list_returns_list(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()["data"]
+        self.assertEqual(data["venue_id"], self.e2e.venue_id)
+        self.assertIsInstance(data["tap_list"], list)
+
+    def test_create_tap_list_item_writes_published_row_and_audit(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        proposals_before = _count_in_review_proposals(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        audits_before = _count_owner_tap_list_audits(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        body = _tap_list_payload()
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 201)
+        data = r.json()["data"]
+        self.assertIn("Drink list saved", data["message"])
+        item = data["tap_item"]
+        self.assertEqual(item["drink_name"], body["drink_name"])
+        self.assertEqual(item["availability"], "permanent")
+        self.assertTrue(item["active"])
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT t.unstructured_line_label, t.catalog_record_status, t.beverage_product_id
+                FROM public.venue_published_tap_offering t
+                WHERE t.id = %s::uuid
+                """,
+                [item["id"]],
+            )
+            row = c.fetchone()
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row[0], body["drink_name"])
+        self.assertEqual(row[1], "active")
+        self.assertIsNone(row[2])
+
+        self.assertEqual(
+            _count_owner_tap_list_audits(
+                self.e2e.venue_id, self.e2e.owner_account_id
+            ),
+            audits_before + 1,
+        )
+        self.assertEqual(
+            _count_in_review_proposals(self.e2e.venue_id, self.e2e.owner_account_id),
+            proposals_before,
+        )
+
+    def test_patch_tap_list_item_updates_row(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            created = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                data=json.dumps(_tap_list_payload(drink_name="Guinness")),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(created.status_code, 201)
+        item_id = created.json()["data"]["tap_item"]["id"]
+        patch_body = {"price_text": "$14 pint", "availability": "rotating"}
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list/{item_id}",
+                data=json.dumps(patch_body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        updated = r.json()["data"]["tap_item"]
+        self.assertEqual(updated["price_text"], "$14 pint")
+        self.assertEqual(updated["availability"], "rotating")
+
+    def test_delete_tap_list_item_deactivates_row(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            created = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                data=json.dumps(_tap_list_payload(drink_name="House red wine")),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(created.status_code, 201)
+        item_id = created.json()["data"]["tap_item"]["id"]
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.delete(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list/{item_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["data"]["tap_item"]["active"])
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT catalog_record_status
+                FROM public.venue_published_tap_offering
+                WHERE id = %s::uuid
+                """,
+                [item_id],
+            )
+            row = c.fetchone()
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row[0], "retired")
+
+    def test_create_tap_list_item_rejects_invalid_drink_name(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        body = _tap_list_payload(drink_name="A")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_create_tap_list_item_rejects_unsupported_fields(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        body = _tap_list_payload(extra_field="nope")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_tap_list_missing_capability_returns_403(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        _revoke_owner_capability(
+            self.e2e.venue_id,
+            self.e2e.owner_account_id,
+            E2E_CAPABILITY_DIRECT_EDIT,
+        )
+        try:
+            with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+                r = self.client.post(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                    data=json.dumps(_tap_list_payload()),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            self.assertEqual(r.status_code, 403)
+            self.assertEqual(r.json()["error"]["code"], "forbidden")
+        finally:
+            with connection.cursor() as c:
+                c.execute(
+                    """
+                    SELECT id::text
+                    FROM public.business_venue_management_relationship
+                    WHERE venue_id = %s::uuid
+                    LIMIT 1
+                    """,
+                    [self.e2e.venue_id],
+                )
+                rel = c.fetchone()
+            if rel:
+                _restore_owner_capability(
+                    rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_DIRECT_EDIT
+                )
+
+    def test_tap_list_forbidden_for_unscoped_venue(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.other_venue_id}/tap-list",
                 **_auth_headers(),
             )
         self.assertEqual(r.status_code, 403)

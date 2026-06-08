@@ -73,6 +73,13 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
           available: true,
         },
         {
+          key: "tap_list",
+          label: "Tap list",
+          status: "missing",
+          required: false,
+          available: true,
+        },
+        {
           key: "features",
           label: "Features",
           status: "missing",
@@ -98,8 +105,8 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
     sections_available: {
       core_details: true,
       events: false,
-      meal_specials: false,
-      tap_list: false,
+      meal_specials: true,
+      tap_list: true,
       features: true,
       photos: false,
     },
@@ -150,7 +157,10 @@ describe("OwnerVenueHub", () => {
     });
     expect(screen.getAllByText(/Coming later/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Edit meal specials" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /tap list/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit tap list" })).toHaveAttribute(
+      "href",
+      "/owner/venues/v-1/tap-list",
+    );
   });
 
   it("shows deferred sections as disabled", async () => {

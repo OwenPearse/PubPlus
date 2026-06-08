@@ -8,7 +8,7 @@ Implementation-ready contract for owner venue onboarding APIs. Backend and front
 
 ## Current stage
 
-**Stage 5 complete.** Meal specials GET/POST/PATCH/DELETE shipped alongside features GET/PATCH and Stage 4 direct PATCH. Phase A `POST .../proposals` remains as legacy shim until 4.3.
+**Stage 6 complete.** Tap list GET/POST/PATCH/DELETE shipped alongside meal specials, features GET/PATCH, and Stage 4 direct PATCH. Phase A `POST .../proposals` remains as legacy shim until 4.3.
 
 ## Decisions
 
@@ -310,7 +310,7 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
       "core_details": true,
       "events": false,
       "meal_specials": false,
-      "tap_list": false,
+      "tap_list": true,
       "features": true,
       "photos": false
     }
@@ -755,6 +755,87 @@ Soft deactivate: `catalog_record_status = retired` (same as PATCH `active: false
 | `start_time` / `end_time` | `recurring_pattern.window_*_time_local` |
 | `active` | `catalog_record_status` |
 | `sort_order` | `discovery_eligibility.tier_notes` (`owner_sort_order=N`) |
+
+---
+
+## Stage 6 — Tap list CRUD
+
+**Guard:** `require_owner_portal_auth` + venue scope + `manage_published_venue_operations`
+
+### GET `/api/v1/owner/venues/{venue_id}/tap-list`
+
+```json
+{
+  "data": {
+    "venue_id": "uuid",
+    "tap_list": [
+      {
+        "id": "uuid",
+        "drink_name": "Stone & Wood Pacific Ale",
+        "brewery_or_brand": "Stone & Wood",
+        "drink_type": "Pale ale",
+        "abv": "4.4%",
+        "price_text": "$12 schooner",
+        "availability": "permanent",
+        "notes": null,
+        "active": true,
+        "sort_order": 0
+      }
+    ]
+  }
+}
+```
+
+### POST / PATCH body (`OwnerTapListItemInput`)
+
+```ts
+type OwnerTapListItemInput = {
+  drink_name: string;
+  brewery_or_brand?: string | null;
+  drink_type?: string | null;
+  abv?: string | null;
+  price_text?: string | null;
+  availability?: "permanent" | "rotating" | "seasonal" | "limited" | null;
+  notes?: string | null;
+  active?: boolean;
+  sort_order?: number;
+};
+```
+
+### Validation
+
+| Field | Rules |
+|-------|--------|
+| `drink_name` | Required on POST; trim; 2–120 chars; no HTML/script markup |
+| `brewery_or_brand` | Max 120 |
+| `drink_type` | Max 80 (free text) |
+| `abv` | Max 20 |
+| `price_text` | Max 80 |
+| `notes` | Max 300 |
+| `availability` | Enum if supplied |
+| `sort_order` | 0–999 |
+| Unknown keys | Rejected |
+
+### DELETE
+
+Soft deactivate: `catalog_record_status = retired`.
+
+### Side effects
+
+1. Write `venue_published_tap_offering` (+ validity/eligibility satellites)
+2. `audit_event` (`action = owner_direct_edit`, `field_family = tap_list`)
+3. No proposal/staging rows
+
+### Schema mapping
+
+| API | Column / table |
+|-----|----------------|
+| `drink_name` | `unstructured_line_label` |
+| `availability` | `is_rotating`, `is_limited_run` (+ meta in tier_notes) |
+| `active` | `catalog_record_status` |
+| `sort_order` | `sort_order` + `tier_notes` (`owner_sort_order=N`) |
+| `brewery_or_brand`, `drink_type`, `abv`, `price_text`, `notes` | `discovery_eligibility.tier_notes` (`owner_meta={json}`) |
+| Owner create | `beverage_product_id = NULL` (free-text display row) |
 
 ---
 

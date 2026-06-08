@@ -13,6 +13,8 @@ from api.v1.owner.views import (
     owner_venue_operational_profile_patch,
     owner_venue_proposals,
     owner_venue_restricted_change_request,
+    owner_venue_tap_list,
+    owner_venue_tap_list_detail,
     owner_venues_list,
 )
 
@@ -60,6 +62,16 @@ urlpatterns = [
         "venues/<uuid:venue_id>/meal-specials/<uuid:special_id>",
         owner_venue_meal_special_detail,
         name="owner-venue-meal-special-detail",
+    ),
+    path(
+        "venues/<uuid:venue_id>/tap-list",
+        owner_venue_tap_list,
+        name="owner-venue-tap-list",
+    ),
+    path(
+        "venues/<uuid:venue_id>/tap-list/<uuid:item_id>",
+        owner_venue_tap_list_detail,
+        name="owner-venue-tap-list-detail",
     ),
     path(
         "venues/<uuid:venue_id>/restricted-change-requests",

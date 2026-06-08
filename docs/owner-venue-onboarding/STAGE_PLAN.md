@@ -6,7 +6,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 
 ## Current stage
 
-**Stage 5 complete (meal specials direct-edit).** Next: **Stage 6** tap list or **Stage 4.3** hardening.
+**Stage 6 complete (tap list direct-edit).** Next: **Stage 4.3** hardening or **Stage 8** photos.
 
 ## Decisions
 

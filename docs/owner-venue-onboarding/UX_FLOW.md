@@ -6,7 +6,7 @@ Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md`
 
 ## Current stage
 
-**Stage 5 complete.** Meal specials page active at `/owner/venues/:venueId/meal-specials`. Step 1 split (Save / Request change) unchanged from Stage 4.2.
+**Stage 6 complete.** Tap list page active at `/owner/venues/:venueId/tap-list`. Meal specials and Step 1 split unchanged.
 
 ## Decisions
 
@@ -193,7 +193,7 @@ No “Submit for review” on these pages unless a field is later reclassified a
   venues/:venueId/basics → OwnerVenueBasicsPage
   venues/:venueId/features → OwnerVenueFeaturesPage (Stage 7)
   venues/:venueId/meal-specials → OwnerVenueMealSpecialsPage (Stage 5)
-  venues/:venueId/taps → (Stage 6)
+  venues/:venueId/tap-list → OwnerVenueTapListPage (Stage 6)
 ```
 
 No sidebar. Breadcrumb: “Back to checklist” only.

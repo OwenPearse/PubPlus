@@ -53,6 +53,12 @@ vi.mock("@/owner/pages/OwnerVenueMealSpecialsPage", () => ({
   ),
 }));
 
+vi.mock("@/owner/pages/OwnerVenueTapListPage", () => ({
+  OwnerVenueTapListPage: () => (
+    <div data-testid="owner-venue-tap-list">Owner tap list</div>
+  ),
+}));
+
 describe("App routing", () => {
   it("renders /access without route guards", () => {
     render(
@@ -115,5 +121,15 @@ describe("App routing", () => {
     );
     expect(screen.getByTestId("owner-route-guard")).toBeInTheDocument();
     expect(screen.getByTestId("owner-venue-meal-specials")).toBeInTheDocument();
+  });
+
+  it("renders owner venue tap list route", () => {
+    render(
+      <MemoryRouter initialEntries={["/owner/venues/v-1/tap-list"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("owner-route-guard")).toBeInTheDocument();
+    expect(screen.getByTestId("owner-venue-tap-list")).toBeInTheDocument();
   });
 });

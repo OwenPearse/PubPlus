@@ -6,7 +6,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 
 ## Current stage
 
-**Stage 5 complete.** Descriptions, hours, MVP boolean features, and meal specials write published tables directly; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
+**Stage 6 complete.** Descriptions, hours, MVP boolean features, meal specials, and tap list write published tables directly; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
 
 ## Decisions
 

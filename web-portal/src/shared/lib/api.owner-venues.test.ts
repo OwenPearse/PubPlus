@@ -12,9 +12,12 @@ vi.mock("@/shared/lib/env", () => ({
 
 import {
   ownerCreateMealSpecial,
+  ownerCreateTapListItem,
   ownerDeactivateMealSpecial,
+  ownerDeactivateTapListItem,
   ownerPatchHours,
   ownerPatchMealSpecial,
+  ownerPatchTapListItem,
   ownerPatchOperationalProfile,
   ownerPatchVenueFeatures,
   ownerRestrictedChangeRequest,
@@ -25,6 +28,7 @@ import {
   ownerVenueFeatures,
   ownerVenueList,
   ownerVenueMealSpecials,
+  ownerVenueTapList,
   ownerVenueProposal,
   parseApiValidationDetails,
   referenceLocalities,
@@ -728,6 +732,113 @@ describe("owner venue API wrappers", () => {
     await ownerDeactivateMealSpecial("v-1", "sp-1");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://api.test/api/v1/owner/venues/v-1/meal-specials/sp-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("ownerVenueTapList fetches tap list", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            tap_list: [
+              {
+                id: "tap-1",
+                drink_name: "Stone & Wood Pacific Ale",
+                brewery_or_brand: "Stone & Wood",
+                drink_type: "Pale ale",
+                abv: "4.4%",
+                price_text: "$12 schooner",
+                availability: "permanent",
+                notes: null,
+                active: true,
+                sort_order: 0,
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const result = await ownerVenueTapList("v-1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/tap-list",
+      expect.any(Object),
+    );
+    expect(result.data.tap_list[0]?.drink_name).toBe("Stone & Wood Pacific Ale");
+  });
+
+  it("ownerCreateTapListItem sends POST", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            tap_item: { id: "tap-1", drink_name: "Guinness", active: true, sort_order: 0 },
+            message: "Drink list saved.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerCreateTapListItem("v-1", { drink_name: "Guinness" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/tap-list",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ drink_name: "Guinness" }),
+      }),
+    );
+  });
+
+  it("ownerPatchTapListItem sends PATCH", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            tap_item: { id: "tap-1", drink_name: "Guinness", active: true, sort_order: 0 },
+            message: "Drink list saved.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerPatchTapListItem("v-1", "tap-1", { price_text: "$14 pint" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/tap-list/tap-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ price_text: "$14 pint" }),
+      }),
+    );
+  });
+
+  it("ownerDeactivateTapListItem sends DELETE", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            tap_item: { id: "tap-1", drink_name: "Guinness", active: false, sort_order: 0 },
+            message: "Drink list saved.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerDeactivateTapListItem("v-1", "tap-1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/tap-list/tap-1",
       expect.objectContaining({ method: "DELETE" }),
     );
   });
