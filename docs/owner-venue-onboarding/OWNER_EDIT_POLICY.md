@@ -14,7 +14,7 @@ This document supersedes the Phase A assumption that **every** `core_details` fi
 
 ## Current stage
 
-**Stage 8 complete.** Photos/media direct-edit added. Tap list (Stage 6) unchanged.
+**Stage 9 complete.** Hub completeness model covers all direct-edit sections. Photos/media (Stage 8) unchanged.
 
 ## Decisions
 

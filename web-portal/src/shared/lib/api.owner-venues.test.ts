@@ -102,6 +102,7 @@ const detailEnvelope = {
     completeness: {
       percent: 50,
       required_basics_complete: false,
+      restricted_pending_review: false,
       sections: [
         {
           key: "core_details",
@@ -110,15 +111,58 @@ const detailEnvelope = {
           required: true,
           available: true,
         },
+        {
+          key: "features",
+          label: "Features",
+          status: "missing",
+          required: false,
+          available: true,
+        },
+        {
+          key: "meal_specials",
+          label: "Meal specials",
+          status: "missing",
+          required: false,
+          available: true,
+        },
+        {
+          key: "tap_list",
+          label: "Tap list & drinks",
+          status: "missing",
+          required: false,
+          available: true,
+        },
+        {
+          key: "photos",
+          label: "Photos",
+          status: "missing",
+          required: false,
+          available: true,
+        },
+        {
+          key: "events",
+          label: "Events",
+          status: "deferred",
+          required: false,
+          available: false,
+        },
+        {
+          key: "menus",
+          label: "Menus",
+          status: "deferred",
+          required: false,
+          available: false,
+        },
       ],
     },
     sections_available: {
       core_details: true,
       events: false,
-      meal_specials: false,
-      tap_list: false,
+      meal_specials: true,
+      tap_list: true,
       features: true,
       photos: true,
+      menus: false,
     },
   },
 };
@@ -181,6 +225,31 @@ describe("owner venue API wrappers", () => {
     );
     expect(result.data.published.contact.supported).toBe(false);
     expect(result.data.published.contact.phone).toBeNull();
+    expect(result.data.completeness.percent).toBe(50);
+    expect(result.data.completeness.restricted_pending_review).toBe(false);
+    expect(result.data.completeness.sections).toHaveLength(7);
+    expect(result.data.sections_available.menus).toBe(false);
+  });
+
+  it("ownerVenueDetail parses completeness section statuses", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(detailEnvelope), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const result = await ownerVenueDetail("v-1");
+    const sections = result.data.completeness.sections;
+    const byKey = Object.fromEntries(sections.map((section) => [section.key, section]));
+    expect(byKey.core_details.status).toBe("partial");
+    expect(byKey.features.status).toBe("missing");
+    expect(byKey.meal_specials.status).toBe("missing");
+    expect(byKey.tap_list.status).toBe("missing");
+    expect(byKey.photos.status).toBe("missing");
+    expect(byKey.events.status).toBe("deferred");
+    expect(byKey.menus.status).toBe("deferred");
   });
 
   it("ownerVenueList throws on error envelope", async () => {

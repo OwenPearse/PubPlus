@@ -6,7 +6,7 @@ Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md`
 
 ## Current stage
 
-**Stage 6 complete.** Tap list page active at `/owner/venues/:venueId/tap-list`. Meal specials and Step 1 split unchanged.
+**Stage 9 complete.** Venue hub shows weighted completion %, checklist statuses, recommended next action, and deferred events/menus.
 
 ## Decisions
 
@@ -90,23 +90,30 @@ Duplicate candidates are never shown to owners.
 | `/owner` | `OwnerPortalEntry` |
 | `/owner/venues/:venueId` | `OwnerVenueHub` |
 
-### Hub copy (updated)
+### Hub copy (Stage 9)
 
 - Headline: “Complete your listing”
-- Subhead: “Update your hours and description anytime. Name or address changes need our team to approve.”
-- Checklist row `core_details`: status from **published** completeness
-- Show badge when **restricted** proposal `in_review` (not for operational saves)
+- Progress: “Your listing is X% complete” (server-weighted)
+- Subhead: “Update descriptions and hours instantly. Request approval for name or address changes.”
+- **Next recommended step** card — first missing implemented section, or “Your listing is looking good.” when complete
+- Restricted banner: “Name/address change pending review.” (does not block pub-details `complete` status)
+- Status badges per row: Complete / In progress / Not started / Coming later
 
-### Checklist rows
+### Checklist rows (order)
 
-| key | Label | Required | Edit model |
-|-----|-------|----------|------------|
-| `core_details` | Pub details | Yes | Mixed (Step 1) |
-| `meal_specials` | Meal specials | No | Direct — **active in hub** |
-| `tap_list` | Tap list | No | Direct (Stage 6) |
-| `features` | Features | No | Direct (Stage 7) — **active in hub** |
-| `events` | Events | No | Deferred |
-| `photos` | Photos | No | **Active** — `/owner/venues/:id/photos` (profile + gallery upload) |
+| key | Label | Required | Status source |
+|-----|-------|----------|---------------|
+| `core_details` | Pub details | Yes | Published basics |
+| `features` | Features | No | Active MVP boolean attrs |
+| `meal_specials` | Meal specials | No | Active structured specials |
+| `tap_list` | Tap list & drinks | No | Active tap offerings |
+| `photos` | Photos | No | Active media rows |
+| `events` | Events | No | `deferred` |
+| `menus` | Menus | No | `deferred` |
+
+### Completeness weights
+
+Pub details 30 · Features 15 · Meal specials 15 · Tap list 15 · Photos 20 · Identity settled 5 (no open restricted `in_review`). Caps at 100.
 
 ---
 

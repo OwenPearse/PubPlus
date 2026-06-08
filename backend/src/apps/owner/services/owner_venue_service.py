@@ -399,16 +399,6 @@ def _compute_required_basics(basics: dict[str, Any]) -> bool:
     )
 
 
-def _completeness_percent(basics: dict[str, Any]) -> int:
-    checks = [
-        bool(basics.get("display_name")),
-        bool(basics.get("address_line_1") and basics.get("locality_id")),
-        bool(basics.get("short_description")),
-        bool(basics.get("hours_ok")),
-    ]
-    return int(25 * sum(1 for x in checks if x))
-
-
 def _core_section_status(basics: dict[str, Any]) -> str:
     if _compute_required_basics(basics):
         return "complete"
@@ -423,6 +413,57 @@ def _core_section_status(basics: dict[str, Any]) -> str:
     ):
         return "partial"
     return "missing"
+
+
+def _is_restricted_pending_review(pending: dict[str, Any]) -> bool:
+    return bool(
+        pending.get("proposal_id")
+        and pending.get("lifecycle_status") == "in_review"
+        and pending.get("submitted_at")
+        and pending.get("review_outcome") not in ("rejected", "changes_requested")
+    )
+
+
+def _core_details_completeness_points(basics: dict[str, Any]) -> int:
+    core_status = _core_section_status(basics)
+    if core_status == "complete":
+        return 30
+    if core_status == "partial":
+        checks = [
+            bool(
+                basics.get("display_name")
+                and basics.get("address_line_1")
+                and basics.get("locality_id")
+            ),
+            bool(basics.get("short_description")),
+            bool(basics.get("hours_ok")),
+        ]
+        return int(30 * sum(1 for x in checks if x) / 3)
+    return 0
+
+
+def _completeness_percent(
+    basics: dict[str, Any],
+    *,
+    features_status: str = "missing",
+    meal_specials_status: str = "missing",
+    tap_list_status: str = "missing",
+    photos_status: str = "deferred",
+    photos_available: bool = False,
+    restricted_pending: bool = False,
+) -> int:
+    score = _core_details_completeness_points(basics)
+    if features_status == "complete":
+        score += 15
+    if meal_specials_status == "complete":
+        score += 15
+    if tap_list_status == "complete":
+        score += 15
+    if photos_available and photos_status == "complete":
+        score += 20
+    if not restricted_pending:
+        score += 5
+    return min(100, score)
 
 
 def _parse_owner_sort_order_from_tier_notes(tier_notes: str | None) -> int:
@@ -545,6 +586,61 @@ def _photos_section_available(venue_id: str) -> bool:
         return c.fetchone() is not None
 
 
+def _load_section_statuses(
+    venue_id: str,
+) -> tuple[str, str, str, str, bool]:
+    features_status = _features_section_status(venue_id)
+    meal_specials_status = _meal_specials_section_status(venue_id)
+    tap_list_status = _tap_list_section_status(venue_id)
+    photos_available = _photos_section_available(venue_id)
+    photos_status = (
+        _photos_section_status(venue_id) if photos_available else "deferred"
+    )
+    return (
+        features_status,
+        meal_specials_status,
+        tap_list_status,
+        photos_status,
+        photos_available,
+    )
+
+
+def _compute_venue_completeness(
+    venue_id: str,
+    basics: dict[str, Any],
+    pending: dict[str, Any],
+) -> dict[str, Any]:
+    (
+        features_status,
+        meal_specials_status,
+        tap_list_status,
+        photos_status,
+        photos_available,
+    ) = _load_section_statuses(venue_id)
+    restricted_pending = _is_restricted_pending_review(pending)
+    return {
+        "percent": _completeness_percent(
+            basics,
+            features_status=features_status,
+            meal_specials_status=meal_specials_status,
+            tap_list_status=tap_list_status,
+            photos_status=photos_status,
+            photos_available=photos_available,
+            restricted_pending=restricted_pending,
+        ),
+        "required_basics_complete": _compute_required_basics(basics),
+        "sections": _completeness_sections(
+            basics,
+            features_status=features_status,
+            meal_specials_status=meal_specials_status,
+            tap_list_status=tap_list_status,
+            photos_status=photos_status,
+            photos_available=photos_available,
+        ),
+        "restricted_pending_review": restricted_pending,
+    }
+
+
 def _completeness_sections(
     basics: dict[str, Any],
     *,
@@ -564,11 +660,11 @@ def _completeness_sections(
             "available": True,
         },
         {
-            "key": "events",
-            "label": "Events",
-            "status": "deferred",
+            "key": "features",
+            "label": "Features",
+            "status": features_status,
             "required": False,
-            "available": False,
+            "available": True,
         },
         {
             "key": "meal_specials",
@@ -579,15 +675,8 @@ def _completeness_sections(
         },
         {
             "key": "tap_list",
-            "label": "Tap list",
+            "label": "Tap list & drinks",
             "status": tap_list_status,
-            "required": False,
-            "available": True,
-        },
-        {
-            "key": "features",
-            "label": "Features",
-            "status": features_status,
             "required": False,
             "available": True,
         },
@@ -597,6 +686,20 @@ def _completeness_sections(
             "status": photos_status if photos_available else "deferred",
             "required": False,
             "available": photos_available,
+        },
+        {
+            "key": "events",
+            "label": "Events",
+            "status": "deferred",
+            "required": False,
+            "available": False,
+        },
+        {
+            "key": "menus",
+            "label": "Menus",
+            "status": "deferred",
+            "required": False,
+            "available": False,
         },
     ]
 
@@ -1150,7 +1253,7 @@ def list_owner_venues(auth: AuthContext) -> dict[str, Any]:
             published=published["basics"],
             staged=staged_basics,
         )
-        required_complete = _compute_required_basics(basics)
+        completeness = _compute_venue_completeness(vid, basics, pending)
         venues.append(
             {
                 "venue_id": vid,
@@ -1159,7 +1262,7 @@ def list_owner_venues(auth: AuthContext) -> dict[str, Any]:
                 "state_code": row[3],
                 "relationship_lifecycle": "approved",
                 "onboarding_status": _derive_onboarding_status(
-                    required_basics_complete=required_complete,
+                    required_basics_complete=completeness["required_basics_complete"],
                     has_owner_proposal_ever=_has_owner_core_proposal_ever(
                         vid, owner_id
                     ),
@@ -1167,8 +1270,8 @@ def list_owner_venues(auth: AuthContext) -> dict[str, Any]:
                     pending=pending,
                 ),
                 "pending_proposal_count": _count_pending_proposals(vid, owner_id),
-                "completeness_percent": _completeness_percent(basics),
-                "required_basics_complete": required_complete,
+                "completeness_percent": completeness["percent"],
+                "required_basics_complete": completeness["required_basics_complete"],
             }
         )
 
@@ -1194,13 +1297,15 @@ def get_owner_venue_detail(
         published=published["basics"],
         staged=staged_basics,
     )
-    required_complete = _compute_required_basics(basics)
+    completeness = _compute_venue_completeness(venue_id, basics, pending)
     caps = _load_capabilities(access.relationship_id, access.owner_account_id)
-    features_status = _features_section_status(venue_id)
-    meal_specials_status = _meal_specials_section_status(venue_id)
-    tap_list_status = _tap_list_section_status(venue_id)
-    photos_available = _photos_section_available(venue_id)
-    photos_status = _photos_section_status(venue_id) if photos_available else "deferred"
+    (
+        _features_status,
+        _meal_specials_status,
+        _tap_list_status,
+        _photos_status,
+        photos_available,
+    ) = _load_section_statuses(venue_id)
 
     display_name = (
         published["profile"].get("display_name")
@@ -1227,16 +1332,10 @@ def get_owner_venue_detail(
         "draft": draft,
         "pending_review": pending,
         "completeness": {
-            "percent": _completeness_percent(basics),
-            "required_basics_complete": required_complete,
-            "sections": _completeness_sections(
-                basics,
-                features_status=features_status,
-                meal_specials_status=meal_specials_status,
-                tap_list_status=tap_list_status,
-                photos_status=photos_status,
-                photos_available=photos_available,
-            ),
+            "percent": completeness["percent"],
+            "required_basics_complete": completeness["required_basics_complete"],
+            "sections": completeness["sections"],
+            "restricted_pending_review": completeness["restricted_pending_review"],
         },
         "sections_available": {
             "core_details": True,
@@ -1245,6 +1344,7 @@ def get_owner_venue_detail(
             "tap_list": True,
             "features": True,
             "photos": photos_available,
+            "menus": False,
         },
     }, "ok"
 

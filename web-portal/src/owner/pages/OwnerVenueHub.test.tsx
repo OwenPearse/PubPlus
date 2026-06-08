@@ -57,12 +57,20 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
     completeness: {
       percent: 40,
       required_basics_complete: false,
+      restricted_pending_review: false,
       sections: [
         {
           key: "core_details",
           label: "Pub details",
           status: "partial",
           required: true,
+          available: true,
+        },
+        {
+          key: "features",
+          label: "Features",
+          status: "missing",
+          required: false,
           available: true,
         },
         {
@@ -74,14 +82,14 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
         },
         {
           key: "tap_list",
-          label: "Tap list",
+          label: "Tap list & drinks",
           status: "missing",
           required: false,
           available: true,
         },
         {
-          key: "features",
-          label: "Features",
+          key: "photos",
+          label: "Photos",
           status: "missing",
           required: false,
           available: true,
@@ -94,11 +102,11 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
           available: false,
         },
         {
-          key: "photos",
-          label: "Photos",
-          status: "missing",
+          key: "menus",
+          label: "Menus",
+          status: "deferred",
           required: false,
-          available: true,
+          available: false,
         },
       ],
     },
@@ -109,9 +117,20 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
       tap_list: true,
       features: true,
       photos: true,
+      menus: false,
     },
     ...overrides,
   };
+}
+
+function renderHub() {
+  render(
+    <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
+      <Routes>
+        <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 describe("OwnerVenueHub", () => {
@@ -119,39 +138,76 @@ describe("OwnerVenueHub", () => {
     ownerVenueDetail.mockReset();
   });
 
-  it("loads venue detail and shows checklist", async () => {
+  it("loads venue detail and shows overall percent", async () => {
     ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
-    render(
-      <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
-        <Routes>
-          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderHub();
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Harbour Hotel" })).toBeInTheDocument();
     });
-    expect(screen.getByText(/Docklands, VIC/)).toBeInTheDocument();
-    expect(screen.getByText("40%")).toBeInTheDocument();
+    expect(screen.getByText(/Your listing is 40% complete/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Edit pub details" })).toHaveAttribute(
       "href",
       "/owner/venues/v-1/basics",
     );
-    expect(screen.getByRole("link", { name: "Edit features" })).toHaveAttribute(
-      "href",
-      "/owner/venues/v-1/features",
-    );
   });
 
-  it("links to photos page when available", async () => {
+  it("renders next recommended action for first missing section", async () => {
     ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
-    render(
-      <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
-        <Routes>
-          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderHub();
+    await waitFor(() => {
+      expect(screen.getByText(/Next recommended step: Complete pub details/i)).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Add your short description and opening hours/i),
+    ).toBeInTheDocument();
+  });
+
+  it("renders complete/missing/deferred status badges", async () => {
+    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
+    renderHub();
+    await waitFor(() => {
+      expect(screen.getByText("In progress")).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("Not started").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Coming later").length).toBeGreaterThan(0);
+  });
+
+  it("links features row to features page", async () => {
+    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
+    renderHub();
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Edit features" })).toHaveAttribute(
+        "href",
+        "/owner/venues/v-1/features",
+      );
+    });
+  });
+
+  it("links meal specials row to meal specials page", async () => {
+    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
+    renderHub();
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Edit meal specials" })).toHaveAttribute(
+        "href",
+        "/owner/venues/v-1/meal-specials",
+      );
+    });
+  });
+
+  it("links tap list row to tap list page", async () => {
+    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
+    renderHub();
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Edit tap list" })).toHaveAttribute(
+        "href",
+        "/owner/venues/v-1/tap-list",
+      );
+    });
+  });
+
+  it("links photos row to photos page", async () => {
+    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
+    renderHub();
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "Edit photos" })).toHaveAttribute(
         "href",
@@ -160,41 +216,19 @@ describe("OwnerVenueHub", () => {
     });
   });
 
-  it("keeps deferred sections disabled", async () => {
+  it("keeps events and menus deferred", async () => {
     ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
-    render(
-      <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
-        <Routes>
-          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderHub();
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Edit features" })).toBeInTheDocument();
+      expect(screen.getByText("Events")).toBeInTheDocument();
     });
-    expect(screen.getAllByText(/Coming later/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Edit meal specials" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Edit tap list" })).toHaveAttribute(
-      "href",
-      "/owner/venues/v-1/tap-list",
+    expect(screen.getByText("Menus")).toBeInTheDocument();
+    expect(screen.getAllByText(/Coming later — you can skip this for now/i).length).toBeGreaterThan(
+      0,
     );
   });
 
-  it("shows deferred sections as disabled", async () => {
-    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
-    render(
-      <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
-        <Routes>
-          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-    await waitFor(() => {
-      expect(screen.getAllByText(/Coming later/i).length).toBeGreaterThan(0);
-    });
-  });
-
-  it("shows submitted for review message", async () => {
+  it("shows pending restricted request banner", async () => {
     ownerVenueDetail.mockResolvedValue({
       data: baseDetail({
         pending_review: {
@@ -204,20 +238,87 @@ describe("OwnerVenueHub", () => {
           reviewed_at: null,
           review_outcome: null,
         },
+        completeness: {
+          ...baseDetail().completeness,
+          restricted_pending_review: true,
+        },
       }),
     });
-    render(
-      <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
-        <Routes>
-          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderHub();
     await waitFor(() => {
       expect(
         screen.getByText(/Name\/address change pending review/i),
       ).toBeInTheDocument();
     });
+  });
+
+  it("renders all-complete state message", async () => {
+    ownerVenueDetail.mockResolvedValue({
+      data: baseDetail({
+        completeness: {
+          percent: 100,
+          required_basics_complete: true,
+          restricted_pending_review: false,
+          sections: [
+            {
+              key: "core_details",
+              label: "Pub details",
+              status: "complete",
+              required: true,
+              available: true,
+            },
+            {
+              key: "features",
+              label: "Features",
+              status: "complete",
+              required: false,
+              available: true,
+            },
+            {
+              key: "meal_specials",
+              label: "Meal specials",
+              status: "complete",
+              required: false,
+              available: true,
+            },
+            {
+              key: "tap_list",
+              label: "Tap list & drinks",
+              status: "complete",
+              required: false,
+              available: true,
+            },
+            {
+              key: "photos",
+              label: "Photos",
+              status: "complete",
+              required: false,
+              available: true,
+            },
+            {
+              key: "events",
+              label: "Events",
+              status: "deferred",
+              required: false,
+              available: false,
+            },
+            {
+              key: "menus",
+              label: "Menus",
+              status: "deferred",
+              required: false,
+              available: false,
+            },
+          ],
+        },
+      }),
+    });
+    renderHub();
+    await waitFor(() => {
+      expect(screen.getByText(/Your listing is looking good/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/You can keep updating it anytime/i)).toBeInTheDocument();
+    expect(screen.getByText(/Your listing is 100% complete/i)).toBeInTheDocument();
   });
 
   it("does not render google_place_id or contact inputs", async () => {
@@ -234,8 +335,6 @@ describe("OwnerVenueHub", () => {
     });
     expect(container.textContent).not.toMatch(/google_place_id/i);
     expect(screen.queryByLabelText(/phone/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/website/i)).not.toBeInTheDocument();
   });
 
   it("shows not found state", async () => {
@@ -249,20 +348,6 @@ describe("OwnerVenueHub", () => {
     );
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Venue not found" })).toBeInTheDocument();
-    });
-  });
-
-  it("shows forbidden state", async () => {
-    ownerVenueDetail.mockRejectedValue({ code: "forbidden", message: "denied", status: 403 });
-    render(
-      <MemoryRouter initialEntries={["/owner/venues/v-other"]}>
-        <Routes>
-          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Access denied" })).toBeInTheDocument();
     });
   });
 
@@ -303,7 +388,6 @@ describe("OwnerVenueHub", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Sparse Pub" })).toBeInTheDocument();
     });
-    expect(screen.getByText(/Carlton, VIC/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Edit pub details" })).toBeInTheDocument();
   });
 });

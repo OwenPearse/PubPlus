@@ -1,57 +1,122 @@
-# Stage 9 — Review, publish status & completeness
+# Stage 9 — Review, completeness & hub polish
 
 ## Purpose
 
-Review step summarizing staged changes, submit for review messaging, and client-side completeness checklist.
+Polish the owner venue hub into a guided onboarding review page with server-derived completeness, section statuses, and recommended next actions.
 
 ## Current stage
 
-After Stage 3; partial without live publish pipeline.
+**Stage 9 complete.** Hub shows weighted completion percent, checklist rows for all implemented sections, deferred events/menus, and restricted pending banner.
 
 ## Decisions
 
-- Copy: changes reviewed before going live (accurate)
-- Completeness = checklist not server score
-- Required: basics step complete; optional sections tracked as `skipped` | `started` | `done` (local or server flags)
+- **Completeness is server-derived** from published truth (not client-only scoring).
+- **No separate review route** — review stays inside the venue hub (`/owner/venues/:venueId`).
+- **No public preview** — deferred until a stable consumer listing URL exists.
+- **Events and menus** remain `deferred` with “Coming later — you can skip this for now.”
 
-## Assumptions
+## Completeness weights
 
-- `GET owner/venues/{id}` exposes `pending_proposals` or equivalent.
+| Section | Weight | Required? |
+|---------|-------:|-----------|
+| Pub details / hours | 30 | Yes |
+| Features | 15 | Recommended |
+| Meal specials | 15 | Recommended |
+| Tap list / drinks | 15 | Recommended |
+| Photos | 20 | Recommended |
+| Restricted identity settled (no open `in_review` request) | 5 | Conditional |
 
-## Open questions
+Total caps at **100**.
 
-- Poll moderation outcome in owner UI v1?
+Partial pub-details credit: up to 30 points proportional to identity + description + hours sub-checks.
 
-## Dependencies
+## Section status rules
 
-- Stages 3–7 as applicable
-- Publish pipeline (enhancement when available)
+| Status | Meaning |
+|--------|---------|
+| `missing` | No published content for section |
+| `partial` | Pub details started but required basics incomplete |
+| `complete` | Section meets completion rule |
+| `pending_review` | Reserved; restricted pending shown via hub banner + `restricted_pending_review` flag |
+| `deferred` | Not implemented (events, menus) |
 
-## Next downstream use
+### Pub details
 
-Stage 10 QA.
+Complete when published has:
 
----
+- `display_name` + `address_line_1` + `locality_id`
+- `short_description`
+- hours: regular row OR non-confident uncertainty OR hours notes (≥10 chars)
+
+Restricted name/address `in_review` does **not** mark pub details incomplete if operational fields are saved.
+
+### Features
+
+Complete when at least one MVP boolean feature is `true` in `venue_published_attribute_value`.
+
+### Meal specials
+
+Complete when at least one active `venue_published_structured_special` (`meal_special` kind).
+
+### Tap list
+
+Complete when at least one active `venue_published_tap_offering`.
+
+### Photos
+
+Complete when at least one active `venue_published_media` (profile or gallery). Retired rows do not count.
+
+### Events / menus
+
+Always `deferred`, `available: false`.
+
+## Recommended next action (frontend)
+
+Pick the first implemented section that is not `complete` or `deferred`:
+
+1. Pub details
+2. Features
+3. Meal specials
+4. Tap list
+5. Photos
+
+If all implemented sections are `complete`:
+
+```text
+Your listing is looking good.
+You can keep updating it anytime.
+```
+
+## API additions
+
+`GET /api/v1/owner/venues` and `GET /api/v1/owner/venues/{venue_id}`:
+
+- `completeness.percent` — weighted 0–100
+- `completeness.sections[]` — ordered checklist with `status`, `available`
+- `completeness.restricted_pending_review` — boolean (detail only)
+- `sections_available.menus` — `false`
 
 ## Frontend scope
 
-- `/owner/onboarding/review` summary page
-- Submit all pending staged proposals (if batch endpoint) or per-family status display
-- Link back to incomplete required step
+- `OwnerVenueHub.tsx` — progress card, next action card, status badges, checklist copy
+- `ownerVenueUi.ts` — `recommendedNextAction`, `sectionStatusLabel`, hub copy constants
 
-## Completeness (feasible fields)
+## Tests
 
-| Signal | Source |
-|--------|--------|
-| Display name present | published or staged profile |
-| Locality + address | published or staged location |
-| Hours | regular hours or uncertainty row |
-| Description | descriptive copy |
-| Features | any staged/published boolean attrs |
-| Specials/taps | count > 0 optional |
+- `backend/tests/test_owner_venue_endpoints.py` — completeness sections, weights, inactive rows, restricted pending, sparse venue
+- `web-portal/src/owner/pages/OwnerVenueHub.test.tsx` — hub rendering
+- `web-portal/src/shared/lib/api.owner-venues.test.ts` — DTO parsing
 
 ## Acceptance
 
-- [ ] Owner sees pending vs no pending states
-- [ ] No “Publish live” button that bypasses moderation
-- [ ] Checklist matches `UX_FLOW.md`
+- [x] Hub shows meaningful completion percentage
+- [x] Active rows: Pub details, Features, Meal specials, Tap list, Photos
+- [x] Events/menus deferred
+- [x] Recommended next action
+- [x] Restricted pending banner
+- [x] Inactive/retired records excluded
+- [x] Sparse approve-new venues tolerated
+
+## Out of scope
+
+Events, menus, contact schema, billing, analytics, public preview, image moderation.

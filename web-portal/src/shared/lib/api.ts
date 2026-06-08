@@ -499,6 +499,7 @@ export type OwnerVenueDetail = {
     percent: number;
     required_basics_complete: boolean;
     sections: OwnerVenueCompletenessSection[];
+    restricted_pending_review?: boolean;
   };
   sections_available: {
     core_details: boolean;
@@ -507,6 +508,7 @@ export type OwnerVenueDetail = {
     tap_list: boolean;
     features: boolean;
     photos: boolean;
+    menus?: boolean;
   };
 };
 

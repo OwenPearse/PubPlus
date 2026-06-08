@@ -6,7 +6,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 
 ## Current stage
 
-**Stage 8 complete (photos/media direct-edit).** Next: **Stage 4.3** hardening or events/menus.
+**Stage 9 complete (hub completeness & review polish).** Next: **Stage 4.3** hardening or events/menus.
 
 ## Decisions
 
@@ -27,8 +27,8 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 | 6 Tap list | ✅ Done | Direct-edit page |
 | 7 Features | ✅ Done | Direct-edit boolean toggles |
 | **8 Photos / media** | ✅ Done | `venue_published_media` + Storage signed upload |
-| 9 Review UX polish | Updated scope | Restricted pending states only |
-| 10 QA | After 4.2+ | |
+| **9 Review UX polish** | ✅ Done | Weighted completeness, hub checklist, next action |
+| 10 QA | After 9 | |
 
 ### Superseded numbering
 

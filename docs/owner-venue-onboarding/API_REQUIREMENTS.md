@@ -6,7 +6,7 @@ Specify backend endpoints for owner venue onboarding. **Normative edit policy:**
 
 ## Current stage
 
-**Stage 8 complete.** Photos/media GET + upload-intent + metadata CRUD shipped. Stage 6 tap list unchanged.
+**Stage 9 complete.** List/detail completeness includes features, meal specials, tap list, photos, and restricted-pending flag. Stage 8 media CRUD unchanged.
 
 ## Decisions
 
@@ -69,12 +69,12 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 | POST | `/api/v1/owner/provision` |
 | GET | `/api/v1/owner/auth-probe` |
 
-## Read (keep — adjust meta semantics Stage 4.1)
+## Read (keep — adjust meta semantics Stage 4.1; completeness Stage 9)
 
 | Method | Path | Summary |
 |--------|------|---------|
-| GET | `/api/v1/owner/venues` | List manageable venues; `pending_proposal_count` = **restricted** proposals only |
-| GET | `/api/v1/owner/venues/{venue_id}` | Published snapshot + restricted draft/pending + `edit_policy` block |
+| GET | `/api/v1/owner/venues` | List manageable venues; weighted `completeness_percent`; `pending_proposal_count` = **restricted** proposals only |
+| GET | `/api/v1/owner/venues/{venue_id}` | Published snapshot + `completeness.sections[]` + `restricted_pending_review` + restricted draft/pending |
 
 ## Direct edit (Stage 4.1 — implemented)
 

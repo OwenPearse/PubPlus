@@ -11,6 +11,7 @@ from common.auth.context import AuthContext
 from common.auth.errors import InvalidTokenError
 
 from tests.support.owner_venues_e2e_data import (
+    E2E_BUSINESS_ID,
     E2E_CAPABILITY_DIRECT_EDIT,
     E2E_CAPABILITY_SUBMIT,
     E2E_MVP_BEER_GARDEN_ATTR_ID,
@@ -2349,3 +2350,332 @@ class OwnerVenueMediaE2ETests(TestCase):
                 **_auth_headers(),
             )
         self.assertEqual(r.status_code, 403)
+
+    def _detail_completeness(self) -> dict:
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        return r.json()["data"]["completeness"]
+
+    def _section_status(self, completeness: dict, key: str) -> str:
+        for section in completeness["sections"]:
+            if section["key"] == key:
+                return section["status"]
+        self.fail(f"Section {key} not found in completeness sections")
+
+    def test_detail_completeness_includes_implemented_sections(self) -> None:
+        self._skip_if_no_db()
+        completeness = self._detail_completeness()
+        keys = {section["key"] for section in completeness["sections"]}
+        self.assertEqual(
+            keys,
+            {
+                "core_details",
+                "features",
+                "meal_specials",
+                "tap_list",
+                "photos",
+                "events",
+                "menus",
+            },
+        )
+        self.assertEqual(self._section_status(completeness, "events"), "deferred")
+        self.assertEqual(self._section_status(completeness, "menus"), "deferred")
+        self.assertIn("restricted_pending_review", completeness)
+
+    def test_completeness_features_complete_after_patch(self) -> None:
+        self._skip_if_no_db()
+        body = {
+            "features": [
+                {
+                    "attribute_definition_id": E2E_MVP_BEER_GARDEN_ATTR_ID,
+                    "value_boolean": True,
+                }
+            ]
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            patch_r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/features",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(patch_r.status_code, 200)
+        completeness = self._detail_completeness()
+        self.assertEqual(self._section_status(completeness, "features"), "complete")
+
+    def test_completeness_meal_specials_complete_with_active_row(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            create_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(_meal_special_payload()),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(create_r.status_code, 201)
+        completeness = self._detail_completeness()
+        self.assertEqual(self._section_status(completeness, "meal_specials"), "complete")
+
+    def test_completeness_meal_specials_missing_when_deactivated(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            create_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(_meal_special_payload(title="Retired Special")),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        special_id = create_r.json()["data"]["meal_special"]["id"]
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            delete_r = self.client.delete(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials/{special_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(delete_r.status_code, 200)
+        completeness = self._detail_completeness()
+        self.assertEqual(self._section_status(completeness, "meal_specials"), "missing")
+
+    def test_completeness_tap_list_complete_with_active_row(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            create_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                data=json.dumps({"drink_name": "Pacific Ale"}),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(create_r.status_code, 201)
+        completeness = self._detail_completeness()
+        self.assertEqual(self._section_status(completeness, "tap_list"), "complete")
+
+    def test_completeness_tap_list_missing_when_deactivated(self) -> None:
+        self._skip_if_no_db()
+        if not _tap_offering_tables_available():
+            self.skipTest("Tap offering tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            create_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                data=json.dumps({"drink_name": "Retired Tap"}),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        item_id = create_r.json()["data"]["tap_list_item"]["id"]
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            delete_r = self.client.delete(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list/{item_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(delete_r.status_code, 200)
+        completeness = self._detail_completeness()
+        self.assertEqual(self._section_status(completeness, "tap_list"), "missing")
+
+    @patch(
+        "apps.owner.services.owner_venue_media_service.storage_object_exists",
+        return_value=True,
+    )
+    @patch(
+        "apps.owner.services.owner_venue_media_service.create_signed_upload_url",
+    )
+    def test_completeness_photos_complete_with_active_media(
+        self, mock_signed, _mock_exists
+    ) -> None:
+        self._skip_if_no_db()
+        if not _venue_media_tables_available():
+            self.skipTest("Venue media tables not present in test DB.")
+        from common.storage.supabase_storage import SignedUploadResult
+
+        mock_signed.return_value = SignedUploadResult(
+            signed_upload_url="https://example.supabase.co/upload/signed",
+            path=f"venues/{self.e2e.venue_id}/gallery/test.jpg",
+            token=None,
+        )
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            intent_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/media/upload-intent",
+                data=json.dumps(
+                    {
+                        "purpose": "gallery",
+                        "file_name": "test.jpg",
+                        "content_type": "image/jpeg",
+                        "file_size_bytes": 120000,
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        intent = intent_r.json()["data"]
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            create_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/media",
+                data=json.dumps(
+                    {
+                        "media_id": intent["media_id"],
+                        "purpose": "gallery",
+                        "storage_bucket": intent["storage_bucket"],
+                        "storage_path": intent["storage_path"],
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(create_r.status_code, 201)
+        completeness = self._detail_completeness()
+        self.assertEqual(self._section_status(completeness, "photos"), "complete")
+
+    def test_completeness_restricted_pending_review_flag(self) -> None:
+        self._skip_if_no_db()
+        body = {
+            "section": "identity_location",
+            "payload": {
+                "display_name": "Pending Name Change Pub",
+                "address_line_1": "100 Pending Street",
+                "locality_id": self.e2e.locality_id,
+            },
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/restricted-change-requests",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertIn(r.status_code, (200, 201))
+        completeness = self._detail_completeness()
+        self.assertTrue(completeness["restricted_pending_review"])
+
+    def test_completeness_percent_caps_at_100(self) -> None:
+        self._skip_if_no_db()
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/operational-profile",
+                data=json.dumps({"short_description": "Complete neighbourhood pub."}),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/hours",
+                data=json.dumps(
+                    {
+                        "uncertainty_level": "unknown",
+                        "regular_hours_json": [],
+                        "exceptions_json": [],
+                        "notes": "Hours vary by season and events.",
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/features",
+                data=json.dumps(
+                    {
+                        "features": [
+                            {
+                                "attribute_definition_id": E2E_MVP_BEER_GARDEN_ATTR_ID,
+                                "value_boolean": True,
+                            }
+                        ]
+                    }
+                ),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+            if _structured_specials_tables_available():
+                self.client.post(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                    data=json.dumps(_meal_special_payload()),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            if _tap_offering_tables_available():
+                self.client.post(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/tap-list",
+                    data=json.dumps({"drink_name": "House Lager"}),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+        completeness = self._detail_completeness()
+        self.assertLessEqual(completeness["percent"], 100)
+
+    def test_sparse_venue_detail_completeness_does_not_crash(self) -> None:
+        self._skip_if_no_db()
+        sparse_venue_id = str(uuid4())
+        with connection.cursor() as c:
+            c.execute(
+                """
+                INSERT INTO public.venue (id, created_at, updated_at)
+                VALUES (%s::uuid, now(), now())
+                ON CONFLICT (id) DO NOTHING
+                """,
+                [sparse_venue_id],
+            )
+            c.execute(
+                """
+                INSERT INTO public.venue_published_profile (
+                    venue_id, display_name, slug, discovery_eligibility_status
+                ) VALUES (%s::uuid, 'Sparse Approve New', 'sparse-approve-new', 'eligible')
+                ON CONFLICT (venue_id) DO NOTHING
+                """,
+                [sparse_venue_id],
+            )
+            c.execute(
+                """
+                INSERT INTO public.venue_published_location (
+                    venue_id, locality_id, address_line_1, country_code
+                ) VALUES (%s::uuid, %s::uuid, '1 Sparse St', 'AU')
+                ON CONFLICT (venue_id) DO NOTHING
+                """,
+                [sparse_venue_id, self.e2e.locality_id],
+            )
+            c.execute(
+                """
+                INSERT INTO public.business_venue_management_relationship (
+                    business_id, venue_id, relationship_lifecycle
+                ) VALUES (%s::uuid, %s::uuid, 'approved')
+                ON CONFLICT DO NOTHING
+                """,
+                [E2E_BUSINESS_ID, sparse_venue_id],
+            )
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{sparse_venue_id}",
+                **_auth_headers(),
+            )
+        if r.status_code == 403:
+            self.skipTest("Sparse venue not linked to owner business in test DB.")
+        self.assertEqual(r.status_code, 200)
+        completeness = r.json()["data"]["completeness"]
+        self.assertIsInstance(completeness["percent"], int)
+        self.assertGreaterEqual(completeness["percent"], 0)
+        self.assertLessEqual(completeness["percent"], 100)
+        self.assertFalse(completeness["required_basics_complete"])
+
+    def test_list_completeness_percent_matches_weighted_model(self) -> None:
+        self._skip_if_no_db()
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            list_r = self.client.get("/api/v1/owner/venues", **_auth_headers())
+            detail_r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(list_r.status_code, 200)
+        self.assertEqual(detail_r.status_code, 200)
+        list_item = next(
+            v
+            for v in list_r.json()["data"]["venues"]
+            if v["venue_id"] == self.e2e.venue_id
+        )
+        detail = detail_r.json()["data"]
+        self.assertEqual(
+            list_item["completeness_percent"], detail["completeness"]["percent"]
+        )

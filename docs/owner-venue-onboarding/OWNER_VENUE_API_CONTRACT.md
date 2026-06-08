@@ -8,7 +8,7 @@ Implementation-ready contract for owner venue onboarding APIs. Backend and front
 
 ## Current stage
 
-**Stage 8 complete.** Photos/media GET + upload-intent + metadata CRUD direct-edit endpoints shipped. Tap list (Stage 6), meal specials (Stage 5), features (Stage 7) unchanged.
+**Stage 9 complete.** List/detail completeness uses weighted model across pub details, features, meal specials, tap list, photos, and restricted-pending flag. Stage 8 media CRUD unchanged.
 
 ## Decisions
 
@@ -261,12 +261,41 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
     "completeness": {
       "percent": 40,
       "required_basics_complete": false,
+      "restricted_pending_review": false,
       "sections": [
         {
           "key": "core_details",
           "label": "Pub details",
           "status": "partial",
           "required": true,
+          "available": true
+        },
+        {
+          "key": "features",
+          "label": "Features",
+          "status": "missing",
+          "required": false,
+          "available": true
+        },
+        {
+          "key": "meal_specials",
+          "label": "Meal specials",
+          "status": "missing",
+          "required": false,
+          "available": true
+        },
+        {
+          "key": "tap_list",
+          "label": "Tap list & drinks",
+          "status": "missing",
+          "required": false,
+          "available": true
+        },
+        {
+          "key": "photos",
+          "label": "Photos",
+          "status": "missing",
+          "required": false,
           "available": true
         },
         {
@@ -277,42 +306,22 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
           "available": false
         },
         {
-          "key": "meal_specials",
-          "label": "Meal specials",
-          "status": "missing",
+          "key": "menus",
+          "label": "Menus",
+          "status": "deferred",
           "required": false,
           "available": false
-        },
-        {
-          "key": "tap_list",
-          "label": "Tap list",
-          "status": "missing",
-          "required": false,
-          "available": false
-        },
-        {
-          "key": "features",
-          "label": "Features",
-          "status": "missing",
-          "required": false,
-          "available": false
-        },
-        {
-          "key": "photos",
-          "label": "Photos",
-          "status": "missing",
-          "required": false,
-          "available": true
         }
       ]
     },
     "sections_available": {
       "core_details": true,
       "events": false,
-      "meal_specials": false,
+      "meal_specials": true,
       "tap_list": true,
       "features": true,
-      "photos": true
+      "photos": true,
+      "menus": false
     }
   }
 }

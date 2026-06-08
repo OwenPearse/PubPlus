@@ -105,7 +105,7 @@ When added: **direct-edit** (not proposal); validate per contract § Validation.
 3. **Direct edit:** `venue_capability_grant.capability_code = 'manage_published_venue_operations'`
 4. **Restricted request:** `venue_capability_grant.capability_code = 'submit_restricted_changes_for_review'`
 
-## Completeness (server-side)
+## Completeness (server-side — Stage 9)
 
 `required_basics_complete` when **published** has:
 
@@ -114,6 +114,17 @@ When added: **direct-edit** (not proposal); validate per contract § Validation.
 - `short_description` (descriptive copy)
 - hours: regular row OR non-confident uncertainty OR hours notes
 
-`completeness_percent`: weighted checklist from published truth — not discovery quality score.
+`completeness_percent` weighted checklist (caps 100):
 
-`onboarding_status`: no longer `submitted` for operational-only work; `submitted` reserved for open **restricted** proposals.
+| Section | Weight |
+|---------|-------:|
+| Pub details / hours | 30 |
+| Features | 15 |
+| Meal specials | 15 |
+| Tap list | 15 |
+| Photos | 20 |
+| Identity settled (no open restricted `in_review`) | 5 |
+
+Inactive/retired published rows do not count. Restricted pending does not mark pub details incomplete.
+
+`onboarding_status`: `submitted` reserved for open **restricted** proposals; operational PATCH does not set `submitted`.

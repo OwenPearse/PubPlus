@@ -2,17 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { PHOTOS_HUB_DESCRIPTION } from "@/owner/lib/ownerVenuePhotosUi";
-import {
-  FEATURES_HUB_DESCRIPTION,
-} from "@/owner/lib/ownerVenueFeaturesUi";
+import { FEATURES_HUB_DESCRIPTION } from "@/owner/lib/ownerVenueFeaturesUi";
 import { MEAL_SPECIALS_HUB_DESCRIPTION } from "@/owner/lib/ownerVenueMealSpecialsUi";
 import { TAP_LIST_HUB_DESCRIPTION } from "@/owner/lib/ownerVenueTapListUi";
 import {
+  CORE_DETAILS_HUB_DESCRIPTION,
   formatVenueLocation,
   OWNER_HUB_HEADLINE,
   OWNER_HUB_REVIEW_NOTE,
   OWNER_HUB_SUBHEAD,
+  recommendedNextAction,
   sectionIsDeferred,
+  sectionStatusBadgeClass,
+  sectionStatusLabel,
   venueHubStatusMessage,
 } from "@/owner/lib/ownerVenueUi";
 import { ErrorBanner } from "@/shared/components/ErrorBanner";
@@ -27,10 +29,9 @@ import {
 function CompletenessBar({ percent }: { percent: number }) {
   const clamped = Math.min(100, Math.max(0, percent));
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       <div className="flex items-center justify-between text-sm text-slate-600">
-        <span>Listing progress</span>
-        <span>{clamped}%</span>
+        <span>Your listing is {clamped}% complete</span>
       </div>
       <div
         className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200"
@@ -46,6 +47,26 @@ function CompletenessBar({ percent }: { percent: number }) {
       </div>
     </div>
   );
+}
+
+function sectionDescription(section: OwnerVenueCompletenessSection): string {
+  if (sectionIsDeferred(section)) {
+    return "Coming later — you can skip this for now.";
+  }
+  switch (section.key) {
+    case "core_details":
+      return CORE_DETAILS_HUB_DESCRIPTION;
+    case "features":
+      return FEATURES_HUB_DESCRIPTION;
+    case "meal_specials":
+      return MEAL_SPECIALS_HUB_DESCRIPTION;
+    case "tap_list":
+      return TAP_LIST_HUB_DESCRIPTION;
+    case "photos":
+      return PHOTOS_HUB_DESCRIPTION;
+    default:
+      return sectionStatusLabel(section.status);
+  }
 }
 
 function ChecklistRow({
@@ -69,7 +90,7 @@ function ChecklistRow({
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-medium text-slate-900">{section.label}</h3>
             {section.required ? (
@@ -79,22 +100,13 @@ function ChecklistRow({
             ) : (
               <span className="text-xs text-slate-500">Optional</span>
             )}
+            <span
+              className={`rounded px-1.5 py-0.5 text-xs font-medium ${sectionStatusBadgeClass(section.status)}`}
+            >
+              {sectionStatusLabel(section.status)}
+            </span>
           </div>
-          {deferred ? (
-            <p className="mt-2 text-sm text-slate-600">
-              Coming later — you can skip this for now.
-            </p>
-          ) : isMealSpecials ? (
-            <p className="mt-2 text-sm text-slate-600">{MEAL_SPECIALS_HUB_DESCRIPTION}</p>
-          ) : isTapList ? (
-            <p className="mt-2 text-sm text-slate-600">{TAP_LIST_HUB_DESCRIPTION}</p>
-          ) : isFeatures ? (
-            <p className="mt-2 text-sm text-slate-600">{FEATURES_HUB_DESCRIPTION}</p>
-          ) : isPhotos ? (
-            <p className="mt-2 text-sm text-slate-600">{PHOTOS_HUB_DESCRIPTION}</p>
-          ) : (
-            <p className="mt-1 text-xs capitalize text-slate-500">{section.status}</p>
-          )}
+          <p className="mt-2 text-sm text-slate-600">{sectionDescription(section)}</p>
         </div>
         {isCore ? (
           <Link
@@ -247,6 +259,7 @@ export function OwnerVenueHub() {
     detail.published.location.state_code,
   );
   const statusMessage = venueHubStatusMessage(detail);
+  const nextAction = recommendedNextAction(detail);
   const addressLine = detail.published.location.address_line_1;
 
   return (
@@ -273,6 +286,13 @@ export function OwnerVenueHub() {
             : "Required basics still need attention."}
         </p>
       </div>
+
+      {nextAction ? (
+        <div className="rounded-lg border border-slate-900 bg-white p-4">
+          <p className="text-sm font-semibold text-slate-900">{nextAction.title}</p>
+          <p className="mt-1 text-sm text-slate-600">{nextAction.description}</p>
+        </div>
+      ) : null}
 
       {statusMessage ? (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
