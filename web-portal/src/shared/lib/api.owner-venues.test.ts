@@ -11,7 +11,10 @@ vi.mock("@/shared/lib/env", () => ({
 }));
 
 import {
+  ownerCreateMealSpecial,
+  ownerDeactivateMealSpecial,
   ownerPatchHours,
+  ownerPatchMealSpecial,
   ownerPatchOperationalProfile,
   ownerPatchVenueFeatures,
   ownerRestrictedChangeRequest,
@@ -21,6 +24,7 @@ import {
   ownerVenueDetail,
   ownerVenueFeatures,
   ownerVenueList,
+  ownerVenueMealSpecials,
   ownerVenueProposal,
   parseApiValidationDetails,
   referenceLocalities,
@@ -617,6 +621,114 @@ describe("owner venue API wrappers", () => {
           address_line_1: "9 Claim St",
         }),
       }),
+    );
+  });
+
+  it("ownerVenueMealSpecials fetches meal specials list", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            meal_specials: [
+              {
+                id: "sp-1",
+                title: "Thursday Parma Night",
+                description: "$20 parmas every Thursday.",
+                days_available: [4],
+                start_time: "17:00",
+                end_time: "21:00",
+                price_text: "$20",
+                conditions: "Dine-in only",
+                active: true,
+                sort_order: 0,
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const result = await ownerVenueMealSpecials("v-1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/meal-specials",
+      expect.any(Object),
+    );
+    expect(result.data.meal_specials[0]?.title).toBe("Thursday Parma Night");
+  });
+
+  it("ownerCreateMealSpecial sends POST payload", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            meal_special: { id: "sp-1", title: "Steak night", active: true, sort_order: 0 },
+            message: "Special saved.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const body = { title: "Steak night", days_available: [2], active: true };
+    await ownerCreateMealSpecial("v-1", body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/meal-specials",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+  });
+
+  it("ownerPatchMealSpecial sends PATCH payload", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            meal_special: { id: "sp-1", title: "Steak night", active: true, sort_order: 0 },
+            message: "Special saved.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerPatchMealSpecial("v-1", "sp-1", { price_text: "$25" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/meal-specials/sp-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ price_text: "$25" }),
+      }),
+    );
+  });
+
+  it("ownerDeactivateMealSpecial sends DELETE", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            meal_special: { id: "sp-1", title: "Steak night", active: false, sort_order: 0 },
+            message: "Special saved.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerDeactivateMealSpecial("v-1", "sp-1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/meal-specials/sp-1",
+      expect.objectContaining({ method: "DELETE" }),
     );
   });
 });

@@ -14,7 +14,7 @@ This document supersedes the Phase A assumption that **every** `core_details` fi
 
 ## Current stage
 
-**Stage 4.2 complete.** Backend direct PATCH + restricted `POST restricted-change-requests`; frontend Step 1 split (Save changes / Request change). Legacy `POST .../proposals` remains for compatibility.
+**Stage 5 complete.** Meal specials direct-edit CRUD added. Stage 4.2 operational PATCH + restricted POST unchanged. Legacy `POST .../proposals` remains for compatibility.
 
 ## Decisions
 
@@ -105,7 +105,7 @@ Remove hub/form copy: “All changes are reviewed before they appear publicly.�
 | `PATCH` | `/api/v1/owner/venues/{venue_id}/operational-profile` | descriptions (+ contact when migrated) | Upsert `venue_published_descriptive_copy` |
 | `PATCH` | `/api/v1/owner/venues/{venue_id}/hours` | opening hours bundle | Replace rows in `venue_hours_*` transactionally |
 | `PATCH` | `/api/v1/owner/venues/{venue_id}/features` | MVP boolean feature toggles | ✅ Stage 7 |
-| `PUT` | `/api/v1/owner/venues/{venue_id}/specials` | meal specials list | Stage 5 — replace-set semantics |
+| `GET/POST/PATCH/DELETE` | `/api/v1/owner/venues/{venue_id}/meal-specials` | meal specials CRUD | ✅ Stage 5 |
 | `PUT` | `/api/v1/owner/venues/{venue_id}/tap-list` | tap offerings | Stage 6 |
 
 **Restricted:**

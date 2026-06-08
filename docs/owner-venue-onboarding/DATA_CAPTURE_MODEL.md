@@ -6,7 +6,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 
 ## Current stage
 
-**Stage 7 complete.** Descriptions, hours, and MVP boolean features write published tables directly via owner PATCH; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
+**Stage 5 complete.** Descriptions, hours, MVP boolean features, and meal specials write published tables directly; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
 
 ## Decisions
 
@@ -60,7 +60,7 @@ Stage 4.2 form field zones shipped (`OwnerVenueBasicsPage`); contact migration t
 | `opening_hours.*` | `venue_hours_regular`, `venue_hours_exception`, `venue_hours_uncertainty` | PATCH hours; transactional replace |
 | `phone`, `email`, `website` | `venue_published_contact` *(planned)* | Extend operational-profile PATCH |
 | Feature toggles | `venue_published_attribute_value` | Reference `attribute_definition_id` |
-| Meal specials | `venue_published_structured_special` + validity/eligibility | PUT replace-set |
+| Meal specials | `venue_published_structured_special` + marketing copy + recurring pattern + validity/eligibility | CRUD `/meal-specials` |
 | Tap list | `venue_published_tap_offering` + validity/eligibility | PUT replace-set |
 
 ## Restricted proposal field map

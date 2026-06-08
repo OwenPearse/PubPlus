@@ -8,7 +8,7 @@ Implementation-ready contract for owner venue onboarding APIs. Backend and front
 
 ## Current stage
 
-**Stage 7 complete.** Direct PATCH + restricted POST implemented; features GET/PATCH shipped. Phase A `POST .../proposals` remains as legacy shim until 4.3.
+**Stage 5 complete.** Meal specials GET/POST/PATCH/DELETE shipped alongside features GET/PATCH and Stage 4 direct PATCH. Phase A `POST .../proposals` remains as legacy shim until 4.3.
 
 ## Decisions
 
@@ -673,6 +673,88 @@ Reuses `OwnerOpeningHoursPayload` shape from Phase A.
 ### Validation
 
 Same rules as Phase A `_validate_opening_hours` with `submit=true` (hours must be materially present).
+
+---
+
+## Stage 5 — Meal specials CRUD
+
+**Guard:** `require_owner_portal_auth` + venue scope + `manage_published_venue_operations`
+
+### GET `/api/v1/owner/venues/{venue_id}/meal-specials`
+
+```json
+{
+  "data": {
+    "venue_id": "uuid",
+    "meal_specials": [
+      {
+        "id": "uuid",
+        "title": "Thursday Parma Night",
+        "description": "$20 parmas every Thursday.",
+        "days_available": [4],
+        "start_time": "17:00",
+        "end_time": "21:00",
+        "price_text": "$20",
+        "conditions": "Dine-in only",
+        "active": true,
+        "sort_order": 0
+      }
+    ]
+  }
+}
+```
+
+### POST / PATCH body (`OwnerMealSpecialInput`)
+
+```ts
+type OwnerMealSpecialInput = {
+  title: string;
+  description?: string | null;
+  days_available?: number[];
+  start_time?: string | null;
+  end_time?: string | null;
+  price_text?: string | null;
+  conditions?: string | null;
+  active?: boolean;
+  sort_order?: number;
+};
+```
+
+### Validation
+
+| Field | Rules |
+|-------|--------|
+| `title` | Required on POST; trim; 2–120 chars |
+| `description` | Max 500 |
+| `days_available` | Integers 0–6; empty → all days |
+| `start_time` / `end_time` | HH:MM pair or both omitted |
+| `price_text` | Max 80 |
+| `conditions` | Max 300 |
+| `sort_order` | 0–999 |
+| Unknown keys | Rejected |
+
+### DELETE
+
+Soft deactivate: `catalog_record_status = retired` (same as PATCH `active: false`).
+
+### Side effects
+
+1. Write `venue_published_structured_special` (`structured_kind = meal_special`, `schedule_class = recurring`) + marketing copy + recurring pattern + validity + discovery eligibility
+2. `audit_event` (`action = owner_direct_edit`, `field_family = meal_specials`)
+3. No proposal/staging rows
+
+### Schema mapping
+
+| API | Column / table |
+|-----|----------------|
+| `title` | `short_label` |
+| `description` | `marketing_copy.body` |
+| `price_text` | `marketing_copy.headline` |
+| `conditions` | `marketing_copy.terms_and_conditions` |
+| `days_available` | `recurring_pattern.recurring_days_of_week` |
+| `start_time` / `end_time` | `recurring_pattern.window_*_time_local` |
+| `active` | `catalog_record_status` |
+| `sort_order` | `discovery_eligibility.tier_notes` (`owner_sort_order=N`) |
 
 ---
 

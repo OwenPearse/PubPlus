@@ -66,6 +66,13 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
           available: true,
         },
         {
+          key: "meal_specials",
+          label: "Meal specials",
+          status: "missing",
+          required: false,
+          available: true,
+        },
+        {
           key: "features",
           label: "Features",
           status: "missing",
@@ -142,7 +149,8 @@ describe("OwnerVenueHub", () => {
       expect(screen.getByRole("link", { name: "Edit features" })).toBeInTheDocument();
     });
     expect(screen.getAllByText(/Coming later/i).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("link", { name: /meal specials/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit meal specials" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /tap list/i })).not.toBeInTheDocument();
   });
 
   it("shows deferred sections as disabled", async () => {

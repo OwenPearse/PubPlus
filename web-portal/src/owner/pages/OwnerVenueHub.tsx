@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import {
   FEATURES_HUB_DESCRIPTION,
 } from "@/owner/lib/ownerVenueFeaturesUi";
+import { MEAL_SPECIALS_HUB_DESCRIPTION } from "@/owner/lib/ownerVenueMealSpecialsUi";
 import {
   formatVenueLocation,
   OWNER_HUB_HEADLINE,
@@ -54,6 +55,7 @@ function ChecklistRow({
 }) {
   const deferred = sectionIsDeferred(section);
   const isCore = section.key === "core_details" && section.available;
+  const isMealSpecials = section.key === "meal_specials" && section.available;
   const isFeatures = section.key === "features" && section.available;
 
   return (
@@ -78,6 +80,8 @@ function ChecklistRow({
             <p className="mt-2 text-sm text-slate-600">
               Coming later — you can skip this for now.
             </p>
+          ) : isMealSpecials ? (
+            <p className="mt-2 text-sm text-slate-600">{MEAL_SPECIALS_HUB_DESCRIPTION}</p>
           ) : isFeatures ? (
             <p className="mt-2 text-sm text-slate-600">{FEATURES_HUB_DESCRIPTION}</p>
           ) : (
@@ -90,6 +94,13 @@ function ChecklistRow({
             className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
           >
             Edit pub details
+          </Link>
+        ) : isMealSpecials ? (
+          <Link
+            to={`/owner/venues/${venueId}/meal-specials`}
+            className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Edit meal specials
           </Link>
         ) : isFeatures ? (
           <Link

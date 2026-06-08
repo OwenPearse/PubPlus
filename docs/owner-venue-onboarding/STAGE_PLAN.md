@@ -6,7 +6,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 
 ## Current stage
 
-**Stage 7 complete (features direct-edit).** Next: **Stage 5** meal specials or **Stage 4.3** hardening.
+**Stage 5 complete (meal specials direct-edit).** Next: **Stage 6** tap list or **Stage 4.3** hardening.
 
 ## Decisions
 
@@ -23,7 +23,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 | **4.2 Step 1 UI split** | ✅ Done | Save vs Request change + restricted POST |
 | **Admin claims polish** | ✅ Done | Owner claim status GET, admin nav + badge, waiting states |
 | **4.3 Hardening** | Planned | Row history, contact schema, deprecate proposal shim |
-| 5 Meal specials | Ready after 4.1 | Direct-edit page |
+| 5 Meal specials | ✅ Done | Direct-edit CRUD page |
 | 6 Tap list | Ready after 4.1 | Direct-edit page |
 | 7 Features | ✅ Done | Direct-edit boolean toggles |
 | Admin restricted publish | Parallel | Publish worker for approved restricted proposals |

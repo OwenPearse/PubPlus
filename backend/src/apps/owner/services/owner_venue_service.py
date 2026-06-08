@@ -108,6 +108,29 @@ _OPERATIONAL_PROFILE_FORBIDDEN_KEYS = frozenset(
         "owner_confirms_management",
     }
 )
+_MEAL_SPECIAL_STRUCTURED_KIND = "meal_special"
+_MEAL_SPECIAL_DEFAULT_TIMEZONE = "Australia/Melbourne"
+_MEAL_SPECIAL_TITLE_MIN = 2
+_MEAL_SPECIAL_TITLE_MAX = 120
+_MEAL_SPECIAL_DESCRIPTION_MAX = 500
+_MEAL_SPECIAL_PRICE_TEXT_MAX = 80
+_MEAL_SPECIAL_CONDITIONS_MAX = 300
+_MEAL_SPECIAL_SORT_ORDER_MIN = 0
+_MEAL_SPECIAL_SORT_ORDER_MAX = 999
+_MEAL_SPECIAL_INPUT_ALLOWED_KEYS = frozenset(
+    {
+        "title",
+        "description",
+        "days_available",
+        "start_time",
+        "end_time",
+        "price_text",
+        "conditions",
+        "active",
+        "sort_order",
+    }
+)
+_SORT_ORDER_TIER_NOTES_PREFIX = "owner_sort_order="
 _HOURS_PATCH_FORBIDDEN_KEYS = frozenset(
     {
         "display_name",
@@ -377,6 +400,52 @@ def _core_section_status(basics: dict[str, Any]) -> str:
     return "missing"
 
 
+def _parse_owner_sort_order_from_tier_notes(tier_notes: str | None) -> int:
+    if not tier_notes:
+        return _MEAL_SPECIAL_SORT_ORDER_MAX
+    for part in str(tier_notes).split("|"):
+        part = part.strip()
+        if part.startswith(_SORT_ORDER_TIER_NOTES_PREFIX):
+            try:
+                return int(part[len(_SORT_ORDER_TIER_NOTES_PREFIX) :])
+            except ValueError:
+                return _MEAL_SPECIAL_SORT_ORDER_MAX
+    return _MEAL_SPECIAL_SORT_ORDER_MAX
+
+
+def _format_owner_sort_order_tier_notes(
+    sort_order: int, existing_notes: str | None
+) -> str:
+    prefix = f"{_SORT_ORDER_TIER_NOTES_PREFIX}{sort_order}"
+    if not existing_notes:
+        return prefix
+    remainder = existing_notes
+    if _SORT_ORDER_TIER_NOTES_PREFIX in remainder:
+        parts = [p.strip() for p in remainder.split("|") if p.strip()]
+        parts = [
+            p for p in parts if not p.startswith(_SORT_ORDER_TIER_NOTES_PREFIX)
+        ]
+        if parts:
+            return f"{prefix}|{'|'.join(parts)}"
+    return f"{prefix}|{remainder}" if remainder else prefix
+
+
+def _meal_specials_section_status(venue_id: str) -> str:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.venue_published_structured_special
+            WHERE venue_id = %s::uuid
+              AND structured_kind = %s
+              AND catalog_record_status = 'active'
+            """,
+            [venue_id, _MEAL_SPECIAL_STRUCTURED_KIND],
+        )
+        row = c.fetchone()
+    return "complete" if row and int(row[0]) > 0 else "missing"
+
+
 def _features_section_status(venue_id: str) -> str:
     with connection.cursor() as c:
         c.execute(
@@ -397,7 +466,10 @@ def _features_section_status(venue_id: str) -> str:
 
 
 def _completeness_sections(
-    basics: dict[str, Any], *, features_status: str = "missing"
+    basics: dict[str, Any],
+    *,
+    features_status: str = "missing",
+    meal_specials_status: str = "missing",
 ) -> list[dict[str, Any]]:
     core_status = _core_section_status(basics)
     return [
@@ -418,9 +490,9 @@ def _completeness_sections(
         {
             "key": "meal_specials",
             "label": "Meal specials",
-            "status": "missing",
+            "status": meal_specials_status,
             "required": False,
-            "available": False,
+            "available": True,
         },
         {
             "key": "tap_list",
@@ -1042,6 +1114,7 @@ def get_owner_venue_detail(
     required_complete = _compute_required_basics(basics)
     caps = _load_capabilities(access.relationship_id, access.owner_account_id)
     features_status = _features_section_status(venue_id)
+    meal_specials_status = _meal_specials_section_status(venue_id)
 
     display_name = (
         published["profile"].get("display_name")
@@ -1070,12 +1143,16 @@ def get_owner_venue_detail(
         "completeness": {
             "percent": _completeness_percent(basics),
             "required_basics_complete": required_complete,
-            "sections": _completeness_sections(basics, features_status=features_status),
+            "sections": _completeness_sections(
+                basics,
+                features_status=features_status,
+                meal_specials_status=meal_specials_status,
+            ),
         },
         "sections_available": {
             "core_details": True,
             "events": False,
-            "meal_specials": False,
+            "meal_specials": True,
             "tap_list": False,
             "features": True,
             "photos": False,
@@ -2578,3 +2655,558 @@ def patch_owner_venue_features(
         "Features saved. These updates are now reflected on your listing."
     )
     return response, "ok", None
+
+
+def _normalize_meal_special_days(days: Any) -> list[int] | None:
+    if days is None:
+        return list(range(7))
+    if not isinstance(days, list):
+        return None
+    out: list[int] = []
+    for day in days:
+        if not isinstance(day, int) or day < 0 or day > 6:
+            return None
+        if day not in out:
+            out.append(day)
+    out.sort()
+    return out if out else list(range(7))
+
+
+def _validate_meal_special_input(
+    body: Any,
+    *,
+    require_title: bool,
+    partial: bool,
+) -> tuple[dict[str, Any] | None, dict[str, list[str]] | None]:
+    if not isinstance(body, dict):
+        return None, {"body": ["Request body must be a JSON object."]}
+
+    details: dict[str, list[str]] = {}
+    unknown = sorted(set(body.keys()) - _MEAL_SPECIAL_INPUT_ALLOWED_KEYS)
+    for key in unknown:
+        details[key] = ["Unsupported field."]
+
+    if require_title and "title" not in body:
+        details.setdefault("title", []).append("This field is required.")
+
+    if not partial and not _MEAL_SPECIAL_INPUT_ALLOWED_KEYS.intersection(body.keys()):
+        details.setdefault("body", []).append("At least one field must be provided.")
+
+    title = body.get("title")
+    if title is not None:
+        if not isinstance(title, str):
+            details.setdefault("title", []).append("Must be a string.")
+        else:
+            title = title.strip()
+            if len(title) < _MEAL_SPECIAL_TITLE_MIN:
+                details.setdefault("title", []).append(
+                    f"Must be at least {_MEAL_SPECIAL_TITLE_MIN} characters."
+                )
+            elif len(title) > _MEAL_SPECIAL_TITLE_MAX:
+                details.setdefault("title", []).append(
+                    f"Must be at most {_MEAL_SPECIAL_TITLE_MAX} characters."
+                )
+
+    description = body.get("description")
+    if "description" in body:
+        if description is not None and not isinstance(description, str):
+            details.setdefault("description", []).append("Must be a string or null.")
+        elif isinstance(description, str) and len(description.strip()) > _MEAL_SPECIAL_DESCRIPTION_MAX:
+            details.setdefault("description", []).append(
+                f"Must be at most {_MEAL_SPECIAL_DESCRIPTION_MAX} characters."
+            )
+
+    days_available = body.get("days_available")
+    normalized_days: list[int] | None = None
+    if days_available is not None:
+        normalized_days = _normalize_meal_special_days(days_available)
+        if normalized_days is None:
+            details.setdefault("days_available", []).append(
+                "Each day must be an integer from 0 (Sunday) to 6 (Saturday)."
+            )
+
+    start_time = body.get("start_time")
+    end_time = body.get("end_time")
+    has_start = start_time is not None and start_time != ""
+    has_end = end_time is not None and end_time != ""
+    if has_start != has_end:
+        details.setdefault("start_time", []).append(
+            "start_time and end_time must both be provided or both omitted."
+        )
+    if has_start:
+        if not isinstance(start_time, str) or not _TIME_RE.match(start_time.strip()):
+            details.setdefault("start_time", []).append("Must be HH:MM (24-hour).")
+        if not isinstance(end_time, str) or not _TIME_RE.match(end_time.strip()):
+            details.setdefault("end_time", []).append("Must be HH:MM (24-hour).")
+
+    price_text = body.get("price_text")
+    if "price_text" in body:
+        if price_text is not None and not isinstance(price_text, str):
+            details.setdefault("price_text", []).append("Must be a string or null.")
+        elif isinstance(price_text, str) and len(price_text.strip()) > _MEAL_SPECIAL_PRICE_TEXT_MAX:
+            details.setdefault("price_text", []).append(
+                f"Must be at most {_MEAL_SPECIAL_PRICE_TEXT_MAX} characters."
+            )
+
+    conditions = body.get("conditions")
+    if "conditions" in body:
+        if conditions is not None and not isinstance(conditions, str):
+            details.setdefault("conditions", []).append("Must be a string or null.")
+        elif isinstance(conditions, str) and len(conditions.strip()) > _MEAL_SPECIAL_CONDITIONS_MAX:
+            details.setdefault("conditions", []).append(
+                f"Must be at most {_MEAL_SPECIAL_CONDITIONS_MAX} characters."
+            )
+
+    active = body.get("active")
+    if active is not None and not isinstance(active, bool):
+        details.setdefault("active", []).append("Must be a boolean.")
+
+    sort_order = body.get("sort_order")
+    parsed_sort: int | None = None
+    if sort_order is not None:
+        if not isinstance(sort_order, int) or isinstance(sort_order, bool):
+            details.setdefault("sort_order", []).append("Must be an integer.")
+        elif (
+            sort_order < _MEAL_SPECIAL_SORT_ORDER_MIN
+            or sort_order > _MEAL_SPECIAL_SORT_ORDER_MAX
+        ):
+            details.setdefault("sort_order", []).append(
+                f"Must be between {_MEAL_SPECIAL_SORT_ORDER_MIN} and "
+                f"{_MEAL_SPECIAL_SORT_ORDER_MAX}."
+            )
+        else:
+            parsed_sort = sort_order
+
+    if details:
+        return None, details
+
+    out: dict[str, Any] = {}
+    if title is not None and isinstance(title, str):
+        out["title"] = title.strip()
+    if "description" in body:
+        out["description"] = (
+            description.strip() if isinstance(description, str) and description.strip()
+            else None
+        )
+    if normalized_days is not None:
+        out["days_available"] = normalized_days
+    elif "days_available" not in body:
+        out["days_available"] = list(range(7))
+    if has_start:
+        out["start_time"] = start_time.strip()  # type: ignore[union-attr]
+        out["end_time"] = end_time.strip()  # type: ignore[union-attr]
+    elif "start_time" in body or "end_time" in body:
+        out["start_time"] = None
+        out["end_time"] = None
+    if "price_text" in body:
+        out["price_text"] = (
+            price_text.strip() if isinstance(price_text, str) and price_text.strip()
+            else None
+        )
+    if "conditions" in body:
+        out["conditions"] = (
+            conditions.strip() if isinstance(conditions, str) and conditions.strip()
+            else None
+        )
+    if active is not None:
+        out["active"] = active
+    if parsed_sort is not None:
+        out["sort_order"] = parsed_sort
+    return out, None
+
+
+def _load_owner_meal_special_rows(venue_id: str) -> list[dict[str, Any]]:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT
+              s.id::text,
+              s.short_label,
+              s.catalog_record_status,
+              s.created_at,
+              m.headline,
+              m.body,
+              m.terms_and_conditions,
+              rp.recurring_days_of_week,
+              rp.window_start_time_local::text,
+              rp.window_end_time_local::text,
+              rp.crosses_local_midnight,
+              de.tier_notes
+            FROM public.venue_published_structured_special s
+            LEFT JOIN public.venue_published_structured_special_marketing_copy m
+              ON m.structured_special_id = s.id
+            LEFT JOIN public.venue_published_special_recurring_pattern rp
+              ON rp.structured_special_id = s.id
+            LEFT JOIN public.venue_published_structured_special_discovery_eligibility de
+              ON de.structured_special_id = s.id
+            WHERE s.venue_id = %s::uuid
+              AND s.structured_kind = %s
+            ORDER BY s.created_at ASC, s.short_label ASC
+            """,
+            [venue_id, _MEAL_SPECIAL_STRUCTURED_KIND],
+        )
+        rows = c.fetchall()
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        start_raw = row[8]
+        end_raw = row[9]
+        start_time = _time_to_hhmm(start_raw) if start_raw else None
+        end_time = _time_to_hhmm(end_raw) if end_raw else None
+        days = list(row[7]) if row[7] is not None else []
+        sort_order = _parse_owner_sort_order_from_tier_notes(row[11])
+        items.append(
+            {
+                "id": row[0],
+                "title": row[1],
+                "description": row[5],
+                "days_available": sorted(int(d) for d in days),
+                "start_time": start_time,
+                "end_time": end_time,
+                "price_text": row[4],
+                "conditions": row[6],
+                "active": row[2] == "active",
+                "sort_order": sort_order,
+                "_created_at": row[3],
+            }
+        )
+
+    items.sort(
+        key=lambda item: (
+            item["sort_order"],
+            item.get("_created_at") or datetime.min.replace(tzinfo=timezone.utc),
+            item["title"] or "",
+        )
+    )
+    for index, item in enumerate(items):
+        if item["sort_order"] == _MEAL_SPECIAL_SORT_ORDER_MAX:
+            item["sort_order"] = index
+        item.pop("_created_at", None)
+    return items
+
+
+def _meal_special_row_to_public(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": item["id"],
+        "title": item["title"],
+        "description": item.get("description"),
+        "days_available": item.get("days_available", []),
+        "start_time": item.get("start_time"),
+        "end_time": item.get("end_time"),
+        "price_text": item.get("price_text"),
+        "conditions": item.get("conditions"),
+        "active": item.get("active", True),
+        "sort_order": item.get("sort_order", 0),
+    }
+
+
+def _build_meal_specials_response(venue_id: str) -> dict[str, Any]:
+    rows = _load_owner_meal_special_rows(venue_id)
+    return {
+        "venue_id": venue_id,
+        "meal_specials": [_meal_special_row_to_public(row) for row in rows],
+    }
+
+
+def _snapshot_meal_specials_for_audit(venue_id: str) -> list[dict[str, Any]]:
+    return [
+        _meal_special_row_to_public(row) for row in _load_owner_meal_special_rows(venue_id)
+    ]
+
+
+def _owner_meal_special_belongs_to_venue(venue_id: str, special_id: str) -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1
+            FROM public.venue_published_structured_special
+            WHERE id = %s::uuid
+              AND venue_id = %s::uuid
+              AND structured_kind = %s
+            """,
+            [special_id, venue_id, _MEAL_SPECIAL_STRUCTURED_KIND],
+        )
+        return c.fetchone() is not None
+
+
+def _crosses_local_midnight(start_time: str, end_time: str) -> bool:
+    return end_time <= start_time
+
+
+def _insert_meal_special_satellites(
+    *,
+    special_id: str,
+    description: str | None,
+    price_text: str | None,
+    conditions: str | None,
+    days_available: list[int],
+    start_time: str,
+    end_time: str,
+    sort_order: int,
+) -> None:
+    crosses = _crosses_local_midnight(start_time, end_time)
+    tier_notes = _format_owner_sort_order_tier_notes(
+        sort_order, "Owner portal meal special."
+    )
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.venue_published_structured_special_marketing_copy (
+                structured_special_id, headline, body, terms_and_conditions
+            ) VALUES (%s::uuid, %s, %s, %s)
+            ON CONFLICT (structured_special_id) DO UPDATE SET
+                headline = EXCLUDED.headline,
+                body = EXCLUDED.body,
+                terms_and_conditions = EXCLUDED.terms_and_conditions,
+                updated_at = now()
+            """,
+            [special_id, price_text, description, conditions],
+        )
+        c.execute(
+            """
+            INSERT INTO public.venue_published_special_recurring_pattern (
+                structured_special_id,
+                recurrence_kind,
+                anchor_timezone,
+                recurring_days_of_week,
+                window_start_time_local,
+                window_end_time_local,
+                crosses_local_midnight
+            ) VALUES (
+                %s::uuid,
+                'weekly_local_time_window',
+                %s,
+                %s::smallint[],
+                %s::time,
+                %s::time,
+                %s
+            )
+            ON CONFLICT (structured_special_id) DO UPDATE SET
+                recurrence_kind = EXCLUDED.recurrence_kind,
+                anchor_timezone = EXCLUDED.anchor_timezone,
+                recurring_days_of_week = EXCLUDED.recurring_days_of_week,
+                window_start_time_local = EXCLUDED.window_start_time_local,
+                window_end_time_local = EXCLUDED.window_end_time_local,
+                crosses_local_midnight = EXCLUDED.crosses_local_midnight,
+                updated_at = now()
+            """,
+            [
+                special_id,
+                _MEAL_SPECIAL_DEFAULT_TIMEZONE,
+                days_available,
+                start_time,
+                end_time,
+                crosses,
+            ],
+        )
+        c.execute(
+            """
+            INSERT INTO public.venue_published_structured_special_validity (
+                structured_special_id,
+                offer_valid_from,
+                offer_valid_to,
+                validity_bounds_kind,
+                timing_signal_strength,
+                suppress_due_to_weak_or_stale_timing
+            ) VALUES (%s::uuid, NULL, NULL, 'unknown', 'strong', false)
+            ON CONFLICT (structured_special_id) DO UPDATE SET
+                validity_bounds_kind = EXCLUDED.validity_bounds_kind,
+                timing_signal_strength = EXCLUDED.timing_signal_strength,
+                suppress_due_to_weak_or_stale_timing = EXCLUDED.suppress_due_to_weak_or_stale_timing,
+                updated_at = now()
+            """,
+            [special_id],
+        )
+        c.execute(
+            """
+            INSERT INTO public.venue_published_structured_special_discovery_eligibility (
+                structured_special_id,
+                safe_for_detail_display,
+                safe_for_card_badge,
+                safe_for_filter_search,
+                safe_for_active_now_ranking,
+                tier_notes
+            ) VALUES (%s::uuid, true, true, true, true, %s)
+            ON CONFLICT (structured_special_id) DO UPDATE SET
+                safe_for_detail_display = EXCLUDED.safe_for_detail_display,
+                safe_for_card_badge = EXCLUDED.safe_for_card_badge,
+                safe_for_filter_search = EXCLUDED.safe_for_filter_search,
+                safe_for_active_now_ranking = EXCLUDED.safe_for_active_now_ranking,
+                tier_notes = EXCLUDED.tier_notes,
+                updated_at = now()
+            """,
+            [special_id, tier_notes],
+        )
+
+
+def get_owner_venue_meal_specials(
+    auth: AuthContext, venue_id: str
+) -> tuple[dict[str, Any] | None, str]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err
+    return _build_meal_specials_response(venue_id), "ok"
+
+
+@transaction.atomic
+def create_owner_venue_meal_special(
+    auth: AuthContext,
+    venue_id: str,
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    parsed, val_err = _validate_meal_special_input(
+        body, require_title=True, partial=False
+    )
+    if val_err:
+        return None, "validation_error", val_err
+    assert parsed is not None
+
+    before = _snapshot_meal_specials_for_audit(venue_id)
+
+    start_time = parsed.get("start_time") or "00:00"
+    end_time = parsed.get("end_time") or "23:59"
+    days_available = parsed.get("days_available", list(range(7)))
+    sort_order = parsed.get("sort_order", len(before))
+    active = parsed.get("active", True)
+    catalog_status = "active" if active else "retired"
+
+    with connection.cursor() as c:
+        c.execute(
+            """
+            INSERT INTO public.venue_published_structured_special (
+                venue_id, structured_kind, schedule_class, short_label, catalog_record_status
+            ) VALUES (%s::uuid, %s, 'recurring', %s, %s)
+            RETURNING id::text
+            """,
+            [venue_id, _MEAL_SPECIAL_STRUCTURED_KIND, parsed["title"], catalog_status],
+        )
+        row = c.fetchone()
+    assert row is not None
+    special_id = row[0]
+
+    _insert_meal_special_satellites(
+        special_id=special_id,
+        description=parsed.get("description"),
+        price_text=parsed.get("price_text"),
+        conditions=parsed.get("conditions"),
+        days_available=days_available,
+        start_time=start_time,
+        end_time=end_time,
+        sort_order=sort_order,
+    )
+
+    after = _snapshot_meal_specials_for_audit(venue_id)
+    saved = next(item for item in after if item["id"] == special_id)
+
+    _write_owner_direct_edit_audit(
+        owner_account_id=access.owner_account_id,
+        venue_id=venue_id,
+        entity_table="venue_published_structured_special",
+        field_family="meal_specials",
+        endpoint=f"/api/v1/owner/venues/{venue_id}/meal-specials",
+        before={"meal_specials": before},
+        after={"meal_specials": after},
+    )
+
+    response = {
+        "venue_id": venue_id,
+        "meal_special": saved,
+        "message": "Special saved. These updates are now reflected on your listing.",
+    }
+    return response, "ok", None
+
+
+@transaction.atomic
+def patch_owner_venue_meal_special(
+    auth: AuthContext,
+    venue_id: str,
+    special_id: str,
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    access, err = assert_owner_can_direct_edit(auth, venue_id)
+    if access is None:
+        return None, err, None
+
+    if not _owner_meal_special_belongs_to_venue(venue_id, special_id):
+        return None, "not_found", None
+
+    parsed, val_err = _validate_meal_special_input(
+        body, require_title=False, partial=True
+    )
+    if val_err:
+        return None, "validation_error", val_err
+    assert parsed is not None
+
+    before = _snapshot_meal_specials_for_audit(venue_id)
+    current = next((r for r in before if r["id"] == special_id), None)
+    if current is None:
+        return None, "not_found", None
+
+    merged = {**current, **parsed}
+
+    catalog_status = "active" if merged.get("active", True) else "retired"
+    start_time = merged.get("start_time") or "00:00"
+    end_time = merged.get("end_time") or "23:59"
+    days_available = merged.get("days_available", list(range(7)))
+    sort_order = merged.get("sort_order", current.get("sort_order", 0))
+
+    with connection.cursor() as c:
+        c.execute(
+            """
+            UPDATE public.venue_published_structured_special
+            SET short_label = %s,
+                catalog_record_status = %s,
+                updated_at = now()
+            WHERE id = %s::uuid AND venue_id = %s::uuid
+            """,
+            [merged["title"], catalog_status, special_id, venue_id],
+        )
+
+    _insert_meal_special_satellites(
+        special_id=special_id,
+        description=merged.get("description"),
+        price_text=merged.get("price_text"),
+        conditions=merged.get("conditions"),
+        days_available=days_available,
+        start_time=start_time,
+        end_time=end_time,
+        sort_order=sort_order,
+    )
+
+    after = _snapshot_meal_specials_for_audit(venue_id)
+    saved = next(item for item in after if item["id"] == special_id)
+
+    _write_owner_direct_edit_audit(
+        owner_account_id=access.owner_account_id,
+        venue_id=venue_id,
+        entity_table="venue_published_structured_special",
+        field_family="meal_specials",
+        endpoint=f"/api/v1/owner/venues/{venue_id}/meal-specials/{special_id}",
+        before={"meal_specials": before},
+        after={"meal_specials": after},
+    )
+
+    response = {
+        "venue_id": venue_id,
+        "meal_special": saved,
+        "message": "Special saved. These updates are now reflected on your listing.",
+    }
+    return response, "ok", None
+
+
+@transaction.atomic
+def deactivate_owner_venue_meal_special(
+    auth: AuthContext,
+    venue_id: str,
+    special_id: str,
+) -> tuple[dict[str, Any] | None, str, dict[str, list[str]] | None]:
+    return patch_owner_venue_meal_special(
+        auth,
+        venue_id,
+        special_id,
+        {"active": False},
+    )

@@ -6,7 +6,7 @@ Specify backend endpoints for owner venue onboarding. **Normative edit policy:**
 
 ## Current stage
 
-**Stage 4.2 complete.** Direct PATCH + restricted `POST restricted-change-requests` implemented. **Admin claims polish:** owner claim status GET + internal summary count for admin nav badge.
+**Stage 5 complete.** Meal specials GET/POST/PATCH/DELETE direct-edit endpoints shipped. Stage 4.2 direct PATCH + restricted POST remain unchanged.
 
 ## Decisions
 
@@ -84,7 +84,10 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 | PATCH | `/api/v1/owner/venues/{venue_id}/hours` | Opening hours bundle | ✅ 4.1 |
 | GET | `/api/v1/owner/venues/{venue_id}/features` | MVP boolean feature definitions + current values | ✅ 7 |
 | PATCH | `/api/v1/owner/venues/{venue_id}/features` | MVP boolean feature toggles | ✅ 7 |
-| PUT | `/api/v1/owner/venues/{venue_id}/specials` | Meal specials replace-set | 5 |
+| GET | `/api/v1/owner/venues/{venue_id}/meal-specials` | List meal specials | ✅ 5 |
+| POST | `/api/v1/owner/venues/{venue_id}/meal-specials` | Create meal special | ✅ 5 |
+| PATCH | `/api/v1/owner/venues/{venue_id}/meal-specials/{special_id}` | Update / deactivate | ✅ 5 |
+| DELETE | `/api/v1/owner/venues/{venue_id}/meal-specials/{special_id}` | Soft deactivate | ✅ 5 |
 | PUT | `/api/v1/owner/venues/{venue_id}/tap-list` | Tap offerings replace-set | 6 |
 
 **Guard:** `manage_published_venue_operations` required (enforce in 4.1).

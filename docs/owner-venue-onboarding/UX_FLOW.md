@@ -6,7 +6,7 @@ Owner-facing navigation and screen contracts aligned with `OWNER_EDIT_POLICY.md`
 
 ## Current stage
 
-**Stage 4.2 complete.** Step 1 splits operational **Save changes** (PATCH) from restricted **Request change** (POST). **Admin claims polish:** owner waiting state shows claim status after submission; admin internal nav links to owner claims queue.
+**Stage 5 complete.** Meal specials page active at `/owner/venues/:venueId/meal-specials`. Step 1 split (Save / Request change) unchanged from Stage 4.2.
 
 ## Decisions
 
@@ -102,7 +102,7 @@ Duplicate candidates are never shown to owners.
 | key | Label | Required | Edit model |
 |-----|-------|----------|------------|
 | `core_details` | Pub details | Yes | Mixed (Step 1) |
-| `meal_specials` | Meal specials | No | Direct (Stage 5) |
+| `meal_specials` | Meal specials | No | Direct — **active in hub** |
 | `tap_list` | Tap list | No | Direct (Stage 6) |
 | `features` | Features | No | Direct (Stage 7) — **active in hub** |
 | `events` | Events | No | Deferred |
@@ -192,7 +192,7 @@ No “Submit for review” on these pages unless a field is later reclassified a
   venues/:venueId → OwnerVenueHub
   venues/:venueId/basics → OwnerVenueBasicsPage
   venues/:venueId/features → OwnerVenueFeaturesPage (Stage 7)
-  venues/:venueId/specials → (Stage 5)
+  venues/:venueId/meal-specials → OwnerVenueMealSpecialsPage (Stage 5)
   venues/:venueId/taps → (Stage 6)
 ```
 

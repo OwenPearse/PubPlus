@@ -627,6 +627,76 @@ export function ownerPatchVenueFeatures(
   );
 }
 
+export type OwnerMealSpecial = {
+  id: string;
+  title: string;
+  description?: string | null;
+  days_available: number[];
+  start_time?: string | null;
+  end_time?: string | null;
+  price_text?: string | null;
+  conditions?: string | null;
+  active: boolean;
+  sort_order: number;
+};
+
+export type OwnerMealSpecialInput = {
+  title: string;
+  description?: string | null;
+  days_available?: number[];
+  start_time?: string | null;
+  end_time?: string | null;
+  price_text?: string | null;
+  conditions?: string | null;
+  active?: boolean;
+  sort_order?: number;
+};
+
+export type OwnerMealSpecialsListResponse = {
+  venue_id: string;
+  meal_specials: OwnerMealSpecial[];
+};
+
+export type OwnerMealSpecialMutationResponse = {
+  venue_id: string;
+  meal_special: OwnerMealSpecial;
+  message: string;
+};
+
+export function ownerVenueMealSpecials(venueId: string) {
+  return apiRequest<ApiResponse<OwnerMealSpecialsListResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/meal-specials`,
+  );
+}
+
+export function ownerCreateMealSpecial(
+  venueId: string,
+  body: OwnerMealSpecialInput,
+) {
+  return apiRequest<ApiResponse<OwnerMealSpecialMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/meal-specials`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export function ownerPatchMealSpecial(
+  venueId: string,
+  specialId: string,
+  body: Partial<OwnerMealSpecialInput>,
+) {
+  return apiRequest<ApiResponse<OwnerMealSpecialMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/meal-specials/${encodeURIComponent(specialId)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
+export function ownerDeactivateMealSpecial(venueId: string, specialId: string) {
+  return apiRequest<ApiResponse<OwnerMealSpecialMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/meal-specials/${encodeURIComponent(specialId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export type OwnerRestrictedIdentityPayload = {
   display_name?: string;
   address_line_1?: string;

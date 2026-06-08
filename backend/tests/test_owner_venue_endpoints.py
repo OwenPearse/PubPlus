@@ -158,6 +158,60 @@ def _count_staging_attribute_rows(venue_id: str) -> int:
     return int(row[0]) if row else 0
 
 
+def _structured_specials_tables_available() -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_structured_special'
+            """
+        )
+        if not c.fetchone():
+            return False
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_special_recurring_pattern'
+            """
+        )
+        return c.fetchone() is not None
+
+
+def _meal_special_payload(**overrides) -> dict:
+    body = {
+        "title": "Thursday Parma Night",
+        "description": "$20 parmas every Thursday.",
+        "days_available": [4],
+        "start_time": "17:00",
+        "end_time": "21:00",
+        "price_text": "$20",
+        "conditions": "Dine-in only",
+        "active": True,
+    }
+    body.update(overrides)
+    return body
+
+
+def _count_owner_meal_special_audits(venue_id: str, owner_account_id: str) -> int:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.audit_event
+            WHERE actor_type = 'owner'
+              AND actor_owner_account_id = %s::uuid
+              AND entity_id = %s::uuid
+              AND action = 'owner_direct_edit'
+              AND detail->>'field_family' = 'meal_specials'
+            """,
+            [owner_account_id, venue_id],
+        )
+        row = c.fetchone()
+    return int(row[0]) if row else 0
+
+
 def _mvp_feature_definitions_available() -> bool:
     with connection.cursor() as c:
         c.execute(
@@ -217,6 +271,18 @@ class OwnerVenueEndpointAuthTests(SimpleTestCase):
         r = self.client.patch(
             f"/api/v1/owner/venues/{uuid4()}/features",
             data='{"features":[]}',
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 401)
+
+    def test_meal_specials_get_without_token_returns_401(self) -> None:
+        r = self.client.get(f"/api/v1/owner/venues/{uuid4()}/meal-specials")
+        self.assertEqual(r.status_code, 401)
+
+    def test_meal_specials_post_without_token_returns_401(self) -> None:
+        r = self.client.post(
+            f"/api/v1/owner/venues/{uuid4()}/meal-specials",
+            data="{}",
             content_type="application/json",
         )
         self.assertEqual(r.status_code, 401)
@@ -389,6 +455,7 @@ class OwnerVenueEndpointE2ETests(TestCase):
         self.assertIsNone(data["published"]["contact"]["phone"])
         self.assertTrue(data["sections_available"]["core_details"])
         self.assertTrue(data["sections_available"]["features"])
+        self.assertTrue(data["sections_available"]["meal_specials"])
         dumped = json.dumps(data)
         self.assertNotIn("google_place_id", dumped)
 
@@ -1409,6 +1476,224 @@ class OwnerVenueEndpointE2ETests(TestCase):
             )
         self.assertEqual(r.status_code, 201)
         self.assertEqual(r.json()["data"]["lifecycle_status"], "staged")
+
+    def test_get_meal_specials_returns_list(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()["data"]
+        self.assertEqual(data["venue_id"], self.e2e.venue_id)
+        self.assertIsInstance(data["meal_specials"], list)
+
+    def test_create_meal_special_writes_published_row_and_audit(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        proposals_before = _count_in_review_proposals(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        audits_before = _count_owner_meal_special_audits(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        body = _meal_special_payload()
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 201)
+        data = r.json()["data"]
+        self.assertIn("Special saved", data["message"])
+        special = data["meal_special"]
+        self.assertEqual(special["title"], body["title"])
+        self.assertEqual(special["days_available"], [4])
+        self.assertTrue(special["active"])
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT s.short_label, s.structured_kind, s.catalog_record_status
+                FROM public.venue_published_structured_special s
+                WHERE s.id = %s::uuid
+                """,
+                [special["id"]],
+            )
+            row = c.fetchone()
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row[0], body["title"])
+        self.assertEqual(row[1], "meal_special")
+        self.assertEqual(row[2], "active")
+
+        self.assertEqual(
+            _count_owner_meal_special_audits(
+                self.e2e.venue_id, self.e2e.owner_account_id
+            ),
+            audits_before + 1,
+        )
+        self.assertEqual(
+            _count_in_review_proposals(self.e2e.venue_id, self.e2e.owner_account_id),
+            proposals_before,
+        )
+
+    def test_patch_meal_special_updates_row(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            created = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(_meal_special_payload(title="Sunday Roast")),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(created.status_code, 201)
+        special_id = created.json()["data"]["meal_special"]["id"]
+        patch_body = {"price_text": "$25", "description": "Updated roast special."}
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.patch(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials/{special_id}",
+                data=json.dumps(patch_body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        updated = r.json()["data"]["meal_special"]
+        self.assertEqual(updated["price_text"], "$25")
+        self.assertEqual(updated["description"], "Updated roast special.")
+
+    def test_delete_meal_special_deactivates_row(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            created = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(_meal_special_payload(title="Kids Meals")),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        special_id = created.json()["data"]["meal_special"]["id"]
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.delete(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials/{special_id}",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["data"]["meal_special"]["active"])
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT catalog_record_status
+                FROM public.venue_published_structured_special
+                WHERE id = %s::uuid
+                """,
+                [special_id],
+            )
+            row = c.fetchone()
+        self.assertEqual(row[0], "retired")
+
+    def test_create_meal_special_rejects_invalid_day(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        body = _meal_special_payload(days_available=[7])
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_create_meal_special_rejects_invalid_time_pair(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        body = _meal_special_payload(start_time="17:00", end_time=None)
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_create_meal_special_rejects_unsupported_fields(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        body = _meal_special_payload(extra_field="nope")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_meal_specials_missing_capability_returns_403(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        _revoke_owner_capability(
+            self.e2e.venue_id,
+            self.e2e.owner_account_id,
+            E2E_CAPABILITY_DIRECT_EDIT,
+        )
+        try:
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                r = self.client.post(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/meal-specials",
+                    data=json.dumps(_meal_special_payload()),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            self.assertEqual(r.status_code, 403)
+            self.assertEqual(r.json()["error"]["code"], "forbidden")
+        finally:
+            with connection.cursor() as c:
+                c.execute(
+                    """
+                    SELECT bvmr.id::text
+                    FROM public.business_venue_management_relationship bvmr
+                    WHERE bvmr.venue_id = %s::uuid
+                    LIMIT 1
+                    """,
+                    [self.e2e.venue_id],
+                )
+                rel = c.fetchone()
+            if rel:
+                _restore_owner_capability(
+                    rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_DIRECT_EDIT
+                )
+
+    def test_meal_specials_forbidden_for_unscoped_venue(self) -> None:
+        self._skip_if_no_db()
+        if not _structured_specials_tables_available():
+            self.skipTest("Structured specials tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.other_venue_id}/meal-specials",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 403)
 
     @patch("apps.owner.services.owner_venue_service.list_owner_venues")
     def test_multiple_venues_no_default(self, mock_list) -> None:
