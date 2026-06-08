@@ -10,6 +10,9 @@ from api.v1.owner.views import (
     owner_venue_hours_patch,
     owner_venue_meal_special_detail,
     owner_venue_meal_specials,
+    owner_venue_media,
+    owner_venue_media_detail,
+    owner_venue_media_upload_intent,
     owner_venue_operational_profile_patch,
     owner_venue_proposals,
     owner_venue_restricted_change_request,
@@ -72,6 +75,21 @@ urlpatterns = [
         "venues/<uuid:venue_id>/tap-list/<uuid:item_id>",
         owner_venue_tap_list_detail,
         name="owner-venue-tap-list-detail",
+    ),
+    path(
+        "venues/<uuid:venue_id>/media/upload-intent",
+        owner_venue_media_upload_intent,
+        name="owner-venue-media-upload-intent",
+    ),
+    path(
+        "venues/<uuid:venue_id>/media/<uuid:media_id>",
+        owner_venue_media_detail,
+        name="owner-venue-media-detail",
+    ),
+    path(
+        "venues/<uuid:venue_id>/media",
+        owner_venue_media,
+        name="owner-venue-media",
     ),
     path(
         "venues/<uuid:venue_id>/restricted-change-requests",

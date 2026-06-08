@@ -1,8 +1,7 @@
 """
 Resolves public Supabase Storage URLs for venue media object keys.
 
-Stage 2: no `venue_published_media` (or similar) table in the repo schema; callers
-pass zero refs and still get a null hero URL. When media rows exist, this module
+Reads `venue_published_media` rows via `PublishedMediaRef` bundles. This module
 stays the single place for URL building (no Django /media/ proxy by default).
 """
 
@@ -14,7 +13,7 @@ from django.conf import settings
 
 from common.storage import public_storage_object_url
 
-from apps.venues.public_read.detail import PhotoItem, PhotosBlock
+from apps.venues.public_read.detail import PhotoItem
 from apps.venues.services.published_venue_read import PublishedMediaRef
 
 
@@ -24,25 +23,28 @@ class ResolvedMedia:
     photos: list[PhotoItem]
 
 
-def _bucket() -> str:
-    return getattr(
-        settings,
-        "SUPABASE_STORAGE_BUCKET_VENUES",
-        "venues",
-    )
-
-
 def _base_url() -> str:
     return str(settings.SUPABASE_URL)
+
+
+def _bucket_for_ref(ref: PublishedMediaRef) -> str:
+    if ref.storage_bucket:
+        return ref.storage_bucket
+    return getattr(
+        settings,
+        "SUPABASE_STORAGE_BUCKET_VENUE_MEDIA",
+        getattr(settings, "SUPABASE_STORAGE_BUCKET_VENUES", "venues"),
+    )
 
 
 def resolve_hero_and_gallery(refs: list[PublishedMediaRef]) -> ResolvedMedia:
     if not refs:
         return ResolvedMedia(hero_url=None, photos=[])
-    base, bucket = _base_url(), _bucket()
+    base = _base_url()
     items: list[PhotoItem] = []
     hero: str | None = None
     for r in sorted(refs, key=lambda x: (x.sort_order is not None, x.sort_order or 0)):
+        bucket = _bucket_for_ref(r)
         u = public_storage_object_url(base, bucket, r.storage_object_path)
         is_hero = r.is_hero
         if is_hero and hero is None:

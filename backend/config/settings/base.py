@@ -126,6 +126,9 @@ SUPABASE_JWT_ALGORITHM = get_env("SUPABASE_JWT_ALGORITHM", default="RS256")
 SUPABASE_STORAGE_BUCKET_VENUES = get_env(
     "SUPABASE_STORAGE_BUCKET_VENUES", default="venues"
 )
+SUPABASE_STORAGE_BUCKET_VENUE_MEDIA = get_env(
+    "SUPABASE_STORAGE_BUCKET_VENUE_MEDIA", default="venue-media"
+)
 MEDIA_URL = get_env("MEDIA_URL", default="/media/")
 
 # Internal / admin protection placeholders

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { PHOTOS_HUB_DESCRIPTION } from "@/owner/lib/ownerVenuePhotosUi";
 import {
   FEATURES_HUB_DESCRIPTION,
 } from "@/owner/lib/ownerVenueFeaturesUi";
@@ -59,6 +60,7 @@ function ChecklistRow({
   const isMealSpecials = section.key === "meal_specials" && section.available;
   const isTapList = section.key === "tap_list" && section.available;
   const isFeatures = section.key === "features" && section.available;
+  const isPhotos = section.key === "photos" && section.available;
 
   return (
     <li
@@ -88,6 +90,8 @@ function ChecklistRow({
             <p className="mt-2 text-sm text-slate-600">{TAP_LIST_HUB_DESCRIPTION}</p>
           ) : isFeatures ? (
             <p className="mt-2 text-sm text-slate-600">{FEATURES_HUB_DESCRIPTION}</p>
+          ) : isPhotos ? (
+            <p className="mt-2 text-sm text-slate-600">{PHOTOS_HUB_DESCRIPTION}</p>
           ) : (
             <p className="mt-1 text-xs capitalize text-slate-500">{section.status}</p>
           )}
@@ -119,6 +123,13 @@ function ChecklistRow({
             className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
           >
             Edit features
+          </Link>
+        ) : isPhotos ? (
+          <Link
+            to={`/owner/venues/${venueId}/photos`}
+            className="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Edit photos
           </Link>
         ) : (
           <span

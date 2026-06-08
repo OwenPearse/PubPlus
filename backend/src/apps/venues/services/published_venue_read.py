@@ -88,13 +88,13 @@ class PublishedTapRow:
 @dataclass
 class PublishedMediaRef:
     """
-    Future: rows from a `venue_published_media` (or similar) table.
-    Stage 2: always empty; hero/gallery resolution hooks read these keys.
+    Rows from `venue_published_media` for hero/gallery resolution.
     """
 
     storage_object_path: str
     sort_order: int | None
     is_hero: bool
+    storage_bucket: str | None = None
 
 
 @dataclass
@@ -448,6 +448,51 @@ def _load_tap_rows(
     return dict(grouped)
 
 
+def _load_media_rows(ids: list[str]) -> dict[str, list[PublishedMediaRef]]:
+    grouped: dict[str, list[PublishedMediaRef]] = defaultdict(list)
+    if not ids:
+        return grouped
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_media'
+            """
+        )
+        if not c.fetchone():
+            return grouped
+    ph, params = _in_clause(ids)
+    with connection.cursor() as c:
+        c.execute(
+            f"""
+            SELECT
+              venue_id::text,
+              storage_path,
+              storage_bucket,
+              purpose,
+              sort_order
+            FROM public.venue_published_media
+            WHERE venue_id IN ({ph})
+              AND catalog_record_status = 'active'
+              AND media_kind = 'image'
+            ORDER BY venue_id, purpose, sort_order, created_at
+            """,
+            params,
+        )
+        for row in c.fetchall():
+            vid = str(row[0])
+            grouped[vid].append(
+                PublishedMediaRef(
+                    storage_object_path=row[1],
+                    storage_bucket=row[2],
+                    sort_order=int(row[4]) if row[4] is not None else None,
+                    is_hero=row[3] == "profile",
+                )
+            )
+    return dict(grouped)
+
+
 def _assemble_bundle(
     core: PublishedCoreRow,
     *,
@@ -457,6 +502,7 @@ def _assemble_bundle(
     hours_exceptions: list[PublishedExceptionHoursRow],
     specials: list[PublishedSpecialRow],
     taps: list[PublishedTapRow],
+    media_refs: list[PublishedMediaRef] | None = None,
 ) -> PublishedVenueReadBundle:
     return PublishedVenueReadBundle(
         core=core,
@@ -466,7 +512,7 @@ def _assemble_bundle(
         hours_exceptions=hours_exceptions,
         specials=specials,
         taps=taps,
-        media_refs=[],
+        media_refs=media_refs or [],
     )
 
 
@@ -494,6 +540,7 @@ def load_published_venue_read_bundles(
     hours_exceptions = _load_exception_hours_rows(valid_ids)
     specials = _load_special_rows(valid_ids)
     taps = _load_tap_rows(valid_ids)
+    media = _load_media_rows(valid_ids)
 
     out: dict[str, PublishedVenueReadBundle] = {}
     for vid, core in cores.items():
@@ -505,6 +552,7 @@ def load_published_venue_read_bundles(
             hours_exceptions=hours_exceptions.get(vid, []),
             specials=specials.get(vid, []),
             taps=taps.get(vid, []),
+            media_refs=media.get(vid, []),
         )
     return out
 

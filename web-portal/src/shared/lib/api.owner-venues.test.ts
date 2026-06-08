@@ -12,9 +12,13 @@ vi.mock("@/shared/lib/env", () => ({
 
 import {
   ownerCreateMealSpecial,
+  ownerCreateMedia,
   ownerCreateTapListItem,
   ownerDeactivateMealSpecial,
+  ownerDeactivateMedia,
   ownerDeactivateTapListItem,
+  ownerMediaUploadIntent,
+  ownerPatchMedia,
   ownerPatchHours,
   ownerPatchMealSpecial,
   ownerPatchTapListItem,
@@ -27,6 +31,7 @@ import {
   ownerVenueDetail,
   ownerVenueFeatures,
   ownerVenueList,
+  ownerVenueMedia,
   ownerVenueMealSpecials,
   ownerVenueTapList,
   ownerVenueProposal,
@@ -113,7 +118,7 @@ const detailEnvelope = {
       meal_specials: false,
       tap_list: false,
       features: true,
-      photos: false,
+      photos: true,
     },
   },
 };
@@ -839,6 +844,149 @@ describe("owner venue API wrappers", () => {
     await ownerDeactivateTapListItem("v-1", "tap-1");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://api.test/api/v1/owner/venues/v-1/tap-list/tap-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("ownerVenueMedia fetches media list", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            media: [
+              {
+                id: "m-1",
+                purpose: "profile",
+                media_kind: "image",
+                url: "https://cdn.example/profile.jpg",
+                storage_bucket: "venue-media",
+                storage_path: "venues/v-1/profile/m-1.jpg",
+                caption: null,
+                alt_text: "Front bar",
+                sort_order: 0,
+                active: true,
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const { data } = await ownerVenueMedia("v-1");
+    expect(data.media).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/media",
+      expect.any(Object),
+    );
+  });
+
+  it("ownerMediaUploadIntent posts upload intent payload", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            media_id: "m-new",
+            storage_bucket: "venue-media",
+            storage_path: "venues/v-1/gallery/m-new.jpg",
+            signed_upload_url: "https://signed.example/upload",
+            expires_in_seconds: 600,
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const body = {
+      purpose: "gallery" as const,
+      file_name: "bar.jpg",
+      content_type: "image/jpeg" as const,
+      file_size_bytes: 120000,
+    };
+    await ownerMediaUploadIntent("v-1", body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/media/upload-intent",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+  });
+
+  it("ownerCreateMedia posts metadata after upload", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            media_item: {
+              id: "m-new",
+              purpose: "gallery",
+              media_kind: "image",
+              url: "https://cdn.example/m-new.jpg",
+              storage_bucket: "venue-media",
+              storage_path: "venues/v-1/gallery/m-new.jpg",
+              caption: null,
+              alt_text: null,
+              sort_order: 0,
+              active: true,
+            },
+            message: "Photo saved.",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const body = {
+      media_id: "m-new",
+      purpose: "gallery" as const,
+      storage_bucket: "venue-media",
+      storage_path: "venues/v-1/gallery/m-new.jpg",
+    };
+    await ownerCreateMedia("v-1", body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/media",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+  });
+
+  it("ownerDeactivateMedia sends DELETE", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            venue_id: "v-1",
+            media_item: {
+              id: "m-1",
+              purpose: "gallery",
+              media_kind: "image",
+              url: "https://cdn.example/m-1.jpg",
+              storage_bucket: "venue-media",
+              storage_path: "venues/v-1/gallery/m-1.jpg",
+              caption: null,
+              alt_text: null,
+              sort_order: 0,
+              active: false,
+            },
+            message: "Photo saved.",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await ownerDeactivateMedia("v-1", "m-1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/api/v1/owner/venues/v-1/media/m-1",
       expect.objectContaining({ method: "DELETE" }),
     );
   });

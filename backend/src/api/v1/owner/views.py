@@ -18,6 +18,13 @@ from apps.owner.services.owner_claim_service import (
     search_venue_claim_candidates,
     submit_venue_claim_request,
 )
+from apps.owner.services.owner_venue_media_service import (
+    create_owner_venue_media,
+    create_owner_venue_media_upload_intent,
+    deactivate_owner_venue_media,
+    get_owner_venue_media,
+    patch_owner_venue_media,
+)
 from apps.owner.services.owner_venue_service import (
     create_or_update_owner_core_details_proposal,
     create_owner_restricted_change_request,
@@ -626,5 +633,116 @@ def owner_venue_restricted_change_request(
     return error_response(
         code="owner_restricted_change_error",
         message="Could not submit your change request.",
+        status=500,
+    )
+
+
+@require_http_methods(["GET", "HEAD", "POST"])
+@require_owner_portal_auth
+def owner_venue_media(request: HttpRequest, venue_id) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+
+    if request.method in ("GET", "HEAD"):
+        if request.method == "HEAD":
+            return JsonResponse({}, status=200)
+        result, code = get_owner_venue_media(auth, str(venue_id))
+        if result is None:
+            return _map_venue_scope_error(code)
+        return JsonResponse({"data": result}, status=200)
+
+    body, err_resp = _parse_json_object_body(request)
+    if err_resp is not None:
+        return err_resp
+    assert body is not None
+
+    result, code, details = create_owner_venue_media(auth, str(venue_id), body)
+    if code == "ok" and result:
+        return JsonResponse({"data": result}, status=201)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code in ("forbidden", "not_found", "admin_forbidden", "missing_capability"):
+        return _map_venue_scope_error(code)
+    return error_response(
+        code="owner_direct_edit_error",
+        message="Could not save photo metadata.",
+        status=500,
+    )
+
+
+@require_http_methods(["POST"])
+@require_owner_portal_auth
+def owner_venue_media_upload_intent(request: HttpRequest, venue_id) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+    body, err_resp = _parse_json_object_body(request)
+    if err_resp is not None:
+        return err_resp
+    assert body is not None
+
+    result, code, details = create_owner_venue_media_upload_intent(
+        auth, str(venue_id), body
+    )
+    if code == "ok" and result:
+        return JsonResponse({"data": result}, status=200)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code == "storage_error":
+        return error_response(
+            code="storage_unavailable",
+            message="Photo upload is temporarily unavailable.",
+            status=503,
+        )
+    if code in ("forbidden", "not_found", "admin_forbidden", "missing_capability"):
+        return _map_venue_scope_error(code)
+    return error_response(
+        code="owner_direct_edit_error",
+        message="Could not prepare photo upload.",
+        status=500,
+    )
+
+
+@require_http_methods(["PATCH", "DELETE"])
+@require_owner_portal_auth
+def owner_venue_media_detail(
+    request: HttpRequest, venue_id, media_id
+) -> JsonResponse:
+    auth = get_auth_context(request)
+    assert auth is not None
+
+    if request.method == "DELETE":
+        result, code, details = deactivate_owner_venue_media(
+            auth, str(venue_id), str(media_id)
+        )
+    else:
+        body, err_resp = _parse_json_object_body(request)
+        if err_resp is not None:
+            return err_resp
+        assert body is not None
+        result, code, details = patch_owner_venue_media(
+            auth, str(venue_id), str(media_id), body
+        )
+
+    if code == "ok" and result:
+        return JsonResponse({"data": result}, status=200)
+    if code == "validation_error" and details:
+        return _validation_error(details=details)
+    if code == "validation_error":
+        return _validation_error()
+    if code == "not_found":
+        return error_response(
+            code="not_found",
+            message="Photo not found.",
+            status=404,
+        )
+    if code in ("forbidden", "admin_forbidden", "missing_capability"):
+        return _map_venue_scope_error(code)
+    return error_response(
+        code="owner_direct_edit_error",
+        message="Could not update photo.",
         status=500,
     )

@@ -8,7 +8,7 @@ Implementation-ready contract for owner venue onboarding APIs. Backend and front
 
 ## Current stage
 
-**Stage 6 complete.** Tap list GET/POST/PATCH/DELETE shipped alongside meal specials, features GET/PATCH, and Stage 4 direct PATCH. Phase A `POST .../proposals` remains as legacy shim until 4.3.
+**Stage 8 complete.** Photos/media GET + upload-intent + metadata CRUD direct-edit endpoints shipped. Tap list (Stage 6), meal specials (Stage 5), features (Stage 7) unchanged.
 
 ## Decisions
 
@@ -300,9 +300,9 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
         {
           "key": "photos",
           "label": "Photos",
-          "status": "deferred",
+          "status": "missing",
           "required": false,
-          "available": false
+          "available": true
         }
       ]
     },
@@ -312,7 +312,7 @@ Set to sole `venue_id` when `total === 1` (frontend may auto-navigate). Omit or 
       "meal_specials": false,
       "tap_list": true,
       "features": true,
-      "photos": false
+      "photos": true
     }
   }
 }
@@ -979,6 +979,68 @@ Extend `GET /api/v1/owner/venues/{venue_id}` with:
 Deprecate over time: `draft.core_details_payload` operational fields; keep for shim compatibility through 4.2.
 
 Adjust `onboarding_status`: `submitted` when `restricted_pending_review` open; operational PATCH does not set `submitted`.
+
+---
+
+## Stage 8 — Venue photos / media
+
+**Guard:** `require_owner_portal_auth` + venue scope + `manage_published_venue_operations`
+
+### GET `/api/v1/owner/venues/{venue_id}/media`
+
+```json
+{
+  "data": {
+    "venue_id": "uuid",
+    "media": [
+      {
+        "id": "uuid",
+        "purpose": "profile",
+        "media_kind": "image",
+        "url": "https://{project}.supabase.co/storage/v1/object/public/venue-media/venues/{venue_id}/profile/{id}.jpg",
+        "storage_bucket": "venue-media",
+        "storage_path": "venues/{venue_id}/profile/{id}.jpg",
+        "caption": null,
+        "alt_text": "Front bar",
+        "sort_order": 0,
+        "active": true
+      }
+    ]
+  }
+}
+```
+
+Public bucket → `url` is a stable public Storage URL (no signed read URL in MVP).
+
+### POST `/api/v1/owner/venues/{venue_id}/media/upload-intent`
+
+Request: `purpose`, `file_name`, `content_type` (jpeg/png/webp), `file_size_bytes` (max 5MB).
+
+Response: `media_id`, `storage_bucket`, `storage_path`, `signed_upload_url`, `expires_in_seconds`.
+
+Backend stores `owner_venue_media_upload_intent` row; path must match `venues/{venue_id}/{purpose}/{media_id}.{ext}`.
+
+### POST `/api/v1/owner/venues/{venue_id}/media`
+
+Commit metadata after Storage upload. Verifies intent, path scope, and object existence (HEAD via service role).
+
+Profile purpose: retires other active profile rows for the venue.
+
+### PATCH / DELETE `/api/v1/owner/venues/{venue_id}/media/{media_id}`
+
+PATCH: `caption`, `alt_text`, `sort_order`, `purpose`, `active`.
+
+DELETE: soft retire (`catalog_record_status = retired`).
+
+### Side effects
+
+1. Write `venue_published_media`
+2. `audit_event` (`action = owner_direct_edit`, `field_family = media`, `entity_table = venue_published_media`)
+3. Consumer listing reads via `published_venue_read` + `venue_media`
+
+### Out of scope
+
+Menu PDFs, event posters, videos, moderation queue, arbitrary Storage paths.
 
 ---
 

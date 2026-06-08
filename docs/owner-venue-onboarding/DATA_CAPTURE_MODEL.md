@@ -6,7 +6,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 
 ## Current stage
 
-**Stage 6 complete.** Descriptions, hours, MVP boolean features, meal specials, and tap list write published tables directly; restricted identity/location uses `POST restricted-change-requests` → proposal staging.
+**Stage 8 complete.** Descriptions, hours, features, meal specials, tap list, and photos write published tables directly; restricted identity/location uses proposals.
 
 ## Decisions
 
@@ -17,6 +17,7 @@ Map onboarding sections to Postgres tables—distinguishing **direct published w
 | Contact | **Direct** → `venue_published_contact` *(migration)* | No |
 | Features | **Direct** → `venue_published_attribute_value` | No |
 | Specials / taps | **Direct** → published specials/tap tables | No |
+| Photos (profile/gallery) | **Direct** → `venue_published_media` + Supabase Storage `venue-media` | No |
 | Identity (name) | **Restricted** → staging → publish | Yes |
 | Location / map | **Restricted** → staging → publish | Yes |
 | Claim / relationship | **Authority** tables — admin only | Yes |
@@ -62,6 +63,7 @@ Stage 4.2 form field zones shipped (`OwnerVenueBasicsPage`); contact migration t
 | Feature toggles | `venue_published_attribute_value` | Reference `attribute_definition_id` |
 | Meal specials | `venue_published_structured_special` + marketing copy + recurring pattern + validity/eligibility | CRUD `/meal-specials` |
 | Tap list | `venue_published_tap_offering` + validity/eligibility | PUT replace-set |
+| Profile / gallery photos | `venue_published_media` (+ files in Storage) | upload-intent → PUT → POST metadata |
 
 ## Restricted proposal field map
 

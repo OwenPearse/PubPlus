@@ -11,6 +11,7 @@ import { OwnerVenueBasicsPage } from "@/owner/pages/OwnerVenueBasicsPage";
 import { OwnerVenueFeaturesPage } from "@/owner/pages/OwnerVenueFeaturesPage";
 import { OwnerVenueHub } from "@/owner/pages/OwnerVenueHub";
 import { OwnerVenueMealSpecialsPage } from "@/owner/pages/OwnerVenueMealSpecialsPage";
+import { OwnerVenuePhotosPage } from "@/owner/pages/OwnerVenuePhotosPage";
 import { OwnerVenueTapListPage } from "@/owner/pages/OwnerVenueTapListPage";
 import { PortalEntryPage } from "@/owner/pages/PortalEntryPage";
 import { OwnerRouteGuard } from "@/owner/components/OwnerRouteGuard";
@@ -38,6 +39,7 @@ function OwnerAppRoutes() {
       <Route path="venues/:venueId/features" element={<OwnerVenueFeaturesPage />} />
       <Route path="venues/:venueId/meal-specials" element={<OwnerVenueMealSpecialsPage />} />
       <Route path="venues/:venueId/tap-list" element={<OwnerVenueTapListPage />} />
+      <Route path="venues/:venueId/photos" element={<OwnerVenuePhotosPage />} />
       <Route path="*" element={<Navigate to="/owner" replace />} />
     </Routes>
   );

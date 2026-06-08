@@ -14,7 +14,7 @@ This document supersedes the Phase A assumption that **every** `core_details` fi
 
 ## Current stage
 
-**Stage 6 complete.** Tap list direct-edit CRUD added. Meal specials (Stage 5) and features (Stage 7) unchanged. Stage 4.2 operational PATCH + restricted POST unchanged.
+**Stage 8 complete.** Photos/media direct-edit added. Tap list (Stage 6) unchanged.
 
 ## Decisions
 
@@ -33,7 +33,7 @@ Verified owners with `manage_published_venue_operations` may PATCH these familie
 | **Recurring activities** | recurring offer patterns | `venue_published_special_recurring_pattern` | Later |
 | **Events / one-off promos** | one-off promotions | `venue_published_special_one_off` | Later |
 | **Menu links / uploads** | TBD | TBD | Later |
-| **Photos / media** | image assets | TBD + moderation queue | Later |
+| **Photos / media** | profile + gallery images | `venue_published_media` + Storage `venue-media` | Stage 8 |
 
 **Never direct-edit (admin / import only):**
 

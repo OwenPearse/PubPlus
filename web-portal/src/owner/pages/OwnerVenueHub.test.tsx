@@ -96,9 +96,9 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
         {
           key: "photos",
           label: "Photos",
-          status: "deferred",
+          status: "missing",
           required: false,
-          available: false,
+          available: true,
         },
       ],
     },
@@ -108,7 +108,7 @@ function baseDetail(overrides: Record<string, unknown> = {}) {
       meal_specials: true,
       tap_list: true,
       features: true,
-      photos: false,
+      photos: true,
     },
     ...overrides,
   };
@@ -141,6 +141,23 @@ describe("OwnerVenueHub", () => {
       "href",
       "/owner/venues/v-1/features",
     );
+  });
+
+  it("links to photos page when available", async () => {
+    ownerVenueDetail.mockResolvedValue({ data: baseDetail() });
+    render(
+      <MemoryRouter initialEntries={["/owner/venues/v-1"]}>
+        <Routes>
+          <Route path="/owner/venues/:venueId" element={<OwnerVenueHub />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Edit photos" })).toHaveAttribute(
+        "href",
+        "/owner/venues/v-1/photos",
+      );
+    });
   });
 
   it("keeps deferred sections disabled", async () => {

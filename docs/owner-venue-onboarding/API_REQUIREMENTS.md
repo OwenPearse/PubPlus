@@ -6,7 +6,7 @@ Specify backend endpoints for owner venue onboarding. **Normative edit policy:**
 
 ## Current stage
 
-**Stage 6 complete.** Tap list GET/POST/PATCH/DELETE direct-edit endpoints shipped. Stage 5 meal specials and Stage 7 features unchanged.
+**Stage 8 complete.** Photos/media GET + upload-intent + metadata CRUD shipped. Stage 6 tap list unchanged.
 
 ## Decisions
 
@@ -92,6 +92,11 @@ Stage 4.1 backend tickets; `web-portal/src/shared/lib/api.ts` client additions i
 | POST | `/api/v1/owner/venues/{venue_id}/tap-list` | Create tap/drink item | ✅ 6 |
 | PATCH | `/api/v1/owner/venues/{venue_id}/tap-list/{item_id}` | Update / deactivate | ✅ 6 |
 | DELETE | `/api/v1/owner/venues/{venue_id}/tap-list/{item_id}` | Soft deactivate | ✅ 6 |
+| GET | `/api/v1/owner/venues/{venue_id}/media` | List venue photos | ✅ 8 |
+| POST | `/api/v1/owner/venues/{venue_id}/media/upload-intent` | Issue signed upload URL + path | ✅ 8 |
+| POST | `/api/v1/owner/venues/{venue_id}/media` | Commit metadata after upload | ✅ 8 |
+| PATCH | `/api/v1/owner/venues/{venue_id}/media/{media_id}` | Update caption/alt/sort/purpose/active | ✅ 8 |
+| DELETE | `/api/v1/owner/venues/{venue_id}/media/{media_id}` | Soft retire | ✅ 8 |
 
 **Guard:** `manage_published_venue_operations` required (enforce in 4.1).
 

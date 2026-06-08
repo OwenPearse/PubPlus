@@ -509,12 +509,50 @@ def _features_section_status(venue_id: str) -> str:
     return "complete" if row and int(row[0]) > 0 else "missing"
 
 
+def _photos_section_status(venue_id: str) -> str:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_media'
+            """
+        )
+        if not c.fetchone():
+            return "deferred"
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.venue_published_media
+            WHERE venue_id = %s::uuid
+              AND catalog_record_status = 'active'
+            """,
+            [venue_id],
+        )
+        row = c.fetchone()
+    return "complete" if row and int(row[0]) > 0 else "missing"
+
+
+def _photos_section_available(venue_id: str) -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_media'
+            """
+        )
+        return c.fetchone() is not None
+
+
 def _completeness_sections(
     basics: dict[str, Any],
     *,
     features_status: str = "missing",
     meal_specials_status: str = "missing",
     tap_list_status: str = "missing",
+    photos_status: str = "deferred",
+    photos_available: bool = False,
 ) -> list[dict[str, Any]]:
     core_status = _core_section_status(basics)
     return [
@@ -556,9 +594,9 @@ def _completeness_sections(
         {
             "key": "photos",
             "label": "Photos",
-            "status": "deferred",
+            "status": photos_status if photos_available else "deferred",
             "required": False,
-            "available": False,
+            "available": photos_available,
         },
     ]
 
@@ -1161,6 +1199,8 @@ def get_owner_venue_detail(
     features_status = _features_section_status(venue_id)
     meal_specials_status = _meal_specials_section_status(venue_id)
     tap_list_status = _tap_list_section_status(venue_id)
+    photos_available = _photos_section_available(venue_id)
+    photos_status = _photos_section_status(venue_id) if photos_available else "deferred"
 
     display_name = (
         published["profile"].get("display_name")
@@ -1194,6 +1234,8 @@ def get_owner_venue_detail(
                 features_status=features_status,
                 meal_specials_status=meal_specials_status,
                 tap_list_status=tap_list_status,
+                photos_status=photos_status,
+                photos_available=photos_available,
             ),
         },
         "sections_available": {
@@ -1202,7 +1244,7 @@ def get_owner_venue_detail(
             "meal_specials": True,
             "tap_list": True,
             "features": True,
-            "photos": False,
+            "photos": photos_available,
         },
     }, "ok"
 

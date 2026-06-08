@@ -353,6 +353,18 @@ class OwnerVenueEndpointAuthTests(SimpleTestCase):
         )
         self.assertEqual(r.status_code, 401)
 
+    def test_media_get_without_token_returns_401(self) -> None:
+        r = self.client.get(f"/api/v1/owner/venues/{uuid4()}/media")
+        self.assertEqual(r.status_code, 401)
+
+    def test_media_upload_intent_without_token_returns_401(self) -> None:
+        r = self.client.post(
+            f"/api/v1/owner/venues/{uuid4()}/media/upload-intent",
+            data="{}",
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 401)
+
     @patch("common.auth.guards.get_owner_account_id", return_value=None)
     def test_list_without_owner_account_returns_403(self, _mock_owner) -> None:
         ctx = _ctx(str(uuid4()))
@@ -1981,3 +1993,359 @@ class OwnerVenueEndpointE2ETests(TestCase):
             r = self.client.get("/api/v1/owner/venues", **_auth_headers())
         self.assertEqual(r.status_code, 200)
         self.assertIsNone(r.json()["data"]["meta"]["default_venue_id"])
+
+
+def _venue_media_tables_available() -> bool:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'venue_published_media'
+            """
+        )
+        if not c.fetchone():
+            return False
+        c.execute(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'owner_venue_media_upload_intent'
+            """
+        )
+        return c.fetchone() is not None
+
+
+def _media_upload_intent_payload(**overrides) -> dict:
+    body = {
+        "purpose": "gallery",
+        "file_name": "front-bar.jpg",
+        "content_type": "image/jpeg",
+        "file_size_bytes": 120000,
+    }
+    body.update(overrides)
+    return body
+
+
+def _count_owner_media_audits(venue_id: str, owner_account_id: str) -> int:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM public.audit_event
+            WHERE actor_type = 'owner'
+              AND actor_owner_account_id = %s::uuid
+              AND entity_id = %s::uuid
+              AND action = 'owner_direct_edit'
+              AND detail->>'field_family' = 'media'
+            """,
+            [owner_account_id, venue_id],
+        )
+        row = c.fetchone()
+    return int(row[0]) if row else 0
+
+
+@override_settings(SUPABASE_JWT_JWKS_URL="https://example.supabase.co/auth/v1/keys")
+class OwnerVenueMediaValidationTests(SimpleTestCase):
+    def test_upload_intent_rejects_invalid_content_type(self) -> None:
+        from apps.owner.services.owner_venue_media_service import (
+            _validate_upload_intent_body,
+        )
+
+        _, err = _validate_upload_intent_body(
+            {
+                "purpose": "gallery",
+                "file_name": "photo.gif",
+                "content_type": "image/gif",
+                "file_size_bytes": 1000,
+            }
+        )
+        self.assertIsNotNone(err)
+        self.assertIn("content_type", err)
+
+    def test_create_rejects_arbitrary_storage_path(self) -> None:
+        from apps.owner.services.owner_venue_media_service import _validate_create_body
+
+        _, err = _validate_create_body(
+            {
+                "media_id": str(uuid4()),
+                "purpose": "gallery",
+                "storage_bucket": "venue-media",
+                "storage_path": "other/random/path.jpg",
+            }
+        )
+        self.assertIsNotNone(err)
+        self.assertIn("storage_path", err)
+
+
+@override_settings(SUPABASE_JWT_JWKS_URL="https://example.supabase.co/auth/v1/keys")
+class OwnerVenueMediaE2ETests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.e2e = try_install_owner_venues_e2e_fixtures()
+        if self.e2e is None:
+            return
+        self.owner_ctx = _ctx(self.e2e.owner_auth_user_id, email="e2e-owner@pubplus.test")
+
+    def _skip_if_no_db(self) -> None:
+        if self.e2e is None:
+            self.skipTest("PubPlus owner venue schema not available in test database.")
+
+    @patch(
+        "apps.owner.services.owner_venue_media_service.storage_object_exists",
+        return_value=True,
+    )
+    @patch(
+        "apps.owner.services.owner_venue_media_service.create_signed_upload_url",
+    )
+    def test_media_upload_intent_and_create_flow(
+        self, mock_signed, _mock_exists
+    ) -> None:
+        self._skip_if_no_db()
+        if not _venue_media_tables_available():
+            self.skipTest("Venue media tables not present in test DB.")
+
+        from common.storage.supabase_storage import SignedUploadResult
+
+        mock_signed.return_value = SignedUploadResult(
+            signed_upload_url="https://example.supabase.co/upload/signed",
+            path="venues/x/gallery/y.jpg",
+            token=None,
+        )
+
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            intent_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/media/upload-intent",
+                data=json.dumps(_media_upload_intent_payload(purpose="profile")),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(intent_r.status_code, 200)
+        intent = intent_r.json()["data"]
+        self.assertEqual(intent["storage_bucket"], "venue-media")
+        self.assertIn(f"venues/{self.e2e.venue_id}/profile/", intent["storage_path"])
+        self.assertTrue(intent["signed_upload_url"])
+
+        audits_before = _count_owner_media_audits(
+            self.e2e.venue_id, self.e2e.owner_account_id
+        )
+        create_body = {
+            "media_id": intent["media_id"],
+            "purpose": "profile",
+            "storage_bucket": intent["storage_bucket"],
+            "storage_path": intent["storage_path"],
+            "alt_text": "Front bar",
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            create_r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/media",
+                data=json.dumps(create_body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(create_r.status_code, 201)
+        self.assertIn("Photo saved", create_r.json()["data"]["message"])
+        self.assertEqual(
+            _count_owner_media_audits(
+                self.e2e.venue_id, self.e2e.owner_account_id
+            ),
+            audits_before + 1,
+        )
+
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            list_r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/media",
+                **_auth_headers(),
+            )
+        self.assertEqual(list_r.status_code, 200)
+        media = list_r.json()["data"]["media"]
+        self.assertTrue(any(m["purpose"] == "profile" for m in media))
+
+    @patch(
+        "apps.owner.services.owner_venue_media_service.create_signed_upload_url",
+    )
+    def test_upload_intent_validates_file_size(self, mock_signed) -> None:
+        self._skip_if_no_db()
+        if not _venue_media_tables_available():
+            self.skipTest("Venue media tables not present in test DB.")
+        mock_signed.side_effect = AssertionError("should not call storage")
+
+        body = _media_upload_intent_payload(file_size_bytes=10_000_000)
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/media/upload-intent",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    @patch(
+        "apps.owner.services.owner_venue_media_service.storage_object_exists",
+        return_value=True,
+    )
+    @patch(
+        "apps.owner.services.owner_venue_media_service.create_signed_upload_url",
+    )
+    def test_profile_create_deactivates_previous_profile(
+        self, mock_signed, _mock_exists
+    ) -> None:
+        self._skip_if_no_db()
+        if not _venue_media_tables_available():
+            self.skipTest("Venue media tables not present in test DB.")
+
+        from common.storage.supabase_storage import SignedUploadResult
+
+        mock_signed.return_value = SignedUploadResult(
+            signed_upload_url="https://example.supabase.co/upload/signed",
+            path="venues/x/gallery/y.jpg",
+            token=None,
+        )
+
+        def _create_profile(label: str) -> str:
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                intent_r = self.client.post(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/media/upload-intent",
+                    data=json.dumps(
+                        _media_upload_intent_payload(
+                            purpose="profile", file_name=f"{label}.jpg"
+                        )
+                    ),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            intent = intent_r.json()["data"]
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                create_r = self.client.post(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/media",
+                    data=json.dumps(
+                        {
+                            "media_id": intent["media_id"],
+                            "purpose": "profile",
+                            "storage_bucket": intent["storage_bucket"],
+                            "storage_path": intent["storage_path"],
+                        }
+                    ),
+                    content_type="application/json",
+                    **_auth_headers(),
+                )
+            self.assertEqual(create_r.status_code, 201)
+            return intent["media_id"]
+
+        first_id = _create_profile("first")
+        second_id = _create_profile("second")
+        self.assertNotEqual(first_id, second_id)
+
+        with connection.cursor() as c:
+            c.execute(
+                """
+                SELECT catalog_record_status
+                FROM public.venue_published_media
+                WHERE id = %s::uuid
+                """,
+                [first_id],
+            )
+            first_status = c.fetchone()[0]
+            c.execute(
+                """
+                SELECT catalog_record_status
+                FROM public.venue_published_media
+                WHERE id = %s::uuid
+                """,
+                [second_id],
+            )
+            second_status = c.fetchone()[0]
+        self.assertEqual(first_status, "retired")
+        self.assertEqual(second_status, "active")
+
+    @patch(
+        "apps.owner.services.owner_venue_media_service.storage_object_exists",
+        return_value=False,
+    )
+    def test_create_rejects_missing_storage_object(self, _mock_exists) -> None:
+        self._skip_if_no_db()
+        if not _venue_media_tables_available():
+            self.skipTest("Venue media tables not present in test DB.")
+
+        media_id = str(uuid4())
+        storage_path = f"venues/{self.e2e.venue_id}/gallery/{media_id}.jpg"
+        with connection.cursor() as c:
+            c.execute(
+                """
+                INSERT INTO public.owner_venue_media_upload_intent (
+                    id, venue_id, owner_account_id, purpose,
+                    storage_bucket, storage_path, content_type, expires_at
+                ) VALUES (
+                    %s::uuid, %s::uuid, %s::uuid, 'gallery',
+                    'venue-media', %s, 'image/jpeg', now() + interval '10 minutes'
+                )
+                """,
+                [media_id, self.e2e.venue_id, self.e2e.owner_account_id, storage_path],
+            )
+
+        body = {
+            "media_id": media_id,
+            "purpose": "gallery",
+            "storage_bucket": "venue-media",
+            "storage_path": storage_path,
+        }
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.post(
+                f"/api/v1/owner/venues/{self.e2e.venue_id}/media",
+                data=json.dumps(body),
+                content_type="application/json",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"]["code"], "validation_error")
+
+    def test_media_missing_capability_returns_403(self) -> None:
+        self._skip_if_no_db()
+        if not _venue_media_tables_available():
+            self.skipTest("Venue media tables not present in test DB.")
+        _revoke_owner_capability(
+            self.e2e.venue_id,
+            self.e2e.owner_account_id,
+            E2E_CAPABILITY_DIRECT_EDIT,
+        )
+        try:
+            with patch(
+                "common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx
+            ):
+                r = self.client.get(
+                    f"/api/v1/owner/venues/{self.e2e.venue_id}/media",
+                    **_auth_headers(),
+                )
+            self.assertEqual(r.status_code, 403)
+        finally:
+            with connection.cursor() as c:
+                c.execute(
+                    """
+                    SELECT bvmr.id::text
+                    FROM public.business_venue_management_relationship bvmr
+                    WHERE bvmr.venue_id = %s::uuid
+                    LIMIT 1
+                    """,
+                    [self.e2e.venue_id],
+                )
+                rel = c.fetchone()
+            if rel:
+                _restore_owner_capability(
+                    rel[0], self.e2e.owner_account_id, E2E_CAPABILITY_DIRECT_EDIT
+                )
+
+    def test_media_forbidden_for_unscoped_venue(self) -> None:
+        self._skip_if_no_db()
+        if not _venue_media_tables_available():
+            self.skipTest("Venue media tables not present in test DB.")
+        with patch("common.auth.guards.verify_supabase_jwt", return_value=self.owner_ctx):
+            r = self.client.get(
+                f"/api/v1/owner/venues/{self.e2e.other_venue_id}/media",
+                **_auth_headers(),
+            )
+        self.assertEqual(r.status_code, 403)

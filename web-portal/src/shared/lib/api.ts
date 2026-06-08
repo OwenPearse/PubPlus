@@ -767,6 +767,126 @@ export function ownerDeactivateTapListItem(venueId: string, itemId: string) {
   );
 }
 
+export type OwnerMediaPurpose = "profile" | "gallery";
+
+export type OwnerMediaItem = {
+  id: string;
+  purpose: OwnerMediaPurpose;
+  media_kind: "image";
+  url: string;
+  storage_bucket: string;
+  storage_path: string;
+  caption: string | null;
+  alt_text: string | null;
+  sort_order: number;
+  active: boolean;
+};
+
+export type OwnerMediaListResponse = {
+  venue_id: string;
+  media: OwnerMediaItem[];
+};
+
+export type OwnerMediaUploadIntentRequest = {
+  purpose: OwnerMediaPurpose;
+  file_name: string;
+  content_type: "image/jpeg" | "image/png" | "image/webp";
+  file_size_bytes: number;
+};
+
+export type OwnerMediaUploadIntentResponse = {
+  media_id: string;
+  storage_bucket: string;
+  storage_path: string;
+  signed_upload_url: string;
+  expires_in_seconds: number;
+};
+
+export type OwnerMediaCreateRequest = {
+  media_id: string;
+  purpose: OwnerMediaPurpose;
+  storage_bucket: string;
+  storage_path: string;
+  caption?: string | null;
+  alt_text?: string | null;
+  sort_order?: number;
+};
+
+export type OwnerMediaMutationResponse = {
+  venue_id: string;
+  media_item: OwnerMediaItem;
+  message: string;
+};
+
+export type OwnerMediaPatchRequest = {
+  caption?: string | null;
+  alt_text?: string | null;
+  sort_order?: number;
+  purpose?: OwnerMediaPurpose;
+  active?: boolean;
+};
+
+export function ownerVenueMedia(venueId: string) {
+  return apiRequest<ApiResponse<OwnerMediaListResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/media`,
+  );
+}
+
+export function ownerMediaUploadIntent(
+  venueId: string,
+  body: OwnerMediaUploadIntentRequest,
+) {
+  return apiRequest<ApiResponse<OwnerMediaUploadIntentResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/media/upload-intent`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export function ownerCreateMedia(venueId: string, body: OwnerMediaCreateRequest) {
+  return apiRequest<ApiResponse<OwnerMediaMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/media`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export function ownerPatchMedia(
+  venueId: string,
+  mediaId: string,
+  body: OwnerMediaPatchRequest,
+) {
+  return apiRequest<ApiResponse<OwnerMediaMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/media/${encodeURIComponent(mediaId)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
+export function ownerDeactivateMedia(venueId: string, mediaId: string) {
+  return apiRequest<ApiResponse<OwnerMediaMutationResponse>>(
+    `/api/v1/owner/venues/${encodeURIComponent(venueId)}/media/${encodeURIComponent(mediaId)}`,
+    { method: "DELETE" },
+  );
+}
+
+/** Upload binary to a backend-issued Supabase signed upload URL. */
+export async function uploadFileToSignedUrl(
+  signedUploadUrl: string,
+  file: File,
+  contentType: string,
+): Promise<void> {
+  const response = await fetch(signedUploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: file,
+  });
+  if (!response.ok) {
+    throw {
+      code: "unknown_error" as const,
+      message: `Upload failed (${response.status})`,
+      status: response.status,
+    } satisfies ApiRequestError;
+  }
+}
+
 export type OwnerRestrictedIdentityPayload = {
   display_name?: string;
   address_line_1?: string;

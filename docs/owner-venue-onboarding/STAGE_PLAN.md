@@ -6,7 +6,7 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 
 ## Current stage
 
-**Stage 6 complete (tap list direct-edit).** Next: **Stage 4.3** hardening or **Stage 8** photos.
+**Stage 8 complete (photos/media direct-edit).** Next: **Stage 4.3** hardening or events/menus.
 
 ## Decisions
 
@@ -24,10 +24,9 @@ Ordered implementation stages. **Stage 4 policy reframe** updates sequencing so 
 | **Admin claims polish** | ✅ Done | Owner claim status GET, admin nav + badge, waiting states |
 | **4.3 Hardening** | Planned | Row history, contact schema, deprecate proposal shim |
 | 5 Meal specials | ✅ Done | Direct-edit CRUD page |
-| 6 Tap list | Ready after 4.1 | Direct-edit page |
+| 6 Tap list | ✅ Done | Direct-edit page |
 | 7 Features | ✅ Done | Direct-edit boolean toggles |
-| Admin restricted publish | Parallel | Publish worker for approved restricted proposals |
-| 8 Photos | Plan only | Schema + moderation |
+| **8 Photos / media** | ✅ Done | `venue_published_media` + Storage signed upload |
 | 9 Review UX polish | Updated scope | Restricted pending states only |
 | 10 QA | After 4.2+ | |
 

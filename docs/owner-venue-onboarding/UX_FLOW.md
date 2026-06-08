@@ -106,7 +106,7 @@ Duplicate candidates are never shown to owners.
 | `tap_list` | Tap list | No | Direct (Stage 6) |
 | `features` | Features | No | Direct (Stage 7) — **active in hub** |
 | `events` | Events | No | Deferred |
-| `photos` | Photos | No | Deferred + moderation |
+| `photos` | Photos | No | **Active** — `/owner/venues/:id/photos` (profile + gallery upload) |
 
 ---
 
