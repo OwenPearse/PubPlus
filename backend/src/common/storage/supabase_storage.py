@@ -88,6 +88,16 @@ def _storage_request(
         raise SupabaseStorageError(f"Storage request failed: {exc}") from exc
 
 
+def _normalize_signed_upload_url(signed_url: str) -> str:
+    """Supabase may return a relative path without the /storage/v1 prefix."""
+    url = signed_url.strip()
+    if url.startswith("/object/"):
+        url = f"/storage/v1{url}"
+    if url.startswith("/"):
+        url = f"{_project_base_url()}{url}"
+    return url
+
+
 def create_signed_upload_url(
     bucket: str,
     object_path: str,
@@ -123,7 +133,7 @@ def create_signed_upload_url(
         token = None
 
     return SignedUploadResult(
-        signed_upload_url=signed_url,
+        signed_upload_url=_normalize_signed_upload_url(signed_url),
         path=path,
         token=token,
     )

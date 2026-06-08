@@ -628,6 +628,29 @@ def _media_belongs_to_venue(venue_id: str, media_id: str) -> bool:
         return c.fetchone() is not None
 
 
+def _load_single_media_row(venue_id: str, media_id: str) -> dict[str, Any] | None:
+    with connection.cursor() as c:
+        c.execute(
+            """
+            SELECT
+              id,
+              purpose,
+              media_kind,
+              storage_bucket,
+              storage_path,
+              caption,
+              alt_text,
+              sort_order,
+              catalog_record_status
+            FROM public.venue_published_media
+            WHERE id = %s::uuid AND venue_id = %s::uuid
+            """,
+            [media_id, venue_id],
+        )
+        row = c.fetchone()
+    return _media_row_to_public(row) if row else None
+
+
 @transaction.atomic
 def patch_owner_venue_media(
     auth: AuthContext,
@@ -686,7 +709,9 @@ def patch_owner_venue_media(
         )
 
     after = _snapshot_media_for_audit(venue_id)
-    saved = next(item for item in after if item["id"] == media_id)
+    saved = _load_single_media_row(venue_id, media_id)
+    if saved is None:
+        return None, "not_found", None
 
     _write_owner_direct_edit_audit(
         owner_account_id=access.owner_account_id,
